@@ -3,8 +3,13 @@ all: build
 pwd=$(shell pwd)
 
 ### Build command
-build:
-	$(MAKE) tcp-client-c-build
+prepare:
+	-mkdir dist
+	-mkdir dist/bin
+	-mkdir dist/conf
+
+build: prepare
+	$(MAKE) tcp-client-c-install
 
 ### Features
 
@@ -14,6 +19,10 @@ tcp-client-c-subtree:
 
 tcp-client-c-build:
 	$(MAKE) simet -C tcp-client-c
+
+tcp-client-c-install: tcp-client-c-build
+	cp tcp-client-c/dist/bin/* dist/bin 2>/dev/null || :
+	cp tcp-client-c/dist/conf/* dist/conf 2>/dev/null || :
 
 ### Dev and test commands for Alpine
 dev:
@@ -25,18 +34,13 @@ dev:
 	simet-agent-unix-img
 
 dev-clean:
-	-rm -rf bin
-	-rm -rf conf
+	-rm -rf dist
 
 dev-install:
-	-mkdir bin
-	-mkdir conf
+	# alpine -mkdir -p dist/{bin,conf}
+
 	$(MAKE) tcp-client-c-install
 
 # tcp-client-c for DEV
-tcp-client-c-install:
-	-cp tcp-client-c/dist/bin/* bin 2>/dev/null || :
-	-cp tcp-client-c/dist/conf/* conf 2>/dev/null || :
-
 tcp-client-c-run:
-	(./bin/tcpc -c "http://docker.lab.simet.nic.br:8800/tcp-control" -h "docker.lab.simet.nic.br" -j "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJUY3BEb3dubG9hZE1lYXN1cmUiLCJleHAiOjE5MjA2MTY3OTMsImlzcyI6InNpbWV0Lm5pYy5iciIsIm1lYXN1cmVfdHlwZSI6Imh0dHBzRG93bmxvYWQifQ.XXGglVdL6Qb2VYi62hf94X--UsxTXMB0elNzRl2_XKM" 2> bin/err.log)
+	(./dist/bin/tcpc -c "http://docker.lab.simet.nic.br:8800/tcp-control" -h "docker.lab.simet.nic.br" -j "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJUY3BEb3dubG9hZE1lYXN1cmUiLCJleHAiOjE5MjA2MTY3OTMsImlzcyI6InNpbWV0Lm5pYy5iciIsIm1lYXN1cmVfdHlwZSI6Imh0dHBzRG93bmxvYWQifQ.XXGglVdL6Qb2VYi62hf94X--UsxTXMB0elNzRl2_XKM" 2> dist/bin/err.log)
