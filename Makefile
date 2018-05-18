@@ -10,6 +10,7 @@ prepare:
 
 build: prepare
 	$(MAKE) tcp-client-c-install
+	$(MAKE) twamp-client-c-install
 
 ### Features
 
@@ -20,9 +21,20 @@ tcp-client-c-subtree:
 tcp-client-c-build:
 	$(MAKE) simet -C tcp-client-c
 
-tcp-client-c-install: tcp-client-c-build
+tcp-client-c-install: tcp-client-c-build prepare
 	cp tcp-client-c/dist/bin/* dist/bin 2>/dev/null || :
 	cp tcp-client-c/dist/conf/* dist/conf 2>/dev/null || :
+
+# twamp-client-c
+twamp-client-c-submodule:
+	git submodule add --name twamp-client-c ssh://git@code.ceptro.br:7999/simet2/twamp-client-c.git twamp-client-c
+
+twamp-client-c-build:
+	$(MAKE) simet -C twamp-client-c
+
+twamp-client-c-install: twamp-client-c-build prepare
+	cp twamp-client-c/dist/bin/* dist/bin/ 2>/dev/null || :
+
 
 ### Dev and test commands for Alpine
 dev:
@@ -40,6 +52,7 @@ dev-install:
 	# alpine -mkdir -p dist/{bin,conf}
 
 	$(MAKE) tcp-client-c-install
+	$(MAKE) twamp-client-c-install
 
 # tcp-client-c for DEV
 tcp-client-c-run:
