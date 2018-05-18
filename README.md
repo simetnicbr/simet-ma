@@ -1,0 +1,1 @@
+git clone --recursive-submodules ssh://git@code.ceptro.br:7999/simet2/simet-agent-unix.git

@@ -1,14 +1,16 @@
 FROM alpine:3.7
 # Update Packages
 RUN apk update
-################
-# TCP-CLIENT-C #
-################
+#################
+## TCP-CLIENT-C #
 ## SYSTEM: make g++ git cmake curl-dev lua-dev lua json-c-dev
 ## OpenWrt: libubox (commit 6eff829d788b36939325557066f58aafd6a05321)
 
+## TWAMP-CLIENT-C #
+## SYSTEM: automake autoconf gcc make libtool cmake
+
 # Tools
-RUN apk add make g++
+RUN apk add automake autoconf g++ gcc make libtool cmake
 RUN apk add git cmake
 # Libs
 RUN apk add curl-dev
