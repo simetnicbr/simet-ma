@@ -24,8 +24,19 @@ dev:
 		--mount type=bind,source="$(pwd)",target=/usr/simet-agent-unix \
 	simet-agent-unix-img
 
+dev-clean:
+	-rm -rf bin
+	-rm -rf conf
+
 dev-install:
-	mkdir bin
-	mkdir conf
-	cp tcp-client-c/bin/* bin
-	cp tcp-client-c/conf/* conf
+	-mkdir bin
+	-mkdir conf
+	$(MAKE) tcp-client-c-install
+
+# tcp-client-c for DEV
+tcp-client-c-install:
+	-cp tcp-client-c/dist/bin/* bin 2>/dev/null || :
+	-cp tcp-client-c/dist/conf/* conf 2>/dev/null || :
+
+tcp-client-c-run:
+	(./bin/tcpc -c "http://docker.lab.simet.nic.br:8800/tcp-control" -h "docker.lab.simet.nic.br" -j "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJUY3BEb3dubG9hZE1lYXN1cmUiLCJleHAiOjE5MjA2MTY3OTMsImlzcyI6InNpbWV0Lm5pYy5iciIsIm1lYXN1cmVfdHlwZSI6Imh0dHBzRG93bmxvYWQifQ.XXGglVdL6Qb2VYi62hf94X--UsxTXMB0elNzRl2_XKM" 2> bin/err.log)
