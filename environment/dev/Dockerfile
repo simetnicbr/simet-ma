@@ -21,8 +21,8 @@ RUN cd libubox && git checkout 6eff829d788b36939325557066f58aafd6a05321 . && cma
 ################
 # LMAP-TASKS   #
 ################
-## SYSTEM: bash
-RUN apk add bash
+## SYSTEM: curl jq
+RUN apk add curl jq
 
 # Create and Set WORKDIR
 RUN mkdir -p "/usr/simet-agent-unix"

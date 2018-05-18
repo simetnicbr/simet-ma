@@ -55,7 +55,7 @@ tcp-client-c-run:
 # Currently includes an orchestration script, while the lmap scheduler is pending work.
 # All lmap tasks are inlined into this orchestration script (lmap_schedule_574.sh).
 lmap-tasks-subtree:
-	git subtree add --prefix lmap-tasks ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git tags/v0.2.0 --squash
+	git subtree add --prefix lmap-tasks ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git tags/v0.3.0 --squash
 
 lmap-tasks-build:
 	$(MAKE) simet -C lmap-tasks
