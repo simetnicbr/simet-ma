@@ -9,11 +9,8 @@ prepare:
 
 build: prepare
 	$(MAKE) tcp-client-c-install
-<<<<<<< HEAD
-	$(MAKE) twamp-client-c-install
-=======
+	# $(MAKE) twamp-client-c-install
 	$(MAKE) lmap-tasks-install
->>>>>>> lmap-tasks
 
 ### Features
 
@@ -59,11 +56,9 @@ dev-install:
 tcp-client-c-run:
 	(./dist/bin/tcpc -c "http://docker.lab.simet.nic.br:8800/tcp-control" -h "docker.lab.simet.nic.br" -j "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJUY3BEb3dubG9hZE1lYXN1cmUiLCJleHAiOjE5MjA2MTY3OTMsImlzcyI6InNpbWV0Lm5pYy5iciIsIm1lYXN1cmVfdHlwZSI6Imh0dHBzRG93bmxvYWQifQ.XXGglVdL6Qb2VYi62hf94X--UsxTXMB0elNzRl2_XKM" 2> dist/bin/err.log)
 
-<<<<<<< HEAD
 # twamp-client-c for DEV
 twamp-client-c-run:
 	(./dist/bin/twampc -h "docker.lab.simet.nic.br")
-=======
 
 ################################################################################
 # lmap-tasks
@@ -85,4 +80,3 @@ lmap-tasks-install: lmap-tasks-build
 # lmap-tasks for DEV
 lmap-tasks-run:
 	/bin/sh ./dist/bin/lmap_schedule_574.sh --config ./dist/conf/lmap_schedule_574.conf
->>>>>>> lmap-tasks
