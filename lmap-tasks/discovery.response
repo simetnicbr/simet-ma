@@ -1,0 +1,34 @@
+[{
+  "locality": "São Paulo NIC",
+  "node": "a",
+  "twamp": [{
+    "id": "1",
+    "hostname": "docker.lab.simet.nic.br",
+    "basePath": "",
+    "ports": [31]
+  }],
+  "tcp": [{
+    "id": "1",
+    "hostname": "docker.lab.simet.nic.br",
+    "basePath": "tcp",
+    "ports": [443]
+  }],
+  "measureToken": [{
+    "id": "1",
+    "hostname": "docker.lab.simet.nic.br",
+    "ports": [443],
+    "basePath": "measure"
+  }],
+  "collector": [{
+    "id": "1",
+    "hostname": "docker.lab.simet.nic.br",
+    "basePath": "collector",
+    "ports": [443]
+  }],
+  "serverMonitor": [{
+    "id": "1",
+    "hostname": "docker.lab.simet.nic.br",
+    "basePath": "server-monitor",
+    "ports": [443]
+  }]
+}]
