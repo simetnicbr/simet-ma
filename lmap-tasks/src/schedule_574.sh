@@ -72,7 +72,7 @@ _schedule_orchestrate(){
 _schedule_setup(){
   # load config
   source "$_config"
-  _log "Loaded config '$_config': BASEDIR=$BASEDIR KEEPREPORT=$KEEPREPORT DISCOVERY_ENDPOINT=$DISCOVERY_ENDPOINT TWAMPC=$TWAMPC TCPC=$TCPC"
+  _log "Loaded config '$_config': BASEDIR=$BASEDIR KEEPREPORT=$KEEPREPORT REPORT_TEMAPLATE=$REPORT_TEMPLATE DISCOVERY_ENDPOINT=$DISCOVERY_ENDPOINT TWAMPC=$TWAMPC TCPC=$TCPC"
 
   # create report directory
   _dir=$BASEDIR/$(date -u +"%Y-%m-%dT%H:%M:%SZ")

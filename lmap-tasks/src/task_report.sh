@@ -72,15 +72,13 @@ _report_render(){
   # variable export is necessary as the template engine (called "_sempl") forks a new shell
   export _tabledir=$_tabledir 
   # render report
-  _report=$(_sempl -o $_template)
+  _sempl $_template "$_tabledir/_report.json"
   if [[ $? -ne 0 ]]; then
     _log "Report rendering failed for template '$_template'. Result: $_report"
     return 1
   fi
-
-  # save report for debugging
-  echo "$_report" > $_tabledir/_report.json
   _log "Report saved for debugging: $_tabledir/_report.json"
+  _report=$(cat $_tabledir/_report.json)
 }
 
 _report_send(){

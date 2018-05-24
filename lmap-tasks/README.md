@@ -32,6 +32,8 @@ make docker-run
 
 # A) execute the whole script, as distributed for deployment, inside the container
 container> /bin/ash ./dist/bin/lmap_schedule_574.sh --config ./dist/conf/lmap_schedule_574.conf 
+# with tracing (+x)
+container> /bin/ash +x ./dist/bin/lmap_schedule_574.sh --config ./dist/conf/lmap_schedule_574.conf  
 
 # B) execute a single task script inside the container
 

@@ -6,6 +6,6 @@
 [subrepo]
 	remote = ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git
 	branch = master
-	commit = 13916ab1638e4c9e58aefc0e4ef34598378b5270
-	parent = b3e1929f276169d3c7d34b39f4d2b8b12b8747b5
+	commit = 40431e48014c4072b98f810f1a5b5f8ec5e9f49d
+	parent = 656a28cc5516e7c381a3e2687c77e56c9ac9ff51
 	cmdver = 0.3.1
