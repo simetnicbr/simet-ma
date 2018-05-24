@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git
+	branch = master
+	commit = 13916ab1638e4c9e58aefc0e4ef34598378b5270
+	parent = b3e1929f276169d3c7d34b39f4d2b8b12b8747b5
+	cmdver = 0.3.1
