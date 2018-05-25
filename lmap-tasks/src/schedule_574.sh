@@ -49,11 +49,12 @@ _schedule_orchestrate(){
   if [[ "$TWAMPC" = "NO" || "$TWAMPC" = "no" || "$TWAMPC" = "No" ]]; then
     _log "Skipping TWAMP task"
   else
-    _result=$(eval $TWAMPC $TWAMP_SERVER)
+    _log "Starting TWAMP task"
+    eval "$TWAMPC $TWAMP_SERVER > $_dir/twamp.json"
     if [[ $? -ne 0 ]]; then
+      rm -f $_dir/twamp.json
       _log "TWAMP task failed. Continue with tasks: tcp, report"
-    else 
-      echo $_result > $_dir/twamp.json
+    else
       _log "TWAMP success. table=$_dir/twamp.json"
     fi
   fi
@@ -62,11 +63,12 @@ _schedule_orchestrate(){
   if [[ "$TCPC" = "NO" || "$TCPC" = "no" || "$TCPC" = "No" ]]; then
     _log "Skipping TCP task"
   else
-    _result=$(eval $TCPC -c $TCP_ENDPOINT -h $TCP_HOST -d $AGENT -j $JWT_TOKEN)
+    _log "Starting TCP task"
+    eval "$TCPC -c $TCP_ENDPOINT -h $TCP_HOST -d $AGENT -j $JWT_TOKEN > $_dir/tcp.json"
     if [[ $? -ne 0 ]]; then
+      rm -f $_dir/tcp.json
       _log "TCP task failed. Continue with task: report"
-    else 
-      echo $_result > $_dir/tcp.json
+    else
       _log "TCP success. table=$_dir/tcp.json"
     fi
   fi

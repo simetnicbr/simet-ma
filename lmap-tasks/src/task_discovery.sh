@@ -86,7 +86,7 @@ _discovery_parse(){
   _port=$(echo "$_resp" | jq ".[$_pos].tcp[0].ports[0]" | tr -d \")
   _path=$(echo "$_resp" | jq ".[$_pos].tcp[0].basePath" | tr -d \")
   TCP_HOST="$_host"
-  TCP_ENDPOINT="https://$_host:$_port/$_path/control"
+  TCP_ENDPOINT="http://$_host:$_port/$_path"
 
   _host=$(echo "$_resp" | jq ".[$_pos].measureToken[0].hostname" | tr -d \")
   _port=$(echo "$_resp" | jq ".[$_pos].measureToken[0].ports[0]" | tr -d \")

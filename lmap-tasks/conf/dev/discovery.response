@@ -10,8 +10,8 @@
   "tcp": [{
     "id": "1",
     "hostname": "docker.lab.simet.nic.br",
-    "basePath": "tcp",
-    "ports": [443]
+    "basePath": "tcp-control",
+    "ports": [8800]
   }],
   "measureToken": [{
     "id": "1",
