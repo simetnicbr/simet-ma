@@ -46,12 +46,30 @@ _schedule_orchestrate(){
   _log "Authentication success. JWT_TOKEN=$JWT_TOKEN"
 
   # twamp metric
-  $TWAMPC $TWAMP_SERVER > $_dir/twamp.json
-  _log "TWAMP success. table=$_dir/twamp.json"
+  if [[ "$TWAMPC" = "NO" || "$TWAMPC" = "no" || "$TWAMPC" = "No" ]]; then
+    _log "Skipping TWAMP task"
+  else
+    _result=$(eval $TWAMPC $TWAMP_SERVER)
+    if [[ $? -ne 0 ]]; then
+      _log "TWAMP task failed. Continue with tasks: tcp, report"
+    else 
+      echo $_result > $_dir/twamp.json
+      _log "TWAMP success. table=$_dir/twamp.json"
+    fi
+  fi
 
   # tcp metric
-  $TCPC > $_dir/tcp.json
-  _log "TCP success. table=$_dir/tcp.json"
+  if [[ "$TCPC" = "NO" || "$TCPC" = "no" || "$TCPC" = "No" ]]; then
+    _log "Skipping TCP task"
+  else
+    _result=$(eval $TCPC -c $TCP_ENDPOINT -h $TCP_HOST -d $AGENT -j $JWT_TOKEN)
+    if [[ $? -ne 0 ]]; then
+      _log "TCP task failed. Continue with task: report"
+    else 
+      echo $_result > $_dir/tcp.json
+      _log "TCP success. table=$_dir/tcp.json"
+    fi
+  fi
 
   # lmap reporting
   report \

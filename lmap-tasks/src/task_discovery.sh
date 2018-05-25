@@ -35,7 +35,7 @@ discovery(){
   if [[ $?  -ne 0 ]]; then
     return 1
   fi
-  _log "Discovery result: TWAMP_HOST=$TWAMP_HOST TWAMP_PORT=$TWAMP_PORT TCP_ENDPOINT=$TCP_ENDPOINT AUTH_ENDPOINT=$AUTH_ENDPOINT REPORT_ENDPOINT=$REPORT_ENDPOINT"
+  _log "Discovery result: TWAMP_HOST=$TWAMP_HOST TWAMP_PORT=$TWAMP_PORT TCP_HOST=$TCP_HOST TCP_ENDPOINT=$TCP_ENDPOINT AUTH_ENDPOINT=$AUTH_ENDPOINT REPORT_ENDPOINT=$REPORT_ENDPOINT"
 }
 
 _discovery_fetch(){
@@ -85,6 +85,7 @@ _discovery_parse(){
   _host=$(echo "$_resp" | jq ".[$_pos].tcp[0].hostname" | tr -d \")
   _port=$(echo "$_resp" | jq ".[$_pos].tcp[0].ports[0]" | tr -d \")
   _path=$(echo "$_resp" | jq ".[$_pos].tcp[0].basePath" | tr -d \")
+  TCP_HOST="$_host"
   TCP_ENDPOINT="https://$_host:$_port/$_path/control"
 
   _host=$(echo "$_resp" | jq ".[$_pos].measureToken[0].hostname" | tr -d \")
