@@ -1,8 +1,7 @@
 ### SIMET-Agent-Unix Features
 # (X) tcp-client-c 
 # ( ) twamp-client-c
-# (X) simet-agent-lmap-tasks (DNS, Trace and HTTP tasks)
-
+# ( ) simet-agent-lmap-tasks (DNS, Trace and HTTP tasks)
 
 all: build
 

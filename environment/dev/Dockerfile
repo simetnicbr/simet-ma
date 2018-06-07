@@ -20,9 +20,8 @@ RUN apk add lua-dev lua json-c-dev
 RUN git clone git://git.openwrt.org/project/libubox.git
 RUN cd libubox && git checkout 6eff829d788b36939325557066f58aafd6a05321 . && cmake . && make && make install
 
-################
-# LMAP-TASKS   #
-################
+###############
+## LMAP-TASKS #
 ## SYSTEM: curl jq
 RUN apk add curl jq
 
