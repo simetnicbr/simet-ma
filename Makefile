@@ -80,7 +80,7 @@ twamp-client-c-subrepo:
 
 # simet-agent-lmap-tasks (lmap-tasks)
 lmap-tasks-subrepo:
-	git subrepo clone ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git lmap-tasks
+	git subrepo clone ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git lmap-tasks -b v0.3.3 -f
 
 
 ####################

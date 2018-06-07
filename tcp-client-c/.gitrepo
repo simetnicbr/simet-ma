@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = ssh://git@code.ceptro.br:7999/simet2/tcp-client-c.git
+	branch = v0.1.0
+	commit = 7d8cb7877d8b743b05ccd57ffdf1f1c8bed0e93d
+	parent = 4dca806fa7f99bfaec805d34a6272c859b693e97
+	cmdver = 0.3.1
