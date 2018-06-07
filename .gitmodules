@@ -1,3 +1,0 @@
-[submodule "twamp-client-c"]
-	path = twamp-client-c
-	url = ssh://git@code.ceptro.br:7999/simet2/twamp-client-c.git

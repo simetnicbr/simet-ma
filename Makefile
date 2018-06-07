@@ -1,42 +1,93 @@
+### SIMET-Agent-Unix Features
+# (X) tcp-client-c 
+# ( ) twamp-client-c
+# (X) simet-agent-lmap-tasks (DNS, Trace and HTTP tasks)
+
+
 all: build
 
 pwd=$(shell pwd)
 
-### Build command
+#####################
+### Build command ###
+#####################
+.PHONY: prepare build
 prepare:
 	-mkdir -p dist/bin
 	-mkdir -p dist/conf
 
 build: prepare
+	# Add new feature
+
 	$(MAKE) tcp-client-c-install
 	# $(MAKE) twamp-client-c-install
-	$(MAKE) lmap-tasks-install
+	# $(MAKE) lmap-tasks-install
 
-### Features
+########################
+### Install commands ###
+########################
+# features build and install commands
 
-# tcp-client-c
-tcp-client-c-subtree:
-	git subtree add --prefix tcp-client-c ssh://git@code.ceptro.br:7999/simet2/tcp-client-c.git tags/v0.1.0 --squash
+####################
+### tcp-client-c ###
 
+.PHONY: tcp-client-c-build tcp-client-c-install
+# Build
 tcp-client-c-build:
 	$(MAKE) simet -C tcp-client-c
 
-tcp-client-c-install: tcp-client-c-build prepare
+# Install
+tcp-client-c-install: prepare tcp-client-c-build
 	cp tcp-client-c/dist/bin/* dist/bin 2>/dev/null || :
 	cp tcp-client-c/dist/conf/* dist/conf 2>/dev/null || :
 
-# twamp-client-c
-twamp-client-c-submodule:
-	git submodule add --name twamp-client-c ssh://git@code.ceptro.br:7999/simet2/twamp-client-c.git twamp-client-c
+###########################################
+### simet-agent-lmap-tasks (lmap-tasks) ###
 
+.PHONY: lmap-tasks-build lmap-tasks-install
+# Build
+lmap-tasks-build:
+	$(MAKE) simet -C lmap-tasks
+
+#Install
+lmap-tasks-install: prepare lmap-tasks-build
+	cp lmap-tasks/dist/bin/* dist/bin 2>/dev/null || :
+	cp lmap-tasks/dist/conf/* dist/conf 2>/dev/null || :
+
+######################
+### twamp-client-c ###
+
+.PHONY: twamp-client-c-build twamp-client-c-install
+# Build
 twamp-client-c-build:
 	$(MAKE) simet -C twamp-client-c
 
-twamp-client-c-install: twamp-client-c-build prepare
+# Install
+twamp-client-c-install: prepare twamp-client-c-build
 	cp twamp-client-c/dist/bin/* dist/bin/ 2>/dev/null || :
 
+############################
+### Git Subrepo commands ###
+############################
 
-### Dev and test commands for Alpine
+# tcp-client-c
+tcp-client-c-subrepo:
+	git subrepo clone ssh://git@code.ceptro.br:7999/simet2/tcp-client-c.git tcp-client-c -b v0.1.0 -f
+
+# twamp-client-c
+twamp-client-c-subrepo:
+	git submodule add --name twamp-client-c ssh://git@code.ceptro.br:7999/simet2/twamp-client-c.git twamp-client-c
+
+# simet-agent-lmap-tasks (lmap-tasks)
+lmap-tasks-subrepo:
+	git subrepo clone ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git lmap-tasks
+
+
+####################
+### DEV Commands ###
+####################
+
+# Dev and test commands for Alpine
 dev:
 	docker build environment/dev/ -t simet-agent-unix-img
 	docker run \
@@ -48,10 +99,12 @@ dev:
 dev-clean:
 	-rm -rf dist
 
-dev-install:
+dev-install: dev-clean
 	$(MAKE) tcp-client-c-install
-	$(MAKE) twamp-client-c-install
+	#$(MAKE) twamp-client-c-install
+	#$(MAKE) lmap-tasks-install
 
+### Features DEV Commands
 # tcp-client-c for DEV
 tcp-client-c-run:
 	(./dist/bin/tcpc -c "http://docker.lab.simet.nic.br:8800/tcp-control" -h "docker.lab.simet.nic.br" -j "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJUY3BEb3dubG9hZE1lYXN1cmUiLCJleHAiOjE5MjA2MTY3OTMsImlzcyI6InNpbWV0Lm5pYy5iciIsIm1lYXN1cmVfdHlwZSI6Imh0dHBzRG93bmxvYWQifQ.XXGglVdL6Qb2VYi62hf94X--UsxTXMB0elNzRl2_XKM" 2> dist/bin/err.log)
@@ -59,23 +112,6 @@ tcp-client-c-run:
 # twamp-client-c for DEV
 twamp-client-c-run:
 	(./dist/bin/twampc -h "docker.lab.simet.nic.br")
-
-################################################################################
-# lmap-tasks
-################################################################################
-
-# Common lmap tasks for simet-agent-unix (server discovery, jwt authentication, report sending).
-# Currently includes an orchestration script, while the lmap scheduler is pending work.
-# All lmap tasks are inlined into this orchestration script (lmap_schedule_574.sh).
-lmap-tasks-subtree:
-	git subrepo clone ssh://git@code.ceptro.br:7999/simet2/simet-agent-lmap-tasks.git lmap-tasks
-
-lmap-tasks-build:
-	$(MAKE) simet -C lmap-tasks
-
-lmap-tasks-install: lmap-tasks-build
-	cp lmap-tasks/dist/bin/* dist/bin 2>/dev/null || :
-	cp lmap-tasks/dist/conf/* dist/conf 2>/dev/null || :
 
 # lmap-tasks for DEV
 lmap-tasks-run:
