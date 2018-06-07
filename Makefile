@@ -70,6 +70,8 @@ twamp-client-c-install: prepare twamp-client-c-build
 ### Git Subrepo commands ###
 ############################
 
+###### FOR PROD always use tag/branch
+
 # tcp-client-c
 tcp-client-c-subrepo:
 	git subrepo clone ssh://git@code.ceptro.br:7999/simet2/tcp-client-c.git tcp-client-c -b v0.1.0 -f

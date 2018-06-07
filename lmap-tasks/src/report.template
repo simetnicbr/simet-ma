@@ -1,0 +1,23 @@
+{ 
+  "ietf-lmap-report": {
+    "date": "$_date",
+    "agent-id": "$_agent",
+    "result": [
+      {
+        "schedule": "$_schedule",
+        "action": "$_action",
+        "task": "$_task",
+        "table": [
+          ### begin
+          # _table_first=$(find $_tabledir -mindepth 1 -maxdepth 1 | head -n1)
+          $(cat $_table_first)
+          # for _table in $(find $_tabledir -mindepth 1 -maxdepth 1 | (read; cat)) ; do
+          , 
+          $(cat $_table)
+          # done
+          ### end
+        ]
+      }
+    ]
+  }
+}
