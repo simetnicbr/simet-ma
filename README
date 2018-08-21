@@ -1,0 +1,23 @@
+Files with "simetbox" in the name are SIMETBOX-specific, they usually have a "simet" counterpart that is generic.
+
+<subdir>/conf/ is for the stuff that should end up installed in $CFGDIR (typically /etc/simet/), but this is
+handled by (cd <subdir> ; make install), so it is only a convention.
+
+<subdir>/Makefile support (defined as MAKEFILE variables at the top level):
+  PREFIX      [/opt/simet]  : the root of nearly everything because they will default to $PREFIX/<something>
+  BINDIR      [$PREFIX/bin] : CLI binaries (main executables), CLI scripts (main executables)
+  LIBDIR      [$PREFIX/lib] : arch-specific components
+  SYSCONFDIR  [$PREFIX/etc] : config root.
+
+  plus the usual GNU stuff (refer to autoconf and cmake)
+
+NOTE: simet config goes into $SYSCONFDIR/simet/<foo>.  simet components, to $LIBDIR/simet/<foo>.
+I.e. they are prefixed by "simet/".
+
+For SIMETBOX:
+  PREFIX=/usr
+  SYSCONFDIR=/etc
+
+For distros (everything under /opt), or simetbox-like.
+  PREFIX=/opt
+
