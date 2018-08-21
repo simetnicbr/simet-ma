@@ -1,0 +1,16 @@
+#!/bin/sh
+# Copyright (c) 2018 NIC.br
+# Distributed under the GPLv2+
+
+# This is a pass-through for OpenWRT cross-compiling, which allows the 
+# Default OpenWRT build machinery to give us the appropriate configure
+# arguments.
+
+# If this file is ran before the toplevel Makefile, the toplevel Makefile
+# will use whatever configuration was done by this file, as-is.
+
+( cd twamp-client-c && {
+	[ -x configure ] || ./autogen.sh
+	./configure "$@"
+})
+:
