@@ -2,10 +2,12 @@
 # Copyright (c) 2018 NIC.br
 # Distributed under the GPLv2+
 
-PREFIX ?=/opt/simet
-SYSCONFDIR ?= $(PREFIX)/etc
+export PREFIX ?=/opt/simet
+export SYSCONFDIR ?=$(PREFIX)/etc
 
-all: twamp-client-c.stamp simet-common.stamp
+export AGENT_VERSION :=$(shell cat version)
+
+all: twamp-client-c.stamp simet-api.stamp
 
 # twamp-client-c
 
@@ -27,21 +29,21 @@ twamp-client-c-clean:
 	-$(MAKE) -C twwap-client-c distclean || (cd twamp-client-c && rm -f config.status Makefile)
 	rm -f twamp-client-c.stamp
 
-# simet-common
+# simet-api
 
-simet-common.stamp:
-	$(MAKE) -C simet-common && touch simet-common.stamp
+simet-api.stamp:
+	$(MAKE) -C simet-api && touch simet-api.stamp
 
-simet-common-install: simet-common.stamp
-	$(MAKE) -C simet-common install
+simet-api-install: simet-api.stamp
+	$(MAKE) -C simet-api install
 
-simet-common-clean:
-	$(MAKE) -C simet-common clean
-	rm -f simet-common.stamp
+simet-api-clean:
+	$(MAKE) -C simet-api clean
+	rm -f simet-api.stamp
 
 
-install: twamp-client-c-install simet-common-install
+install: twamp-client-c-install simet-api-install
 
-clean: twamp-client-c-clean simet-common-clean
+clean: twamp-client-c-clean simet-api-clean
 
 .PHONY: install clean

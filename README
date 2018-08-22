@@ -28,3 +28,8 @@ AUTOCONF:
   ./configure script that is an alternative way to autotool and configure all
   subprojects.  OpenWRT uses it automatically, and the toplevel Makefile
   notices the subproject has been already autoconf'd, and doesn't overwrite it.
+
+VERSIONING:
+  when a subproject does not have its own version number, it should use the
+  version set in AGENT_VERSION (makefile variable)
+  This variable is set from <toplevel>/version

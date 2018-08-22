@@ -1,4 +1,0 @@
-Here you should have all simet-wide files, shared by all components.  Usually,
-those will be system-wide config files.
-
-conf/ will become either /etc/simet/ or /opt/simet/etc depeding on packaging.
