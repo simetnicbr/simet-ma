@@ -6,4 +6,4 @@
 SUBDIRS = @OPT_LIBUBOX@ src
 DIST_SUBDIRS = libubox src
 
-EXTRA_DIST	= autogen.sh CONTRIBUTING
+EXTRA_DIST	= autogen.sh
