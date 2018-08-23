@@ -18,12 +18,12 @@
 #include <time.h>
 #include <pthread.h>
 
-char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen);
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen);
 static int convert_family(int family);
-int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket);
-void *twamp_callback_thread(void *param);
+static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket);
+static void *twamp_callback_thread(void *param);
 
-int twamp_test(TestParameters);
+static int twamp_test(TestParameters);
 
 int twamp_run_client(TWAMPParameters param) {
     int ret_socket, fd_control, fd_test;
@@ -321,7 +321,7 @@ static int convert_family(int family) {
 		return 0;
 }
 
-char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
 {
     switch(sa->ss_family) {
         case AF_INET:
@@ -341,7 +341,7 @@ char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
 }
 
 // twamp_callback_thread receive the reflected packets and return the result array
-void *twamp_callback_thread(void *p) {
+static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
 	int bytes_recv = 0;
     uint pkg_count = 0;
@@ -382,7 +382,7 @@ void *twamp_callback_thread(void *p) {
 	return NULL;
 }
 
-int twamp_test(TestParameters test_param) {
+static int twamp_test(TestParameters test_param) {
     struct timeval tv_cur, tv_stop;
     uint counter = 0;
     int send_resp = 0;
@@ -430,7 +430,7 @@ int twamp_test(TestParameters test_param) {
     return 0;
 }
 
-int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket) {
+static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket) {
     int recv_size = 0, recv_total = 0;
     uint8_t message[MAX_SIZE_MESSAGE];
     int fd_ready = 0;
