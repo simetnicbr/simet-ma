@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
     char *device_id = "device_id";
     char *host = "twamp-server";
     char *port = "862";
-    int family = 4;
+    int family = 0;
     int timeout_test = 15;
     int packet_count = 50;
     int packet_interval_ns = 100000;
@@ -25,6 +25,10 @@ int main(int argc, char **argv) {
                 break;
             case 'f':
                 family = atoi(optarg);
+		if (family != 4 && family != 6) {
+		    fprintf(stderr, "Unknown IP protocol family: %s\n", optarg);
+		    return 1;
+		}
                 break;
             case 'p':
                 port = optarg;
