@@ -13,17 +13,16 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 dnl GNU General Public License for more details.
 
 AC_PREREQ([2.69])
-AC_INIT([simet-agent-unix], [0.1],
+AC_INIT([simet-ma-runner], [0.1],
         [medicoes@simet.nic.br],
-        [simet-ma],
+        [simet-ma-runner],
         [http://simet.nic.br])
 AC_COPYRIGHT([Copyright (c) 2018 NIC.br])
 
 AC_CONFIG_AUX_DIR([.])
 AC_CANONICAL_HOST
-AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
-AC_CONFIG_FILES([Makefile simet-api/Makefile])
-AC_CONFIG_SUBDIRS([twamp-client-c task-runner])
+AM_INIT_AUTOMAKE([1.13 foreign no-dist-gzip dist-xz -Wall])
+AC_CONFIG_FILES([Makefile])
 
 AC_ARG_ENABLE([simetbox],
     [AC_HELP_STRING([--enable-simetbox],
