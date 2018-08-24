@@ -167,7 +167,7 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings);
 /***********************/
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse);
-int message_format_request_session(u_int16_t sender_port, RequestSession *rqtSession);
+int message_format_request_session(uint16_t sender_port, RequestSession *rqtSession);
 
 int message_format_stop_sessions(StopSessions *stpSessions);
 

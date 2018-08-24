@@ -154,7 +154,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     INFO_LOG("local address is %s", str);
 
-    u_int16_t port = 1862;
+    uint16_t port = 1862;
 
     if (message_format_request_session(port, rqtSession) != 0) {
         INFO_LOG("message_format_request_session problem");
