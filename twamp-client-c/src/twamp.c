@@ -29,6 +29,7 @@ int twamp_run_client(TWAMPParameters param) {
     int ret_socket, fd_control, fd_test;
     int fd_ready;
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_test, local_addr_test;
+    char * testPort = NULL;
 
     // Create TWAMPReport
     TWAMPReport * report = malloc(sizeof(TWAMPReport));
@@ -65,14 +66,14 @@ int twamp_run_client(TWAMPParameters param) {
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
     fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param.family), param.host, param.port, &remote_addr_control, 2000);
     if (fd_control < 0) {
-        ERROR_LOG(fd_control, "usock_inet_timeout problem");
+        ERROR_LOG(fd_control, "could not resolve server name or address");
         simet_err = 1;
         goto MEM_FREE;
     }
 
     fd_ready = usock_wait_ready(fd_control, 5000);
     if (fd_ready != 0) {
-        ERROR_LOG(fd_ready, "usock_wait_ready problem");
+        ERROR_LOG(fd_ready, "connection to server failed");
         simet_err = 1;
         goto MEM_FREE;
     }
@@ -187,7 +188,7 @@ int twamp_run_client(TWAMPParameters param) {
     report->serverPort = (unsigned int)port;
     DEBUG_LOG("Session Port: %"PRIu16, port);
 
-    char* testPort = malloc(sizeof(char) * 6);
+    testPort = malloc(sizeof(char) * 6);
     snprintf(testPort, 6, "%u", port);
 
     // CREATE SOCKET
@@ -305,9 +306,12 @@ MEM_FREE:
     free(testPort);
 
     // free report data
-    free(report->result->raw_data);
-    free(report->result);
-    free(report);
+    if (report) {
+        if (report->result)
+                free(report->result->raw_data);
+        free(report->result);
+        free(report);
+    }
 
     return simet_err;
 }
