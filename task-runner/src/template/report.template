@@ -1,0 +1,14 @@
+{   
+    "date": "$_date",
+    "agent-id": "$_agent",
+    "result": [
+      ### begin
+      # _task_first=$(find $_task_dir -mindepth 1 -maxdepth 1 | head -n1)
+      $(cat $_task_first)
+      # for _task in $(find $_task_dir -mindepth 1 -maxdepth 1 | (read; cat)) ; do
+      , 
+      $(cat $_task)
+      # done
+      ### end
+    ]
+}

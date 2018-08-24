@@ -1,0 +1,35 @@
+[{
+  "locality": "São Paulo - SP",
+  "serverMonitor": [{
+    "serviceName": "serverMonitor",
+    "hostname": "kubelab-ix-p1.lab.simet.nic.br",
+    "basePath": "server-monitor/",
+    "ports": [
+      443
+    ]
+  }],
+  "collector": [{
+    "serviceName": "collector",
+    "hostname": "api.lab.simet.nic.br",
+    "basePath": "collector/",
+    "ports": [
+      443
+    ]
+  }],
+  "measureToken": [{
+    "serviceName": "measureToken",
+    "hostname": "api.lab.simet.nic.br",
+    "basePath": "measurement/",
+    "ports": [
+      443
+    ]
+  }],
+  "twamp": [{
+    "serviceName": "twamp",
+    "hostname": "kubelab-ix-p1.lab.simet.nic.br",
+    "basePath": "",
+    "ports": [
+      862
+    ]
+  }]
+}]

@@ -1,0 +1,15 @@
+{
+  "schedule": "$_schedule",
+  "action": "$_action",
+  "task": "$_taskname",
+  "tag": [
+    "task-version:20180810",
+    "macaddress:$_macaddress"
+  ],
+  "event": "$_event",
+  "start": "$_start",
+  "status": $_status,
+  "table": [
+    $_table
+  ]
+}
