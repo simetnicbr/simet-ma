@@ -23,7 +23,7 @@ AC_CONFIG_AUX_DIR([.])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
 AC_CONFIG_FILES([Makefile simet-api/Makefile])
-AC_CONFIG_SUBDIRS([twamp-client-c task-runner])
+AC_CONFIG_SUBDIRS([twamp-client-c simet-runner])
 
 AC_ARG_ENABLE([simetbox],
     [AC_HELP_STRING([--enable-simetbox],

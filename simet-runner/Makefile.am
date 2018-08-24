@@ -10,11 +10,6 @@ endif
 dist_bin_SCRIPTS = simet-ma_run.sh
 CLEANFILES = simet-ma_run.sh
 
-agent-version.txt:
-	echo $(PACKAGE)/$(PACKAGE_VERSION) > "$@" && chmod 0644 "$@"
-
-
-
 simet-ma_run.sh: src/log.sh \
 		src/task_authentication.sh  \
 		src/task_authorization.sh  \
@@ -27,7 +22,7 @@ simet-ma_run.sh: src/log.sh \
 
 .PHONY: help
 help:
-	@echo 'Management commands for simet-agent-unix/task-runner:'
+	@echo 'Management commands for simet-runner:'
 	@echo
 	@echo 'Usage:'
 	@echo 'build Tasks:'
@@ -64,7 +59,7 @@ clean-local:
 ################################################################################
 .PHONY: dev-simetbox
 dev-simetbox:
-		docker build -t openwrt-dev . && docker run -v `pwd`:/task-runner -w /task-runner -it openwrt-dev /bin/ash
+		docker build -t openwrt-dev . && docker run -v `pwd`:/simet-runner -w /simet-runner -it openwrt-dev /bin/ash
 
 .PHONY: dev-debian
 dev-simetlinux:
