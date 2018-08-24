@@ -355,6 +355,7 @@ int message_format_request_session(u_int16_t sender_port, RequestSession *rqtSes
     rqtSession->ConfReceiver = 0;
     rqtSession->SlotsNo = 0;
     rqtSession->PacketsNo = 0;
+    rqtSession->PaddingLength = cpu_to_be32(TST_PKT_SIZE - 14); /* FIXME */
 
     rqtSession->SenderAddress = cpu_to_be32(0);
     rqtSession->ReceiverAddress = cpu_to_be32(0);
