@@ -1,4 +1,5 @@
 /* Simple TWAMP Client */
+#include "twampc_config.h"
 #include "twamp.h"
 
 #include <stdio.h>

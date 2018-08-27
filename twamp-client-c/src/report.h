@@ -1,6 +1,7 @@
 #ifndef REPORT_H_
 #define REPORT_H_
 
+#include "twampc_config.h"
 #include "timestamp.h"
 #include "message.h"
 
