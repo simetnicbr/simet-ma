@@ -67,7 +67,7 @@ dnl Before we get to the C compiler...
 AC_USE_SYSTEM_EXTENSIONS
 
 dnl Checks for programs
-AC_PROG_CC
+AC_PROG_CC_STDC
 
 dnl Checks for headers
 AC_HEADER_STDC
