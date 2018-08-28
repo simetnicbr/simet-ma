@@ -347,7 +347,7 @@ int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *s
     return 0;
 }
 
-int message_format_request_session(uint16_t sender_port, RequestSession *rqtSession) {
+int message_format_request_session(int ipvn, uint16_t sender_port, RequestSession *rqtSession) {
     rqtSession->Type = 5;
     
     // Set 0 as default
@@ -355,13 +355,14 @@ int message_format_request_session(uint16_t sender_port, RequestSession *rqtSess
     rqtSession->ConfReceiver = 0;
     rqtSession->SlotsNo = 0;
     rqtSession->PacketsNo = 0;
+    rqtSession->IPVN = (uint8_t)ipvn;
     rqtSession->PaddingLength = cpu_to_be32(TST_PKT_SIZE - 14); /* FIXME */
 
     rqtSession->SenderAddress = cpu_to_be32(0);
     rqtSession->ReceiverAddress = cpu_to_be32(0);
 
     rqtSession->SenderPort = cpu_to_be16(sender_port);
-    rqtSession->ReceiverPort = cpu_to_be16(10001);
+    rqtSession->ReceiverPort = cpu_to_be16(862);
 
     return 0;
 }
