@@ -13,17 +13,18 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 dnl GNU General Public License for more details.
 
 AC_PREREQ([2.69])
-AC_INIT([twampc], [0.0.1],
+AC_INIT([twampc], m4_esyscmd_s([./version.sh]),
         [],
         [twampc],
         [])
-AC_COPYRIGHT([Copyright (c) 2017 NIC.br])
+AC_COPYRIGHT([Copyright (c) 2018 NIC.br])
 
 AC_CONFIG_SRCDIR([src/twampc.c])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
 AC_CONFIG_HEADERS([twampc_config.h])
 AC_CONFIG_MACRO_DIR([m4])
+AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh'])
 
 dnl Work around the lack of a way to set preferred *FLAGS
 AC_ARG_ENABLE([extend-flags],
