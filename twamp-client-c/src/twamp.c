@@ -1,3 +1,4 @@
+#include "twampc_config.h"
 #include "twamp.h"
 
 #include "logger.h"

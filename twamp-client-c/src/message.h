@@ -1,6 +1,7 @@
 #ifndef MESSAGE_H_
 #define MESSAGE_H_
 
+#include "twampc_config.h"
 #include "timestamp.h"
 
 #include <inttypes.h>
@@ -167,7 +168,7 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings);
 /***********************/
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse);
-int message_format_request_session(uint16_t sender_port, RequestSession *rqtSession);
+int message_format_request_session(uint16_t sendr_port, RequestSession *rqtSession);
 
 int message_format_stop_sessions(StopSessions *stpSessions);
 

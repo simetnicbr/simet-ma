@@ -1,4 +1,5 @@
 /* Simple TWAMP Client */
+#include "twampc_config.h"
 #include "twamp.h"
 
 #include <stdio.h>
@@ -6,7 +7,19 @@
 #include <unistd.h>
 #include <getopt.h>
 
-static void usage(const char * const p, int mode)
+static const char program_copyright[]=
+	"Copyright (c) 2018 NIC.br\n\n"
+	"This is free software; see the source for copying conditions.\n"
+	"There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR\n"
+	"A PARTICULAR PURPOSE.\n";
+
+static void print_version(void)
+{
+    fprintf(stdout, "%s %s\n%s\n", PACKAGE_NAME, PACKAGE_VERSION, program_copyright);
+    exit(EXIT_SUCCESS);
+}
+
+static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-4|-6] [-p <service port>] [-t <timeout (s)>] "
 	    "[-c <packet count>] [-i <interpacket interval (ns)>] [-d <device id>] "
@@ -38,7 +51,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "46hp:t:c:i:d:")) != -1) {
+    while ((option = getopt(argc, argv, "46hVp:t:c:i:d:")) != -1) {
         switch(option) {
 	case '4':
 	    family = 4;
@@ -62,15 +75,18 @@ int main(int argc, char **argv)
 	    device_id = optarg;
 	    break;
 	case 'h':
-	    usage(argv[0], 1);
+	    print_usage(argv[0], 1);
+	    /* fall-through */ /* silence bogus warning */
+	case 'V':
+	    print_version();
 	    /* fall-through */ /* silence bogus warning */
 	default:
-	    usage(argv[0], 0);
+	    print_usage(argv[0], 0);
         }
     }
 
     if (optind >= argc || argc - optind != 1)
-	usage(argv[0], 0);
+	print_usage(argv[0], 0);
 
     host = argv[optind];
 

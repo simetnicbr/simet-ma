@@ -1,3 +1,4 @@
+#include "twampc_config.h"
 #include "timestamp.h"
 
 #include <inttypes.h>
