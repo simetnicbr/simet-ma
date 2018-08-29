@@ -43,6 +43,8 @@ configless: clean
 		cat ./src/main.sh ) \
 	>> ./dist/simet_agent_unix.sh
 	chmod +x ./dist/simet_agent_unix.sh
+	cp ./src/template/report.template ./dist
+	cp ./src/template/task.template ./dist
 
 clean:
 	rm -fr ./dist

@@ -1,13 +1,13 @@
 {   
-    "date": "$_date",
-    "agent-id": "$_agent",
+    "date": "$_lmap_report_date",
+    "agent-id": "$AGENT_ID",
     "result": [
       ### begin
-      # _task_first=$(find $_task_dir -mindepth 1 -maxdepth 1 | head -n1)
-      $(cat $_task_first)
-      # for _task in $(find $_task_dir -mindepth 1 -maxdepth 1 | (read; cat)) ; do
+      # _first=$(find $_report_dir/*/result.json | head -n1)
+      $(cat $_first)
+      # for _follower in $(find $_report_dir/*/result.json | (read; cat)) ; do
       , 
-      $(cat $_task)
+      $(cat $_follower)
       # done
       ### end
     ]

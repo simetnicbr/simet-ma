@@ -16,14 +16,6 @@
       443
     ]
   }],
-  "measureToken": [{
-    "serviceName": "measureToken",
-    "hostname": "api.lab.simet.nic.br",
-    "basePath": "measurement/",
-    "ports": [
-      443
-    ]
-  }],
   "twamp": [{
     "serviceName": "twamp",
     "hostname": "kubelab-ix-p1.lab.simet.nic.br",

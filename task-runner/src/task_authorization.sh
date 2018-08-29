@@ -2,6 +2,7 @@
 #
 # function authorization()
 # - input param: endpoint_base agent_token
+# - input var: MOCK_AUTHORIZATION (optional var)
 # - output var: AUTHORIZATION_TOKEN
 # - return 0, on authorization
 # - return 1, on non authorization
@@ -14,6 +15,11 @@
 ################################################################################
 
 authorization() {
+  if [ "$MOCK_AUTHORIZATION" = "true" ]; then
+  _debug "Mocking authorization request, with allow."
+    return 0  
+  fi
+
   local _endpoint="$1/measure-allowed"
   local _agent_token="$2"
 
