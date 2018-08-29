@@ -60,11 +60,16 @@ report(){
   done
 
   # main steps
-  _report_render || return 1
+  _report_render_final || return 1
   _report_send
 }
 
-_report_render(){
+report_render_task_result(){
+  local _task_dir="$1"
+  _sempl "$_task.template" "$_task_dir/tables"
+}
+
+_report_render_final(){
   _log "Going to render template '$_template.{head,tail}'"
 
   # export the variables to be interpolated in the report template

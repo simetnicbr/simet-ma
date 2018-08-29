@@ -1,0 +1,22 @@
+{
+  "schedule": "$LMAP_TASK_SCHEDULE",
+  "action": "$LMAP_TASK_ACTION",
+  "task": "$_lmap_task_name",
+  "tag": [
+    "task-version:$_lmap_task_version",
+     "macaddress:$_macaddress"
+  ],
+  "event": "$LMAP_TASK_EVENT",
+  "start": "$LMAP_TASK_START",
+  "status": $_lmap_task_status,
+  "table": [
+    ### begin
+    # _first=$(find $_task_dir/tables -mindepth 1 -maxdepth 1 | head -n1)
+    $(cat $_first)
+    # for _follower in $(find $_task_dir/tables -mindepth 1 -maxdepth 1 | (read; cat)) ; do
+    , 
+    $(cat $_follower)
+    # done
+    ### end
+  ]
+}
