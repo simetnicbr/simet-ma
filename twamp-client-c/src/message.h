@@ -1,6 +1,7 @@
 #ifndef MESSAGE_H_
 #define MESSAGE_H_
 
+#include "twampc_config.h"
 #include "timestamp.h"
 
 #include <inttypes.h>
@@ -102,7 +103,7 @@ typedef struct twamp_stop {
 /* TEST MESSAGES */
 /*****************/
 
-#define TST_PKT_SIZE 512
+#define TST_PKT_SIZE 128
 
 typedef struct test_packet {
     uint32_t SeqNumber;
@@ -167,7 +168,7 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings);
 /***********************/
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse);
-int message_format_request_session(uint16_t sender_port, RequestSession *rqtSession);
+int message_format_request_session(int ipvn, uint16_t sender_port, RequestSession *rqtSession);
 
 int message_format_stop_sessions(StopSessions *stpSessions);
 

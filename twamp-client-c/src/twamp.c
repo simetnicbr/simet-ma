@@ -1,3 +1,4 @@
+#include "twampc_config.h"
 #include "twamp.h"
 
 #include "logger.h"
@@ -20,6 +21,8 @@
 
 static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen);
 static int convert_family(int family);
+static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
+static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
 static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket);
 static void *twamp_callback_thread(void *param);
 
@@ -28,7 +31,7 @@ static int twamp_test(TestParameters);
 int twamp_run_client(TWAMPParameters param) {
     int ret_socket, fd_control, fd_test;
     int fd_ready;
-    struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_test, local_addr_test;
+    struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
 
     // Create TWAMPReport
@@ -86,6 +89,15 @@ int twamp_run_client(TWAMPParameters param) {
         WARNING_LOG("get_ip_str problem");
     }
     report->address = hostAddr;
+
+    memset(&local_addr_measure, 0, sizeof(struct sockaddr_storage));
+    cp_remote_addr(&remote_addr_control, &local_addr_measure);
+
+    if (remote_addr_control.ss_family == AF_INET) {
+        param.family = 4;
+    } else {
+        param.family = 6;
+    }
 
     // SERVER GREETINGS
     ret_socket = message_server_greetings(fd_control, 10, srvGreetings);
@@ -155,9 +167,53 @@ int twamp_run_client(TWAMPParameters param) {
 
     INFO_LOG("local address is %s", str);
 
-    uint16_t port = 1862;
+    // CREATE SOCKET
+    memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
+    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, 2000);
+    if (fd_test < 0) {
+        ERROR_LOG(fd_test, "usock_inet_timeout problem");
+        simet_err = 1;
+        goto CONTROL_CLOSE;
+    }
 
-    if (message_format_request_session(port, rqtSession) != 0) {
+    fd_ready = usock_wait_ready(fd_test, 5000);
+    if (fd_ready != 0) {
+        ERROR_LOG(fd_ready, "usock_wait_ready problem");
+        simet_err = 1;
+        goto TEST_CLOSE;
+    }
+
+    INFO_LOG("TEST socket connected");
+    DEBUG_LOG("sin_addr: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
+    DEBUG_LOG("sin_port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
+
+    // Get Sender Port
+    uint16_t sender_port = 862;
+    addr_len = sizeof(local_addr_measure);
+    memset(&local_addr_measure, 0, addr_len);
+	if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0){
+        INFO_LOG("getsockname problem");
+        simet_err = 1;
+        goto TEST_CLOSE;
+	}
+
+    // Verificar se o Endian está invertido....
+    switch(local_addr_measure.ss_family) {
+        case AF_INET:
+            sender_port = be16_to_cpu(((struct sockaddr_in *) &local_addr_measure)->sin_port);
+            INFO_LOG("PORT IPv4 %u", sender_port);
+            break;
+
+        case AF_INET6:
+            sender_port = be16_to_cpu(((struct sockaddr_in6 *) &local_addr_measure)->sin6_port);
+            INFO_LOG("PORT IPv6: %u", sender_port);
+            break;
+
+        default:
+            break;
+    }
+
+    if (message_format_request_session(param.family, sender_port, rqtSession) != 0) {
         INFO_LOG("message_format_request_session problem");
         simet_err = 1;
         goto TEST_CLOSE;
@@ -184,54 +240,29 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    port = actSession->Port;
-    report->serverPort = (unsigned int)port;
-    DEBUG_LOG("Session Port: %"PRIu16, port);
+    uint16_t receiver_port = actSession->Port;
+    report->serverPort = (unsigned int)receiver_port;
+    DEBUG_LOG("Session Port: %"PRIu16, receiver_port);
 
     testPort = malloc(sizeof(char) * 6);
-    snprintf(testPort, 6, "%u", port);
+    snprintf(testPort, 6, "%u", receiver_port);
 
-    // CREATE SOCKET
-    memset(&remote_addr_test, 0, sizeof(struct sockaddr_storage));
-    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, testPort, &remote_addr_test, 2000);
-    if (fd_test < 0) {
-        ERROR_LOG(fd_test, "usock_inet_timeout problem");
-        simet_err = 1;
-        goto CONTROL_CLOSE;
-    }
+    add_remote_port(&remote_addr_measure, receiver_port);
+    addr_len = sizeof(remote_addr_measure);
 
-    fd_ready = usock_wait_ready(fd_test, 5000);
-    if (fd_ready != 0) {
-        ERROR_LOG(fd_ready, "usock_wait_ready problem");
-        simet_err = 1;
-        goto TEST_CLOSE;
-    }
+    DEBUG_LOG("Update Remote Port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
+    DEBUG_LOG("Addr value: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
 
-    INFO_LOG("TEST socket connected");
+    DEBUG_LOG("fd_test before: %d", fd_test);
 
-    addr_len = sizeof(local_addr_test);
-    memset(&local_addr_test, 0, addr_len);
-	if (getsockname(fd_test, (struct sockaddr *) &local_addr_test, (socklen_t *) &addr_len) < 0){
-        INFO_LOG("getsockname problem");
+    if (connect(fd_test, (struct sockaddr *) &remote_addr_measure, remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) :
+sizeof(struct sockaddr_in6)) != 0) {
+        ERRNO_LOG("connect to remote measurement peer problem");
         simet_err = 1;
         goto TEST_CLOSE;
-	}
-
-    // Verificar se o Endian está invertido....
-    switch(local_addr_test.ss_family) {
-        case AF_INET:
-            port = be16_to_cpu(((struct sockaddr_in *) &local_addr_test)->sin_port);
-            INFO_LOG("PORT IPv4 %u", port);
-            break;
-
-        case AF_INET6:
-            port = be16_to_cpu(((struct sockaddr_in6 *) &local_addr_test)->sin6_port);
-            INFO_LOG("PORT IPv6: %u", port);
-            break;
-
-        default:
-            break;
     }
+
+    DEBUG_LOG("fd_test after: %d", fd_test);
 
     // START SESSION
     strSession->Type = 2;
@@ -342,6 +373,34 @@ static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxle
     }
 
     return s;
+}
+
+static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst) {
+    switch(sa_src->ss_family) {
+        case AF_INET:
+            ((struct sockaddr_in *)sa_dst)->sin_addr = ((struct sockaddr_in *)sa_src)->sin_addr;
+            break;
+
+        case AF_INET6:
+            ((struct sockaddr_in6 *)sa_dst)->sin6_addr = ((struct sockaddr_in6 *)sa_src)->sin6_addr;
+            break;
+    }
+
+    return 0;
+}
+
+static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
+    switch(sa->ss_family) {
+        case AF_INET:
+            ((struct sockaddr_in *)sa)->sin_port = htons(remote_port);
+            break;
+
+        case AF_INET6:
+            ((struct sockaddr_in6 *)sa)->sin6_port = htons(remote_port);
+            break;
+    }
+
+    return 0;
 }
 
 // twamp_callback_thread receive the reflected packets and return the result array
