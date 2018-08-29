@@ -123,8 +123,7 @@ _task_twamp(){
   _info "Start task TWAMP IPv$_af"
   local _host=$( discover_service TWAMP HOST )
   local _port=$( discover_service TWAMP PORT )
-  # local _about=$( $TWAMPC -V ) 
-  local _about=" twampc 1.2.3-ABC "
+  local _about=$( $TWAMPC -V )
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
   export _lmap_task_name=$( echo "$_about" | head -n1 | sed -En 's/^\s*(\S+)\s+(\S+)\s*/\1/p' )    # " twampc 1.2.3-ABC " => "twampc"
   export _lmap_task_version=$( echo "$_about" | head -n1 | sed -En 's/^\s*(\S+)\s+(\S+)\s*/\2/p' ) # " twampc 1.2.3-ABC " => "1.2.3-ABC"
