@@ -9,7 +9,7 @@
 # - Report LMAP
 #
 # Execution (after build):
-# ./dist/simet_agent_unix.sh --config ./dist/simet_agent_unix.conf --debug
+# ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
 #
 # Dependencies:
 # - sempl (src/vendor/sempl; https://github.com/nextrevision/sempl)
@@ -52,9 +52,10 @@ _main_orchestrate(){
   # 2. task service discovery
   local _discovered="false"
   discover_init
-  while [ discover_next_peer ]; do
+  discover_next_peer
+  while [ $? ]; do
     local _endpoint_base="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
-    _info "Discovered measurement peer. Authorization attempt at $_host"
+    _info "Discovered measurement peer. Authorization attempt at $_endpoint_base"
     # 3. task authorization: try at successive peers, until first success 
     AUTHORIZATION_TOKEN="undefined"
     authorization "$_endpoint_base" "$AGENT_TOKEN"
@@ -62,11 +63,12 @@ _main_orchestrate(){
       _discovered="true"
       break
     fi
+    discover_next_peer
   done
   if [ "$_discovered" = "true" ]; then
-    _info "Peer discovery and authorization success: Selected peer: $_host"
+    _info "Peer discovery and authorization success: Selected peer: $_endpoint_base"
   else
-    _error "Peer discovery and authorization failure: Last attempt at peer: $_host"
+    _error "Peer discovery and authorization failure: Last attempt at peer: $_endpoint_base"
     exit 1
   fi
 
@@ -100,7 +102,7 @@ _main_orchestrate(){
     --location \
     --show-error \
     --verbose \
-    "$_endpoint/measure" 2>&1
+    "${_endpoint}measure" 2>&1
   ) || {
     _log "POST $_endpoint failed. See the HTTP Trace in the following log lines."
     _log "HTTP Trace: ${_resp}"
@@ -123,10 +125,11 @@ _task_twamp(){
   _info "Start task TWAMP IPv$_af"
   local _host=$( discover_service TWAMP HOST )
   local _port=$( discover_service TWAMP PORT )
-  local _about=$( $TWAMPC -V )
+  local _about=$( $TWAMPC -V | head -n1)
+  set -f && set -- $_about && set +f
+  export _lmap_task_name=$1    # " twampc 1.2.3-ABC " => "twampc"
+  export _lmap_task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
-  export _lmap_task_name=$( echo "$_about" | head -n1 | sed -En 's/^\s*(\S+)\s+(\S+)\s*/\1/p' )    # " twampc 1.2.3-ABC " => "twampc"
-  export _lmap_task_version=$( echo "$_about" | head -n1 | sed -En 's/^\s*(\S+)\s+(\S+)\s*/\2/p' ) # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   mkdir -p "$_task_dir/tables"
   _debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
@@ -166,10 +169,11 @@ _main_setup(){
   mkdir -p "$BASEDIR/report"
 
   # 2. prepare env variables
-  export LMAP_TASK_SCHEDULE="simet_base_schedule"
-  export LMAP_TASK_ACTION="simet_base_action"
-  export LMAP_TASK_EVENT="simet_base_event"
-  export LMAP_TASK_START="simet_base_start"
+  export LMAP_TASK_SCHEDULE="to_define"
+  export LMAP_TASK_ACTION="to_define"
+  export LMAP_TASK_EVENT="to_define"
+  export LMAP_TASK_START="to_define"
+  export LMAP_MAC_ADDRESS=$( get_mac_address.sh )
 }
 
 _main_cleanup(){
