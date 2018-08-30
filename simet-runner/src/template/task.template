@@ -4,7 +4,7 @@
   "task": "$_lmap_task_name",
   "tag": [
     "task-version:$_lmap_task_version",
-     "macaddress:$_macaddress"
+     "macaddress:$LMAP_MAC_ADDRESS"
   ],
   "event": "$LMAP_TASK_EVENT",
   "start": "$LMAP_TASK_START",
