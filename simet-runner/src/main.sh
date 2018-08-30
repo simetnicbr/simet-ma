@@ -187,7 +187,7 @@ _main_config(){
   if [ "$AGENT_TOKEN_FILE" = "" ]; then _msg="$_msg AGENT_TOKEN_FILE"; fi
   if [ "$API_SERVICE_DISCOVERY" = "" ]; then _msg="$_msg API_SERVICE_DISCOVERY"; fi
   if [ "$AGENT_LOCK" = "" ]; then _msg="$_msg AGENT_LOCK"; fi
-  if [ "$TEMPLATE_DIR" = "" ]; then _msg="$_msg TEMPALTE_DIR"; fi
+  if [ "$TEMPLATE_DIR" = "" ]; then _msg="$_msg TEMPLATE_DIR"; fi
   if [ "$TWAMPC" = "" ]; then _msg="$_msg TWAMPC"; fi
   if [ "$_msg" != "" ]; then
     _error "Exit due to missing config params: $_msg"

@@ -16,3 +16,4 @@ src/Makefile
 src/Makefile.in
 stamp-h1
 version
+simet-ma_run.sh
