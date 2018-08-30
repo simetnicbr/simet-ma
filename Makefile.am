@@ -4,4 +4,4 @@
 ##
 
 SUBDIRS     = simet-api twamp-client-c simet-runner
-EXTRA_DIST  = autogen.sh
+EXTRA_DIST  = autogen.sh version

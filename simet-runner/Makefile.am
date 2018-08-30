@@ -11,6 +11,8 @@ dist_bin_SCRIPTS = simet-ma_run.sh
 CLEANFILES = simet-ma_run.sh
 dist_simetlib_DATA = src/template/report.template src/template/task.template
 
+EXTRA_DIST = autogen.sh version
+
 simet-ma_run.sh: src/log.sh \
 		src/task_authentication.sh  \
 		src/task_authorization.sh  \
