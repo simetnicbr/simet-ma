@@ -9,6 +9,7 @@ endif
 
 dist_bin_SCRIPTS = simet-ma_run.sh
 CLEANFILES = simet-ma_run.sh
+dist_simetlib_DATA = src/template/report.template src/template/task.template
 
 simet-ma_run.sh: src/log.sh \
 		src/task_authentication.sh  \
@@ -19,6 +20,7 @@ simet-ma_run.sh: src/log.sh \
 		src/task_report.sh \
 		src/main.sh
 	( echo "#!$(usetheshell)" ; cat $^ ) > "$@" && chmod +x "$@"
+
 
 .PHONY: help
 help:
