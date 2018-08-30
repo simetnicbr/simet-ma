@@ -8,8 +8,12 @@ abend() {
 }
 
 GIT_VER=
-git rev-parse --git-dir >/dev/null 2>&1 && GIT_VER=$(git describe --dirty=+ --abbrev=10 --tags --long --match 'v*' --always 2>/dev/null)
-[ -z "$GIT_VER" ] && GIT_VER=$(cat version)
+if [ -r version ] ; then
+	GIT_VER=$(cat version)
+else
+	git rev-parse --git-dir >/dev/null 2>&1 && GIT_VER=$(git describe --dirty=+ --abbrev=10 --tags --long --match 'v*' --always 2>/dev/null)
+fi
+
 if [ -n "$GIT_VER" ] ; then
 	echo $GIT_VER
 else

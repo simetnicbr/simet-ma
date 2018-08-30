@@ -12,4 +12,3 @@
 #    autoconf, automake, libtool (newer possible)
 
 autoreconf -i
-./version.sh > version

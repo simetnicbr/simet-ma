@@ -24,7 +24,11 @@ AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
 AC_CONFIG_HEADERS([twampc_config.h])
 AC_CONFIG_MACRO_DIR([m4])
-AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh'])
+AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
+
+if test ! -r version ; then
+	echo "$PACKAGE_VERSION" > version
+fi
 
 dnl Work around the lack of a way to set preferred *FLAGS
 AC_ARG_ENABLE([extend-flags],
