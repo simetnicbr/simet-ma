@@ -20,7 +20,7 @@ authorization() {
     return 0  
   fi
 
-  local _endpoint="$1/measure-allowed"
+  local _endpoint="${1}measure-allowed"
   local _agent_token="$2"
 
   _resp=$(curl \

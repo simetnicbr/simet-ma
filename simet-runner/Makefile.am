@@ -44,9 +44,10 @@ help:
 .PHONY: dev
 dev: configless
 	cp ./test/simet_agent_unix.conf		./dist/simet_agent_unix.conf
-	cp ./test/agent-id.lab		./dist/agent-id
-	cp ./test/agent.jwt.lab		./dist/agent.jwt
+	cp ./test/agent-id.prod		./dist/agent-id
+	cp ./test/agent.jwt.prod		./dist/agent.jwt
 	cp ./test/services.mock.json		./dist/services.mock.json
+	cp ./src/template/*		./dist/
 
 .PHONY: configless
 configless: clean simet-ma_run.sh
