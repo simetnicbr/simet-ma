@@ -12,6 +12,10 @@ NOTE: simet config goes into $SYSCONFDIR/simet/<foo>.  simet components, to $LIB
 I.e. they are prefixed by "simet/".
 
 VERSIONING:
-  subdirs that are independent have their own versions, set in the CMakefile or in configure.ac.
-  the main version is set by the toplevel configure.ac AC_INIT.
+  The main version is set by the toplevel "version" file.  If working from
+  a VCS checkout, it will be based on "git describe" instead (see version.sh).
+
+  Please always commit an up-to-date version file and then tag the new release:
+
+  echo "v1.2.3" > version ; git add version ; git commit -m "version: update" ; git tag -m "simet-ma version $(cat version)" $(cat version)
 

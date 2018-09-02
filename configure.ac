@@ -26,10 +26,6 @@ AC_CONFIG_FILES([Makefile simet-api/Makefile])
 AC_CONFIG_SUBDIRS([twamp-client-c simet-runner])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
 
-if test ! -r version ; then
-	echo "$PACKAGE_VERSION" > version
-fi
-
 AC_ARG_ENABLE([simetbox],
     [AC_HELP_STRING([--enable-simetbox],
         [build for SIMETBOX (OpenWRT)])],

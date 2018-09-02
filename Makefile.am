@@ -1,7 +1,18 @@
 ##
-## Toplevel Makefile.am for twampc
-## Copyright (c) 2017 NIC.br
+## Toplevel Makefile.am for simet-ma
+## Copyright (c) 2018 NIC.br
 ##
+## License: GPLv2+
 
 SUBDIRS     = simet-api twamp-client-c simet-runner
-EXTRA_DIST  = autogen.sh version
+EXTRA_DIST  = autogen.sh version version.sh
+
+version:
+	$(top_srcdir)/version.sh > version
+
+.PHONY: bump-version
+bump-version:
+	-rm -f version
+	$(top_srcdir)/version.sh > version
+
+dist-local: version
