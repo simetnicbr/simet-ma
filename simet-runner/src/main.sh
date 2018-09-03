@@ -53,7 +53,7 @@ _main_orchestrate(){
   local _discovered="false"
   discover_init
   discover_next_peer
-  while [ $? ]; do
+  while [ $? -eq 0 ]; do
     local _endpoint_base="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
     _info "Discovered measurement peer. Authorization attempt at $_endpoint_base"
     # 3. task authorization: try at successive peers, until first success 
@@ -135,7 +135,6 @@ _task_twamp(){
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   export _lmap_task_status="$?"
   if [ "$_lmap_task_status" -ne 0 ]; then
-    export _lmap_task_status 
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
