@@ -135,7 +135,6 @@ _task_twamp(){
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   export _lmap_task_status="$?"
   if [ "$_lmap_task_status" -ne 0 ]; then
-    export _lmap_task_status 
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
