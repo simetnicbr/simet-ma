@@ -18,4 +18,6 @@ stamp-h1
 twampc_config.h
 twampc_config.h.in
 version
-*.log
+err.log
+src/*.o
+src/twampc
