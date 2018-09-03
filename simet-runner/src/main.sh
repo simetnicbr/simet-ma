@@ -53,7 +53,7 @@ _main_orchestrate(){
   local _discovered="false"
   discover_init
   discover_next_peer
-  while [ $? ]; do
+  while [ $? -eq 0 ]; do
     local _endpoint_base="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
     _info "Discovered measurement peer. Authorization attempt at $_endpoint_base"
     # 3. task authorization: try at successive peers, until first success 
