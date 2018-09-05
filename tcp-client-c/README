@@ -1,0 +1,6 @@
+Source code structure:
+
+<main project dir>
+  m4/         - autotools macros
+  libubox/    - optional embedded libubox (will be statically linked)
+  src/        - module
