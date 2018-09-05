@@ -9,6 +9,7 @@ abend() {
 	exit 1
 }
 
+[ -r /usr/lib/simet/simet-ma.conf ] && . /usr/lib/simet/simet-ma.conf
 [ -r /etc/simet/simet-ma.conf ] && . /etc/simet/simet-ma.conf
 AGENT_ID_FILE=${AGENT_ID_FILE:-/etc/simet/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-/etc/simet/agent.jwt}

@@ -7,8 +7,8 @@ else
 dist_bin_SCRIPTS = simet_register_ma.sh
 endif
 
-dist_simetconf_DATA = conf/*
-dist_simetlib_DATA  = agent-version.txt
+#dist_simetconf_DATA = conf/*
+dist_simetlib_DATA  = conf/* agent-version.txt
 
 CLEANFILES = agent-version.txt
 

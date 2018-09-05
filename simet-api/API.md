@@ -2,11 +2,16 @@
 
 ## System-wide config file
 
+  <libdir>/simet/simet-ma.conf
   <sysconf dir>/simet/simet-ma.conf
 
-  $<VARIABLE> below refers to a variable set on the above file.
+  $<VARIABLE> below refers to a variable set on the above files.
   The file follows the VARIABLE="contents with spaces" syntax,
   "" is optional when the shell would accept it without quotes.
+
+  First, the one in libdir is read.  Then, the one in sysconf dir
+  is read (*if* it exists, it is not required to be there).  The
+  last definition for each variable "wins".
 
 
 ## API version
