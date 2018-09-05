@@ -20,14 +20,19 @@
 _info "Executing $0"
 
 main(){
-  local _config="undefined"
   local _result="undefined"
+  local _configured=0
 
   # read params
   while [ ! $# -eq 0 ]; do
     case "$1" in
       --config)
-        _config="$2"
+	if [ $_configured -eq 0 ] ; then
+		_main_config "$2" || exit 1
+		_configured=1
+	else
+		[ -r "$2" ] && _main_config "$2"
+	fi
         ;;
       --debug)
         DEBUG="true"
@@ -36,7 +41,6 @@ main(){
     shift
   done
 
-  _main_config "$_config"
   _main_setup
   _main_orchestrate
   _main_cleanup
@@ -183,7 +187,7 @@ _main_cleanup(){
 }
 
 _main_config(){
-  source "$1"
+  . "$1"
   _debug "Loaded config '$1': AGENT_ID_FILE=$AGENT_ID_FILE AGENT_TOKEN_FILE=$AGENT_TOKEN_FILE API_SERVICE_DISCOVERY=$API_SERVICE_DISCOVERY AGENT_LOCK=$AGENT_LOCK TEMPLATE_DIR=$TEMPLATE_DIR TWAMPC=$TWAMPC"
   local _msg=""
   if [ "$AGENT_ID_FILE" = "" ]; then _msg="$_msg AGENT_ID_FILE"; fi

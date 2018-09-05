@@ -1,5 +1,4 @@
 This uses the toplevel configure.ac
 This uses the toplevel Makefile.am via SUBDIRS
 
-
 API.md describes the API.
