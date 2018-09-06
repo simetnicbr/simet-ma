@@ -13,9 +13,9 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 dnl GNU General Public License for more details.
 
 AC_PREREQ([2.69])
-AC_INIT([twampc], m4_esyscmd_s([./version.sh]),
+AC_INIT([tcpc], m4_esyscmd_s([./version.sh]),
         [],
-        [twampc],
+        [tcpc],
         [])
 AC_COPYRIGHT([Copyright (c) 2018 NIC.br])
 
