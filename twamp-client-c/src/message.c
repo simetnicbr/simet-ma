@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 
-#include "libubox/utils.h"
+#include <arpa/inet.h>
 
 /********************/
 /* MESSAGES READERS */
@@ -65,8 +65,8 @@ int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetin
 
                 if (recv_total == SERVER_GREETINGS_SIZE) {
 
-                    srvGreetings->Modes = be32_to_cpu(srvGreetings->Modes);
-                    srvGreetings->Count = be32_to_cpu(srvGreetings->Count);
+                    srvGreetings->Modes = ntohl(srvGreetings->Modes);
+                    srvGreetings->Count = ntohl(srvGreetings->Count);
 
                     return recv_total;
                 }
@@ -131,8 +131,8 @@ int message_server_start(int socket, int timeout, ServerStart *srvStart) {
                 recv_total += recv_size;
 
                 if (recv_total == SERVER_START_SIZE) {
-                    srvStart->StartTime.integer = be32_to_cpu(srvStart->StartTime.integer);
-                    srvStart->StartTime.fractional = be32_to_cpu(srvStart->StartTime.fractional);
+                    srvStart->StartTime.integer = ntohl(srvStart->StartTime.integer);
+                    srvStart->StartTime.fractional = ntohl(srvStart->StartTime.fractional);
 
                     return recv_total;
                 }
@@ -197,7 +197,7 @@ int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
                 recv_total += recv_size;
 
                 if (recv_total == ACCEPT_SESSION_SIZE) {
-                    actSession->Port = be16_to_cpu(actSession->Port);
+                    actSession->Port = ntohs(actSession->Port);
 
                     return recv_total;
                 }
@@ -342,7 +342,7 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings) {
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse) {
     stpResponse->Mode = srvGreetings->Modes & (01);
-    stpResponse->Mode = cpu_to_be32(stpResponse->Mode);
+    stpResponse->Mode = htonl(stpResponse->Mode);
 
     return 0;
 }
@@ -356,13 +356,13 @@ int message_format_request_session(int ipvn, uint16_t sender_port, RequestSessio
     rqtSession->SlotsNo = 0;
     rqtSession->PacketsNo = 0;
     rqtSession->IPVN = (uint8_t)ipvn;
-    rqtSession->PaddingLength = cpu_to_be32(TST_PKT_SIZE - 14); /* FIXME */
+    rqtSession->PaddingLength = htonl(TST_PKT_SIZE - 14); /* FIXME */
 
-    rqtSession->SenderAddress = cpu_to_be32(0);
-    rqtSession->ReceiverAddress = cpu_to_be32(0);
+    rqtSession->SenderAddress = htonl(0);
+    rqtSession->ReceiverAddress = htonl(0);
 
-    rqtSession->SenderPort = cpu_to_be16(sender_port);
-    rqtSession->ReceiverPort = cpu_to_be16(862);
+    rqtSession->SenderPort = htons(sender_port);
+    rqtSession->ReceiverPort = htons(862);
 
     return 0;
 }
@@ -371,7 +371,7 @@ int message_format_stop_sessions(StopSessions *stpSessions) {
     stpSessions->Type = 3;
     stpSessions->Accept = 0;
 
-    stpSessions->SessionsNo = cpu_to_be32(1);
+    stpSessions->SessionsNo = htonl(1);
 
     return 0;
 }

@@ -29,9 +29,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <poll.h>
+#include <time.h>
 
 #include "usock.h"
-#include "utils.h"
 
 static void usock_set_flags(int sock, unsigned int type)
 {

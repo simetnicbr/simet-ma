@@ -111,24 +111,6 @@ AC_ARG_ENABLE([valgrind-build],
                [AC_DEFINE(VALGRIND_BUILD, [], [Valgrind-friendly build])])
     ])
 
-dnl -------------
-dnl embedded libs
-dnl -------------
-
-dnl use embedded libubox if no system one is found
-AC_CHECK_LIB([ubox], [usock_inet_timeout],
-    [LIB_UBOX="-lubox"],
-    [
-        AC_MSG_NOTICE([Will use the embedded libubox...])
-        UBOX_LIBDIR="-L ../libubox"
-        LIB_UBOX="-l:libubox.a"
-        OPT_LIBUBOX="libubox"
-        (cd ${OPT_LIBUBOX} && cmake -DBUILD_LUA=OFF -DBUILD_EXAMPLES=OFF .)
-    ])
-AC_SUBST([LIB_UBOX])
-AC_SUBST([OPT_LIBUBOX])
-AC_SUBST([UBOX_LIBDIR])
-
 AC_CHECK_LIB(json, json_object_get,[ JSON_LIBS="-ljson" ],[
 AC_CHECK_LIB(json-c, json_object_get,[ JSON_LIBS="-ljson-c" ],[
 	AC_MSG_ERROR([Fatal: libjson not found.])])])
