@@ -21,8 +21,8 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-4|-6] [-p <service port>] [-t <timeout (s)>] "
-	    "[-c <packet count>] [-i <interpacket interval (ns)>] [-d <device id>] "
+    fprintf(stderr, "Usage: %s [-h] [-4|-6] [-p <service port>] [-t <timeout>] "
+	    "[-c <packet count>] [-i <interpacket interval>] [-d <device id>] "
 	    "<server>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
