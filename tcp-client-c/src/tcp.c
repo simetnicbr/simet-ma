@@ -11,13 +11,13 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
+#include <arpa/inet.h>
 
 #include <sys/epoll.h>
 
 #include "json-c/json.h"
 #include "curl/curl.h"
 #include "libubox/usock.h"
-#include "libubox/utils.h"
 
 #define TIMEVAL_MICROSECONDS(tv) ((tv.tv_sec * 1e6L) + tv.tv_usec)
 
@@ -448,7 +448,7 @@ int create_measure_socket(char *host, char *port, char *token)
         return -1;
     }
 
-    uint32_t jwtSize = cpu_to_be32(strlen(token));
+    uint32_t jwtSize = htonl(strlen(token));
 
     int ret_socket = message_send(fd_measure, 10, &jwtSize, sizeof(uint32_t));
     if (ret_socket <= 0)

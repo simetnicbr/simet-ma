@@ -4,8 +4,6 @@
 #include "logger.h"
 #include "report.h"
 
-#include "libubox/usock.h"
-#include "libubox/utils.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -18,6 +16,9 @@
 #include <errno.h>
 #include <time.h>
 #include <pthread.h>
+#include <arpa/inet.h>
+
+#include "libubox/usock.h"
 
 static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen);
 static int convert_family(int family);
@@ -200,12 +201,12 @@ int twamp_run_client(TWAMPParameters param) {
     // Verificar se o Endian está invertido....
     switch(local_addr_measure.ss_family) {
         case AF_INET:
-            sender_port = be16_to_cpu(((struct sockaddr_in *) &local_addr_measure)->sin_port);
+            sender_port = ntohs(((struct sockaddr_in *) &local_addr_measure)->sin_port);
             INFO_LOG("PORT IPv4 %u", sender_port);
             break;
 
         case AF_INET6:
-            sender_port = be16_to_cpu(((struct sockaddr_in6 *) &local_addr_measure)->sin6_port);
+            sender_port = ntohs(((struct sockaddr_in6 *) &local_addr_measure)->sin6_port);
             INFO_LOG("PORT IPv6: %u", sender_port);
             break;
 
@@ -463,7 +464,7 @@ static int twamp_test(TestParameters test_param) {
 
     while(timercmp(&tv_cur, &tv_stop, <) && (counter < test_param.param.packets_count)) {
         // Set packet counter
-        packet->SeqNumber = cpu_to_be32(counter++);
+        packet->SeqNumber = htonl(counter++);
     
         // Set packet timestamp
         Timestamp ts = timeval_to_timestamp(&tv_cur);
@@ -548,11 +549,11 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
 
                 if (recv_total == sizeof(UnauthReflectedPacket)) {
                     // Sender info
-                    reflectedPacket->SenderSeqNumber = be32_to_cpu(reflectedPacket->SenderSeqNumber);
+                    reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
                     decode_be_timestamp(&reflectedPacket->SenderTime);
 
                     // Reflector info
-                    reflectedPacket->SeqNumber = be32_to_cpu(reflectedPacket->SeqNumber);
+                    reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
                     decode_be_timestamp(&reflectedPacket->RecvTime);
                     decode_be_timestamp(&reflectedPacket->Time);
 

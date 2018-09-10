@@ -8,12 +8,17 @@ usetheshell=/bin/bash
 endif
 
 dist_bin_SCRIPTS = simet-ma_run.sh
-CLEANFILES = simet-ma_run.sh
 dist_simetlib_DATA = src/template/report.template src/template/task.template
 
-EXTRA_DIST = autogen.sh version
+EXTRA_DIST = autogen.sh version version.sh
 
-simet-ma_run.sh: src/log.sh \
+dist-local: version
+
+version: $(top_srcdir)/version.sh
+	$(top_srcdir)/version.sh > version
+
+
+simetma_sources = src/log.sh \
 		src/task_authentication.sh  \
 		src/task_authorization.sh  \
 		src/task_discover.sh \
@@ -21,8 +26,12 @@ simet-ma_run.sh: src/log.sh \
 		src/vendor/sempl.sh \
 		src/task_report.sh \
 		src/main.sh
+
+simet-ma_run.sh: $(simetma_sources)
 	( echo "#!$(usetheshell)" ; cat $^ ) > "$@" && chmod +x "$@"
 
+EXTRA_DIST += $(simetma_sources)
+CLEANFILES = simet-ma_run.sh
 
 .PHONY: help
 help:

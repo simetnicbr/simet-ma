@@ -3,7 +3,11 @@
 ## Copyright (c) 2017 NIC.br
 ##
 
-SUBDIRS = @OPT_LIBUBOX@ src
-DIST_SUBDIRS = libubox src
+SUBDIRS = src
 
-EXTRA_DIST	= autogen.sh version
+EXTRA_DIST	= autogen.sh version version.sh
+
+dist-local: version
+
+version: $(top_srcdir)/version.sh
+	$(top_srcdir)/version.sh > version

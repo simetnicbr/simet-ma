@@ -3,7 +3,7 @@
 
 #include <inttypes.h>
 
-#include "libubox/utils.h"
+#include <arpa/inet.h>
  
 Timestamp timeval_to_timestamp(const struct timeval *tv) {
     Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
@@ -32,13 +32,13 @@ struct timeval timestamp_to_timeval(const Timestamp *ts) {
 }
 
 void encode_be_timestamp(Timestamp *ts) {
-    ts->integer = cpu_to_be32(ts->integer);
-    ts->fractional = cpu_to_be32(ts->fractional);
+    ts->integer = htonl(ts->integer);
+    ts->fractional = htonl(ts->fractional);
 }
 
 void decode_be_timestamp(Timestamp *ts) {
-    ts->integer = be32_to_cpu(ts->integer);
-    ts->fractional = be32_to_cpu(ts->fractional);
+    ts->integer = ntohl(ts->integer);
+    ts->fractional = ntohl(ts->fractional);
 }
 
 uint64_t timeval_to_microsec(const struct timeval *tv) {
