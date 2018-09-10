@@ -5,4 +5,9 @@
 
 SUBDIRS = src
 
-EXTRA_DIST	= autogen.sh version
+EXTRA_DIST	= autogen.sh version version.sh
+
+dist-local: version
+
+version: $(top_srcdir)/version.sh
+	$(top_srcdir)/version.sh > version
