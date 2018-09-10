@@ -55,4 +55,4 @@ gettoken() {
 	:
 }
 
-( flock -x 9 && gettoken ) <&- 9>> "$AGENT_TOKEN_LOCK"
+( flock -n -x 9 && gettoken ) <&- 9>> "$AGENT_TOKEN_LOCK"
