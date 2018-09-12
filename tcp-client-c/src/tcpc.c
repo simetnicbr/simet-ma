@@ -22,36 +22,38 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-4|-6] [-p <service port>] [-t <timeout>] "
-	    "[-d <device id>] "
-	    "<server>\n", p);
+    fprintf(stderr, "Usage: %s [-h] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
+	    "[-d <agent-id>] [-j <token> ] "
+	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
 		"\t-h\tprint usage help and exit\n"
-		"\t-4\tuse IPv4, instead of system default\n"
-		"\t-6\tuse IPv6, instead of system default\n"
+		"\t-4\ttest over IPv4 (default)\n"
+		"\t-6\ttest over IPv6\n"
 		"\t-t\tconnection timeout in seconds\n"
-		"\t-d\tdevice identification string to send to the measurement server\n"
-		"\t-p\tservice name or numeric port of the measurement server\n"
-		"\nserver: hostname or IP address of the measurement server\n\n");
+		"\t-l\tbandwidth measurement duration in seconds (each direction)\n"
+		"\t-c\tnumber of desired concurrent streams\n"
+		"\t-d\tmeasurement agent id\n"
+		"\t-j\taccess credentials\n"
+		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
 
 int main(int argc, char **argv) {
-
-    char *device_id = NULL;
-    char *host_name = NULL;
-    char *control_url = "http://docker.lab.simet.nic.br:8800/tcp-control";
-    char *token = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJUY3BEb3dubG9hZE1lYXN1cmUiLCJleHAiOjE5MjA2MTY3OTMsImlzcyI6InNpbWV0Lm5pYy5iciIsIm1lYXN1cmVfdHlwZSI6Imh0dHBzRG93bmxvYWQifQ.XXGglVdL6Qb2VYi62hf94X--UsxTXMB0elNzRl2_XKM";
-    char *port = "20000";
-    int family = 0;
+    char *agent_id = NULL;
+    char *control_url = NULL;
+    char *token = NULL;
+    int family = 4;
     int timeout_test = 30;
+    int test_lenght = 11;
+    int numstreams = 5;
 
     int option;
 
-    while ((option = getopt (argc, argv, "46hVc:f:p:t:d:j:")) != -1) {
+    /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
+    while ((option = getopt (argc, argv, "46hVc:l:t:d:j:")) != -1) {
         switch (option) {
 	    case '4':
 		family = 4;
@@ -59,20 +61,17 @@ int main(int argc, char **argv) {
 	    case '6':
 		family = 6;
 		break;
-            case 'c':
-                control_url = optarg;
-                break;
-            case 'f':
-                family = atoi(optarg);
-                break;
-            case 'p':
-                port = optarg;
-                break;
+	    case 'l':
+		test_lenght = atoi(optarg);
+		break;
             case 't':
                 timeout_test = atoi(optarg);
                 break;
+	    case 'c':
+		numstreams = atoi(optarg);
+		break;
             case 'd':
-                device_id = optarg;
+                agent_id = optarg;
                 break;
             case 'j':
                 token = optarg;
@@ -91,16 +90,18 @@ int main(int argc, char **argv) {
     if (optind >= argc || argc - optind != 1)
 	print_usage(argv[0], 0);
 
-    host_name = argv[optind];
+    control_url = argv[optind];
 
     MeasureContext ctx;
-    ctx.device_id = device_id;
-    ctx.host_name = host_name;
+    ctx.agent_id = agent_id;
+    ctx.host_name = NULL;
+    ctx.port = 0;
     ctx.control_url = control_url;
-    ctx.port = port;
     ctx.token = token;
     ctx.family = family;
     ctx.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : timeout_test;
+    ctx.numstreams = (numstreams <= 1 || numstreams > 10) ? 10 : numstreams;
+    ctx.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : test_lenght;
 
     int value = tcp_client_run(ctx);
 

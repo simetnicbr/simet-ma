@@ -5,13 +5,15 @@
 
 /* TCP measure context struct */
 typedef struct measure_context {
-    char *device_id;
+    char *agent_id;
     char *host_name;
     char *control_url;
     char *port;
     char *token;
     int family;
-    int timeout_test;
+    unsigned int timeout_test;
+    unsigned int numstreams;
+    unsigned int test_duration;
 } MeasureContext;
 
 struct MemoryStruct {
