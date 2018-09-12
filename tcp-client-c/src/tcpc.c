@@ -1,6 +1,6 @@
 /* Simple TCP Client */
 #include "tcpc_config.h"
-#include "tcp.h"
+#include "tcpc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,16 +92,19 @@ int main(int argc, char **argv) {
 
     control_url = argv[optind];
 
-    MeasureContext ctx;
-    ctx.agent_id = agent_id;
-    ctx.host_name = NULL;
-    ctx.port = 0;
-    ctx.control_url = control_url;
-    ctx.token = token;
-    ctx.family = family;
-    ctx.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : timeout_test;
-    ctx.numstreams = (numstreams <= 1 || numstreams > 10) ? 10 : numstreams;
-    ctx.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : test_lenght;
+    MeasureContext ctx = {
+	.agent_id = agent_id,
+	.host_name = NULL,
+	.port = NULL,
+	.control_url = control_url,
+	.token = token,
+	.family = family,
+	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : timeout_test,
+	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : numstreams,
+	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : test_lenght,
+	.sessionid = NULL,
+	.sample_period_ms = 500U,
+    };
 
     int value = tcp_client_run(ctx);
 
