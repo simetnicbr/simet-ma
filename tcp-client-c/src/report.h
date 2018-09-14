@@ -4,9 +4,9 @@
 #include "json-c/json.h"
 
 typedef struct tcp_download_result {
-    uint32_t sequence;
-    uint64_t bits;
-    uint64_t intervalMs;
+    uint64_t bytes;
+    uint64_t interval; /* microseconds */
+    unsigned int nstreams;
 } DownResult;
 
 json_object * createReport(json_object*, DownResult*, uint32_t); 
