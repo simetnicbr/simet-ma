@@ -80,14 +80,10 @@ _main_orchestrate(){
   _task_twamp "4"
   _task_twamp "6"
 
-  # [TODO sprint 2] 5. task geolocation 
-  # _info "Start task GEOLOCATION"
-  # export _task_dir="$BASEDIR/report/geolocation" 
-  # export _lmap_task_name="undefined"
-  # export _lmap_task_version="undefined"
-  # mkdir -p "$_task_dir/tables"
-  # _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
-  # _info "End task GEOLOCATION"
+  # 5. task bw tcp
+  _task_tcpbw "4"
+  sleep 3
+  _task_tcpbw "6"
 
   # 6. task report
   _info "Start task REPORT"
@@ -144,6 +140,38 @@ _task_twamp(){
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
   _info "End Task TWAMP IPv$_af"
 }
+
+_task_tcpbw(){
+  local _af="$1"
+  if [[ "$_af" != "4" && "$_af" != "6" ]]; then
+    _error "Aborting task TCPBW IPvX. Unknown address familiy '$_af'."
+    return 1
+  fi
+  if [[ "$TCPBW" = "NO" || "$TCPBW" = "no" || "$TCPBW" = "No" ]]; then
+    _info "Skipping task TCPBW IPv$_af"
+    return 0
+  fi
+  _info "Start task TCPBW IPv$_af"
+  local _host=$( discover_service TCPBW HOST )
+  local _port=$( discover_service TCPBW PORT )
+  local _path=$( discover_service TCPBW PATH )
+  local _about=$( $TCPBWC -V | head -n1)
+  set -f && set -- $_about && set +f
+  export _tcpbw_task_name=$1    # " tcpbw 1.2.3-ABC " => "tcpbw"
+  export _tcpbw_task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
+  export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
+  mkdir -p "$_task_dir/tables"
+  _debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}${_path} > $_task_dir/tables/tcpbw.json"
+  eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}${_path}  > $_task_dir/tables/tcpbw.json"
+  export _tcpbw_task_status="$?"
+  if [ "$_tcpbw_task_status" -ne 0 ]; then
+    rm -f $_task_dir/tables/*
+  fi
+  _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  _info "End Task TCPBW IPv$_af"
+}
+
+
 
 ################################################################################
 # function _main_setup

@@ -79,6 +79,9 @@ discover_service() {
     TWAMP)
       _service="twamp"
     ;;
+    TCPBW)
+      _service="tcpbw"
+    ;;
   esac
 
   case "$2" in
