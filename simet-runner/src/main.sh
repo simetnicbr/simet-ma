@@ -127,7 +127,7 @@ _task_twamp(){
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
   set -f && set -- $_about && set +f
-  export _task_name=$1    # " twampc 1.2.3-ABC " => "twampc"
+  export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " twampc 1.2.3-ABC " => "twampc"
   export _task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
   export _task_action="packettrain_udp_ipv${_af}_to_nearest_available_peer"
@@ -162,7 +162,7 @@ _task_tcpbw(){
   local _path=$( discover_service TCPBW PATH )
   local _about=$( $TCPBWC -V | head -n1)
   set -f && set -- $_about && set +f
-  export _task_name=$1    # " tcpbw 1.2.3-ABC " => "tcpbw"
+  export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " tcpbw 1.2.3-ABC " => "tcpbw"
   export _task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
   export _task_action="bandwidth_tcp_ipv${_af}_to_nearest_available_peer"
@@ -233,6 +233,7 @@ _main_config(){
   if [ "$AGENT_LOCK" = "" ]; then _msg="$_msg AGENT_LOCK"; fi
   if [ "$TEMPLATE_DIR" = "" ]; then _msg="$_msg TEMPLATE_DIR"; fi
   if [ "$LMAP_SCHEDULE" = "" ]; then _msg="$_msg LMAP_SCHEDULE"; fi
+  if [ "$LMAP_TASK_NAME_PREFIX" = "" ]; then _msg="$_msg LMAP_TASK_NAME_PREFIX"; fi
   if [ "$TWAMPC" = "" ]; then _msg="$_msg TWAMPC"; fi
   if [ "$TCPBWC" = "" ]; then _msg="$_msg TCPBWC"; fi
   if [ "$_msg" != "" ]; then
