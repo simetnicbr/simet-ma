@@ -1,14 +1,18 @@
 {
-  "schedule": "$LMAP_TASK_SCHEDULE",
-  "action": "$LMAP_TASK_ACTION",
-  "task": "$_lmap_task_name",
+  "schedule": "$REPORT_SCHEDULE",
+  "action": "$_task_action",
+  "task": "$_task_name",
+  "parameters": $_task_parameters,
+  "options": $_task_options,
+  "conflict": [],
   "tag": [
-    "task-version:$_lmap_task_version",
-     "macaddress:$LMAP_MAC_ADDRESS"
+    "task-version:$_task_version",
+     "macaddress:$REPORT_MAC_ADDRESS"
   ],
-  "event": "$LMAP_TASK_EVENT",
-  "start": "$LMAP_TASK_START",
-  "status": $_lmap_task_status,
+  "event": "$REPORT_EVENT",
+  "start": "$_task_start",
+  "end": "$_task_end",
+  "status": $_task_status,
   "table": [
     ### begin
     # _first=$(find $_task_dir/tables -mindepth 1 -maxdepth 1 | head -n1)

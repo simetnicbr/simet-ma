@@ -80,14 +80,10 @@ _main_orchestrate(){
   _task_twamp "4"
   _task_twamp "6"
 
-  # [TODO sprint 2] 5. task geolocation 
-  # _info "Start task GEOLOCATION"
-  # export _task_dir="$BASEDIR/report/geolocation" 
-  # export _lmap_task_name="undefined"
-  # export _lmap_task_version="undefined"
-  # mkdir -p "$_task_dir/tables"
-  # _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
-  # _info "End task GEOLOCATION"
+  # 5. task bw tcp
+  _task_tcpbw "4"
+  sleep 3
+  _task_tcpbw "6"
 
   # 6. task report
   _info "Start task REPORT"
@@ -131,19 +127,61 @@ _task_twamp(){
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
   set -f && set -- $_about && set +f
-  export _lmap_task_name=$1    # " twampc 1.2.3-ABC " => "twampc"
-  export _lmap_task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
+  export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " twampc 1.2.3-ABC " => "twampc"
+  export _task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
+  export _task_action="packettrain_udp_ipv${_af}_to_nearest_available_peer"
+  export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
+  export _task_options='[]'
+  export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
   _debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
-  export _lmap_task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  export _task_status="$?"
   if [ "$_lmap_task_status" -ne 0 ]; then
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
   _info "End Task TWAMP IPv$_af"
 }
+
+_task_tcpbw(){
+  local _af="$1"
+  if [[ "$_af" != "4" && "$_af" != "6" ]]; then
+    _error "Aborting task TCPBW IPvX. Unknown address familiy '$_af'."
+    return 1
+  fi
+  if [[ "$TCPBW" = "NO" || "$TCPBW" = "no" || "$TCPBW" = "No" ]]; then
+    _info "Skipping task TCPBW IPv$_af"
+    return 0
+  fi
+  _info "Start task TCPBW IPv$_af"
+  local _host=$( discover_service TCPBW HOST )
+  local _port=$( discover_service TCPBW PORT )
+  local _path=$( discover_service TCPBW PATH )
+  local _about=$( $TCPBWC -V | head -n1)
+  set -f && set -- $_about && set +f
+  export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " tcpbw 1.2.3-ABC " => "tcpbw"
+  export _task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
+  export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
+  export _task_action="bandwidth_tcp_ipv${_af}_to_nearest_available_peer"
+  export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
+  export _task_options='[]'
+  export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  mkdir -p "$_task_dir/tables"
+  _debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
+  eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path}  > $_task_dir/tables/tcpbw.json"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  export _task_status="$?"
+  if [ "$_tcpbw_task_status" -ne 0 ]; then
+    rm -f $_task_dir/tables/*
+  fi
+  _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  _info "End Task TCPBW IPv$_af"
+}
+
+
 
 ################################################################################
 # function _main_setup
@@ -160,23 +198,21 @@ _task_twamp(){
 #   $BASEDIR/other_files..
 #
 # Variables
-#   LMAP_TASK_SCHEDULE
-#   LMAP_TASK_ACTION
-#   LMAP_TASK_EVENT
-#   LMAP_TASK_START
+#   REPORT_SCHEDULE
+#   REPORT_ACTION
+#   REPORT_EVENT
 ################################################################################
 _main_setup(){
+  local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   # 1. pepare dir structure
-  BASEDIR=/tmp/simet-ma/$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  BASEDIR="/tmp/simet-ma/$_time_of_exection"
   _debug "Files will be collected in $BASEDIR"
   mkdir -p "$BASEDIR/report"
 
   # 2. prepare env variables
-  export LMAP_TASK_SCHEDULE="to_define"
-  export LMAP_TASK_ACTION="to_define"
-  export LMAP_TASK_EVENT="to_define"
-  export LMAP_TASK_START="to_define"
-  export LMAP_MAC_ADDRESS=$( get_mac_address.sh )
+  export REPORT_SCHEDULE="$LMAP_SCHEDULE"
+  export REPORT_EVENT="$_time_of_exection"
+  export REPORT_MAC_ADDRESS=$( get_mac_address.sh )
 }
 
 _main_cleanup(){
@@ -195,7 +231,10 @@ _main_config(){
   if [ "$API_SERVICE_DISCOVERY" = "" ]; then _msg="$_msg API_SERVICE_DISCOVERY"; fi
   if [ "$AGENT_LOCK" = "" ]; then _msg="$_msg AGENT_LOCK"; fi
   if [ "$TEMPLATE_DIR" = "" ]; then _msg="$_msg TEMPLATE_DIR"; fi
+  if [ "$LMAP_SCHEDULE" = "" ]; then _msg="$_msg LMAP_SCHEDULE"; fi
+  if [ "$LMAP_TASK_NAME_PREFIX" = "" ]; then _msg="$_msg LMAP_TASK_NAME_PREFIX"; fi
   if [ "$TWAMPC" = "" ]; then _msg="$_msg TWAMPC"; fi
+  if [ "$TCPBWC" = "" ]; then _msg="$_msg TCPBWC"; fi
   if [ "$_msg" != "" ]; then
     _error "Exit due to missing config params: $_msg"
     exit 1

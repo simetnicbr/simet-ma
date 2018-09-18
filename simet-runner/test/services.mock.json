@@ -23,5 +23,13 @@
     "ports": [
       862
     ]
+  }],
+  "tcpbw": [{
+    "serviceName": "tcpbw",
+    "hostname": "kubelab-ix-p1.lab.simet.nic.br",
+    "basePath": "tcp-server/",
+    "ports": [
+      443
+    ]
   }]
 }]

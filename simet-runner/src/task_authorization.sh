@@ -17,6 +17,7 @@
 authorization() {
   if [ "$MOCK_AUTHORIZATION" = "true" ]; then
   _debug "Mocking authorization request, with allow."
+    AUTHORIZATION_TOKEN="mocked_authorization_token"
     return 0  
   fi
 
@@ -38,5 +39,6 @@ authorization() {
     _log "HTTP Trace: ${_resp}"
     return 1
   }
+  AUTHORIZATION_TOKEN="$_resp"
 }
 # keep line
