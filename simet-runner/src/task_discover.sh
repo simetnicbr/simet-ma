@@ -46,7 +46,7 @@
 discover_init() {
   GLOBAL_STATE_CURRENT_PEER=-1
   if [ "$MOCK_API_SERVICE_DISCOVERY" = "true" ]; then
-    cp ./$(dirname "$0")/services.mock.json $BASEDIR/services.json
+    cp "$MOCK_SERVICE_DISCOVERY_RESPONSE" $BASEDIR/services.json
     _debug "Mocking request to API_SERVICE_DISCOVERY with precanned response: $BASEDIR/services.json"
     return    
   fi

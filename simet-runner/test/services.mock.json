@@ -3,7 +3,7 @@
   "serverMonitor": [{
     "serviceName": "serverMonitor",
     "hostname": "kubelab-ix-p1.lab.simet.nic.br",
-    "basePath": "server-monitor",
+    "basePath": "server-monitor/",
     "ports": [
       443
     ]
@@ -27,9 +27,9 @@
   "tcpbw": [{
     "serviceName": "tcpbw",
     "hostname": "kubelab-ix-p1.lab.simet.nic.br",
-    "basePath": "",
+    "basePath": "tcp-server/",
     "ports": [
-      88
+      443
     ]
   }]
 }]
