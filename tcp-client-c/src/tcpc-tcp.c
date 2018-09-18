@@ -186,6 +186,34 @@ static ssize_t send_tcp(int sockfd, const char *message, size_t len)
 
 /* Command channel handling */
 
+static char *curl_errmsg = NULL;
+
+static int setup_curl_err_handling(CURL * const handle)
+{
+    assert(handle);
+    if (!curl_errmsg)
+	curl_errmsg = calloc(1, CURL_ERROR_SIZE);
+    if (!curl_errmsg ||
+	curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, curl_errmsg) != CURLE_OK)
+	return -1;
+    return 0;
+}
+
+static void free_curl_err_handling(void)
+{
+    free(curl_errmsg);
+    curl_errmsg = NULL;
+}
+
+/* if (check_curl_error(curl_easy_*(...)) <an error happened> */
+static int check_curl_error(CURLcode e)
+{
+    if (e == CURLE_OK)
+	return 0;
+    WARNING_LOG("%s: %s", curl_easy_strerror(e), (curl_errmsg) ? curl_errmsg : "(no info)");
+    return -1;
+}
+
 static int prepare_command_channel(CURL * const handle,
 				   const char * const baseurl, const char * const endpoint,
 				   struct curl_slist * const headers,
@@ -196,7 +224,8 @@ static int prepare_command_channel(CURL * const handle,
     assert(endpoint && baseurl);
 
     snprintf(url, MAX_URL_SIZE, "%s%s", baseurl, endpoint);
-    curl_easy_setopt(handle, CURLOPT_URL, url);
+    if (check_curl_error(curl_easy_setopt(handle, CURLOPT_URL, url)))
+	return -1;
 
     curl_easy_setopt(handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1);
@@ -207,8 +236,11 @@ static int prepare_command_channel(CURL * const handle,
 			    (family == 6)? CURL_IPRESOLVE_V6 :
 			     ((family == 4)? CURL_IPRESOLVE_V4 :
 			       CURL_IPRESOLVE_WHATEVER));
-    if (headers)
-	curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers);
+    if (headers &&
+	check_curl_error(curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers)))
+	return -1;
+
+    /* FIXME: we have not overriden the default output handling */
 
     DEBUG_LOG("Will issue API call: %s", endpoint);
 
@@ -220,21 +252,16 @@ static int issue_simple_command(CURL * const handle, const int emptybody)
     assert(handle);
     long status;
 
-    int res = curl_easy_perform(handle);
-    if (res != CURLE_OK)
-    {
-	WARNING_LOG("API call failed: %s", curl_easy_strerror(res));
+    if (check_curl_error(curl_easy_perform(handle)) ||
+        check_curl_error(curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status)))
 	return -1;
-    }
-    res = curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status);
-    if ((res != CURLE_OK) || (status != ((emptybody)? 204: 200)))
-    {
+    if (status != ((emptybody)? 204: 200)) {
 	WARNING_LOG("API call returned unexpected status code: %li", status);
 	return -1;
     }
 
-    /* FIXME: em caso de erro 4xx, tem um JSON {errorMessage} para mostrar... */
-
+    /* FIXME: em caso de erro 4xx, tem um JSON {errorMessage} para mostrar, que
+     * foi para o usuário via default output handling da libcurl */
     return 0;
 }
 
@@ -483,7 +510,7 @@ int tcp_client_run(MeasureContext ctx)
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
-    if (!curl) {
+    if (!curl || setup_curl_err_handling(curl)) {
 	WARNING_LOG("failed to initialize libcurl");
 	return -1;
     }
@@ -641,6 +668,7 @@ err_exit:
 	curl_slist_free_all(slist);
 
     curl_global_cleanup();
+    free_curl_err_handling();
 
     return rc;
 }
