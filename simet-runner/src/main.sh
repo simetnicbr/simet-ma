@@ -201,7 +201,6 @@ _task_tcpbw(){
 #   REPORT_SCHEDULE
 #   REPORT_ACTION
 #   REPORT_EVENT
-#   REPORT_START
 ################################################################################
 _main_setup(){
   local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
