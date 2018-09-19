@@ -158,32 +158,6 @@ static int create_measure_socket(char *host, char *port, char *sessionid)
     return fd_measure;
 }
 
-static ssize_t send_tcp(int sockfd, const char *message, size_t len)
-{
-    size_t sent = 0;
-    size_t bytesleft = len;
-    int n;
-
-    while (sent < len) {
-	errno = 0;
-        n = send(sockfd, message, bytesleft, MSG_DONTWAIT | MSG_NOSIGNAL);
-        if (n == -1)
-            break;
-        else
-        {
-	    message += n;
-            sent += n;
-            bytesleft -= n;
-        }
-    }
-
-    if (sent < len)
-        return -errno;
-    else
-        return sent;
-}
-
-
 /* Command channel handling */
 
 static char *curl_errmsg = NULL;
@@ -382,19 +356,26 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 static int sendUploadPackets(const MeasureContext ctx)
 {
     int upTimeout = ctx.test_duration;
-    const unsigned int group = 5;
-
     struct timeval tv_cur, tv_stop_test, tv_select;
     uint64_t counter = 0;
-    fd_set wset;
-    unsigned int i, j;
+    fd_set wset, masterset;
+    unsigned int i;
 
     assert(sockBuffer);
     assert(sockBufferSz);
 
-    /* FIXME: fill buffer with random crap, it is all-zeros right now */
+    memcpy(&masterset, &sockListFDs, sizeof(fd_set));
 
-    /* FIXME: we want something in the VDSO, and if possible, CLOCK_MONOTONIC */
+    /* FIXME: fill buffer with uncompressible pseudo-random, it is all-zeros right now */
+
+    /* FIXME: if possible, switch to CLOCK_MONOTONIC, which is also in the VDSO */
+
+    /* FIXME: switch to blocking IO, using one thread per socket, so that it will sleep without blocking the others?
+     *        right now, we return from select to write a bit to large socket buffers that are still far from empty...
+     *        this is Not Ok.
+     *
+     *        Consider vmsplice and ring buffers if absolutely required.
+     */
     gettimeofday(&tv_cur, NULL);
     tv_stop_test.tv_usec = tv_cur.tv_usec;
     tv_stop_test.tv_sec = tv_cur.tv_sec + (long)upTimeout;
@@ -403,18 +384,17 @@ static int sendUploadPackets(const MeasureContext ctx)
         tv_select.tv_sec = tv_stop_test.tv_sec - tv_cur.tv_sec;
         tv_select.tv_usec = 0;
 
-        // Necessário copiar toda vez pois o select 'zera' o fd_count
-        memcpy(&wset, &sockListFDs, sizeof(fd_set));
+        memcpy(&wset, &masterset, sizeof(fd_set));
         if (select(sockListLastFD + 1, NULL, &wset, NULL, &tv_select) > 0) {
-            // Envia um grupo de pacotes seguidos antes de verificar o timeout do teste
-            for (j = 0; j < group; j++) {
-                for (i = 0; i < ctx.numstreams; i++) {
-                    if (FD_ISSET(sockList[i], &wset)) {
-                        send_tcp(sockList[i], sockBuffer, sockBufferSz);
-                        counter++;
-                    }
-                }
-            }
+	    for (i = 0; i < ctx.numstreams; i++) {
+		if (FD_ISSET(sockList[i], &wset)) {
+		    if (send(sockList[i], sockBuffer, sockBufferSz, MSG_DONTWAIT | MSG_NOSIGNAL) == -1 &&
+			(errno == EPIPE || errno == ECONNRESET)) {
+			    FD_CLR(sockList[i], &masterset);
+		    }
+		    counter++;
+		}
+	    }
         }
         gettimeofday(&tv_cur, NULL);
     };
@@ -572,7 +552,6 @@ int tcp_client_run(MeasureContext ctx)
 	return -1;
     }
 
-    // Send /start-upload
     DEBUG_LOG("Sending request /session/start-upload");
     if (prepare_command_channel(curl, ctx.control_url, "/session/start-upload", slist, ctx.timeout_test, ctx.family))
 	goto err_exit;
@@ -602,7 +581,6 @@ int tcp_client_run(MeasureContext ctx)
     if (!streamcount)
 	goto err_exit;
 
-    // Send /start-download
     if (prepare_command_channel(curl, ctx.control_url, "/session/start-download", slist, ctx.timeout_test, ctx.family))
 	goto err_exit;
     if (issue_simple_command(curl, 1))
