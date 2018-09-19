@@ -1,5 +1,5 @@
 ##
-## Toplevel Makefile.am for tcpc
+## Toplevel Makefile.am for tcpbwc - SIMET2 MA TCP bandwidth test client
 ## Copyright (c) 2018 NIC.br
 ##
 

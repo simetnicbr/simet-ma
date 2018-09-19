@@ -4,7 +4,7 @@
 ##
 ## License: GPLv2+
 
-SUBDIRS     = simet-api twamp-client-c tcp-client-c simet-runner
+SUBDIRS     = simet-api twamp-client-c tcpbw-client-c simet-runner
 EXTRA_DIST  = autogen.sh version version.sh
 
 version:
