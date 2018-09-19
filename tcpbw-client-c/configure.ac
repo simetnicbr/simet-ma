@@ -13,16 +13,16 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 dnl GNU General Public License for more details.
 
 AC_PREREQ([2.69])
-AC_INIT([tcpc], m4_esyscmd_s([./version.sh]),
+AC_INIT([tcpbwc], m4_esyscmd_s([./version.sh]),
         [],
-        [tcpc],
+        [tcpbwc],
         [])
 AC_COPYRIGHT([Copyright (c) 2018 NIC.br])
 
-AC_CONFIG_SRCDIR([src/tcpc.c])
+AC_CONFIG_SRCDIR([src/tcpbwc.c])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
-AC_CONFIG_HEADERS([tcpc_config.h])
+AC_CONFIG_HEADERS([tcpbwc_config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
 

@@ -23,7 +23,7 @@ AC_CONFIG_AUX_DIR([.])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
 AC_CONFIG_FILES([Makefile simet-api/Makefile])
-AC_CONFIG_SUBDIRS([twamp-client-c tcp-client-c simet-runner])
+AC_CONFIG_SUBDIRS([twamp-client-c tcpbw-client-c simet-runner])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
 
 AC_ARG_ENABLE([simetbox],

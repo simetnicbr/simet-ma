@@ -1,6 +1,6 @@
 /* Simple TCP Client */
-#include "tcpc_config.h"
-#include "tcpc.h"
+#include "tcpbwc_config.h"
+#include "tcpbwc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
