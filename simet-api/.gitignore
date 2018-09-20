@@ -1,3 +1,5 @@
 Makefile
 Makefile.in
 agent-version.txt
+conf/simet-ma.conf
+simet*_register_ma.sh

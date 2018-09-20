@@ -1,7 +1,8 @@
 Files with "simetbox" in the name are SIMETBOX-specific, they usually have a
 "simet" counterpart that is generic.
 
-For a SIMETBOX build, ensure you configure everything with --enable-simetbox
+For a SIMETBOX build, ensure you configure everything with
+  --enable-simetbox --prefix=/usr --sysconfdir=/etc --localstatedir=/var
 
 
 Conventions:
