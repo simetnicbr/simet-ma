@@ -1,0 +1,14 @@
+AGENT_ID_FILE=@SIMETCONFDIR@/agent-id
+AGENT_TOKEN_FILE=@SIMETCONFDIR@/agent.jwt
+AGENT_TOKEN_LOCK=@LOCALSTATEDIR@/lock/simet-agent-token.lock
+AGENT_LOCK=@LOCALSTATEDIR@/lock/simet-ma.lock
+AGENT_VERSION_FILE=@SIMETLIBDIR@/agent-version.txt
+
+TEMPLATE_DIR=@SIMETLIBDIR@
+
+API_AGENT_TOKEN=https://api.simet.nic.br/measurement/jwt
+API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
+LMAP_SCHEDULE="anatel-574"
+LMAP_TASK_NAME_PREFIX="simet2_simet-agent-unix_"
+TWAMPC=@BINDIR@/twampc
+TCPBWC=@BINDIR@/tcpbwc
