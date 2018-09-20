@@ -159,7 +159,7 @@ _task_tcpbw(){
   _info "Start task TCPBW IPv$_af"
   local _host=$( discover_service TCPBW HOST )
   local _port=$( discover_service TCPBW PORT )
-  local _path=$( discover_service TCPBW PATH )
+  local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
   local _about=$( $TCPBWC -V | head -n1)
   set -f && set -- $_about && set +f
   export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " tcpbw 1.2.3-ABC " => "tcpbw"
