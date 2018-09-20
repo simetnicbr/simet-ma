@@ -152,7 +152,7 @@ _task_tcpbw(){
     _error "Aborting task TCPBW IPvX. Unknown address familiy '$_af'."
     return 1
   fi
-  if [[ "$TCPBW" = "NO" || "$TCPBW" = "no" || "$TCPBW" = "No" ]]; then
+  if [[ "$TCPBWC" = "NO" || "$TCPBWC" = "no" || "$TCPBWC" = "No" ]]; then
     _info "Skipping task TCPBW IPv$_af"
     return 0
   fi
@@ -224,7 +224,7 @@ _main_cleanup(){
 
 _main_config(){
   . "$1"
-  _debug "Loaded config '$1': AGENT_ID_FILE=$AGENT_ID_FILE AGENT_TOKEN_FILE=$AGENT_TOKEN_FILE API_SERVICE_DISCOVERY=$API_SERVICE_DISCOVERY AGENT_LOCK=$AGENT_LOCK TEMPLATE_DIR=$TEMPLATE_DIR TWAMPC=$TWAMPC"
+  _info "Loaded config '$1': AGENT_ID_FILE=$AGENT_ID_FILE AGENT_TOKEN_FILE=$AGENT_TOKEN_FILE API_SERVICE_DISCOVERY=$API_SERVICE_DISCOVERY AGENT_LOCK=$AGENT_LOCK TEMPLATE_DIR=$TEMPLATE_DIR LMAP_SCHEDULE=$LMAP_SCHEDULE LMAP_TASK_NAME_PREFIX=$LMAP_TASK_NAME_PREFIX TWAMPC=$TWAMPC TCPBWC=$TCPBWC"
   local _msg=""
   if [ "$AGENT_ID_FILE" = "" ]; then _msg="$_msg AGENT_ID_FILE"; fi
   if [ "$AGENT_TOKEN_FILE" = "" ]; then _msg="$_msg AGENT_TOKEN_FILE"; fi
