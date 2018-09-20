@@ -3,7 +3,7 @@
   "action": "$_task_action",
   "task": "$_task_name",
   "parameters": $_task_parameters,
-  "options": $_task_options,
+  "option": $_task_options,
   "conflict": [],
   "tag": [
     "task-version:$_task_version",
