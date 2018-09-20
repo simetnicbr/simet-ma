@@ -501,13 +501,6 @@ int tcp_client_run(MeasureContext ctx)
         slist = curl_slist_append(slist, strbuf);
     }
 
-    /* FIXME: For Debugging, remove on production */
-    DEBUG_LOG("FIXME: issuing gratuitous /session/clean");
-    if (prepare_command_channel(curl, ctx.control_url, "/session/clean", slist, ctx.timeout_test, ctx.family))
-	goto err_exit;
-    if (issue_simple_command(curl, 1))
-	goto err_exit;
-
     if (prepare_command_channel(curl, ctx.control_url, "/session/request", slist, ctx.timeout_test, ctx.family))
 	goto err_exit;
 
