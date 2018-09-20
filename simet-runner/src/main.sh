@@ -139,7 +139,7 @@ _task_twamp(){
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
-  if [ "$_lmap_task_status" -ne 0 ]; then
+  if [ "$_task_status" -ne 0 ]; then
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
@@ -174,7 +174,7 @@ _task_tcpbw(){
   eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path}  > $_task_dir/tables/tcpbw.json"
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
-  if [ "$_tcpbw_task_status" -ne 0 ]; then
+  if [ "$_task_status" -ne 0 ]; then
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
