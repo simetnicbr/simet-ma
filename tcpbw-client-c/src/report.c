@@ -16,7 +16,6 @@ static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
     json_object_array_add(j, json_object_new_string(buf));
 }
 
-
 /**
  * createReport - create the JSON LMAP-like report snippet
  *
@@ -24,9 +23,9 @@ static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
  * Then, render the rows for DownResult[] (download direction measurement results), if any.
  *
  * @jresults MUST use the same column ordering as we do:
- * sequence; streams; bits; interval (ms); direction
+ * sequence; bits; streams; interval (ms); direction
  */
-json_object * createReport(json_object* jresults, DownResult * downloadRes, uint32_t counter)
+json_object *createReport(json_object *jresults, DownResult *downloadRes, uint32_t counter)
 {
     assert(downloadRes);
     /* FIXME: handle NULL returns as error... */
@@ -34,12 +33,13 @@ json_object * createReport(json_object* jresults, DownResult * downloadRes, uint
     json_object *jo, *jo1; /* used when transfering ownership via _add */
 
     /* shall contain function, column, row arrays */
-    json_object * jtable = json_object_new_object();
+    json_object *jtable = json_object_new_object();
     assert(jtable);
 
-    if (!json_object_is_type(jresults, json_type_array)) {
-	WARNING_LOG("Received unusable data from server, ignoring...");
-	jresults = NULL;
+    if (!json_object_is_type(jresults, json_type_array))
+    {
+        WARNING_LOG("Received unusable data from server, ignoring...");
+        jresults = NULL;
     }
 
     /* function object list */
@@ -56,33 +56,34 @@ json_object * createReport(json_object* jresults, DownResult * downloadRes, uint
     jo = json_object_new_array();
     assert(jo);
     json_object_array_add(jo, json_object_new_string("sequence"));
-    json_object_array_add(jo, json_object_new_string("streams"));
     json_object_array_add(jo, json_object_new_string("bits"));
+    json_object_array_add(jo, json_object_new_string("streams"));
     json_object_array_add(jo, json_object_new_string("intervalMs"));
     json_object_array_add(jo, json_object_new_string("direction"));
     json_object_object_add(jtable, "column", jo);
     jo = NULL;
 
     /* rows (result data) */
-    json_object *jrows = (jresults)? jresults : json_object_new_array();
+    json_object *jrows = (jresults) ? jresults : json_object_new_array();
     assert(jrows);
 
-    for(unsigned int i = 0; i < counter; i++) {
+    for (unsigned int i = 0; i < counter; i++)
+    {
         json_object *jrow = json_object_new_array();
-	assert(jrow);
+        assert(jrow);
 
-	/* WARNING: keep the same order as in the columns list! */
-	xx_json_object_array_add_uin64_as_str(jrow, i+1);
-	xx_json_object_array_add_uin64_as_str(jrow, downloadRes[i].nstreams);
-	xx_json_object_array_add_uin64_as_str(jrow, downloadRes[i].bytes * 8U);
-	xx_json_object_array_add_uin64_as_str(jrow, (uint64_t)downloadRes[i].interval / 1000UL);
-	json_object_array_add(jrow, json_object_new_string("download"));
+        /* WARNING: keep the same order as in the columns list! */
+        xx_json_object_array_add_uin64_as_str(jrow, i + 1);
+        xx_json_object_array_add_uin64_as_str(jrow, downloadRes[i].bytes * 8U);
+        xx_json_object_array_add_uin64_as_str(jrow, downloadRes[i].nstreams);
+        xx_json_object_array_add_uin64_as_str(jrow, (uint64_t)downloadRes[i].interval / 1000UL);
+        json_object_array_add(jrow, json_object_new_string("download"));
 
-	/* add row to list of rows */
-	jo = json_object_new_object();
-	json_object_object_add(jo, "value", jrow);
-	json_object_array_add(jrows, jo);
-	jo = NULL;
+        /* add row to list of rows */
+        jo = json_object_new_object();
+        json_object_object_add(jo, "value", jrow);
+        json_object_array_add(jrows, jo);
+        jo = NULL;
     }
 
     json_object_object_add(jtable, "row", jrows);
