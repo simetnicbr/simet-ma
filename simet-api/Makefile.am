@@ -15,6 +15,12 @@ else
 dist_bin_SCRIPTS = simet_register_ma.sh
 endif
 
+create-dirs:
+	[ -d "$(DESTDIR)$(simetconfdir)" ] || mkdir -m 0700 -p "$(DESTDIR)$(simetconfdir)"
+
+install-exec-hook: create-dirs
+install-data-hook: create-dirs
+
 dist_simetlib_DATA  = conf/simet-ma.conf agent-version.txt
 
 CLEANFILES = $(dist_simetlib_DATA) $(dist_bin_SCRIPTS)
