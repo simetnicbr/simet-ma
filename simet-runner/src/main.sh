@@ -58,11 +58,11 @@ _main_orchestrate(){
   discover_init
   discover_next_peer
   while [ $? -eq 0 ]; do
-    local _endpoint_base="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
-    _info "Discovered measurement peer. Authorization attempt at $_endpoint_base"
+    local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
+    _info "Discovered measurement peer. Authorization attempt at $_auth_endpoint"
     # 3. task authorization: try at successive peers, until first success 
     AUTHORIZATION_TOKEN="undefined"
-    authorization "$_endpoint_base" "$AGENT_TOKEN"
+    authorization "$_auth_endpoint" "$AGENT_TOKEN"
     if [ $? -eq 0 ]; then
       _discovered="true"
       break
@@ -70,9 +70,9 @@ _main_orchestrate(){
     discover_next_peer
   done
   if [ "$_discovered" = "true" ]; then
-    _info "Peer discovery and authorization success: Selected peer: $_endpoint_base"
+    _info "Peer discovery and authorization success: Selected peer: $_auth_endpoint"
   else
-    _error "Peer discovery and authorization failure: Last attempt at peer: $_endpoint_base"
+    _error "Peer discovery and authorization failure: Last attempt at peer: $_auth_endpoint"
     exit 1
   fi
 
@@ -83,7 +83,13 @@ _main_orchestrate(){
   # 5. task bw tcp
   _task_tcpbw "4"
   sleep 3
-  _task_tcpbw "6"
+  _debug "Refresh the authorization token, as each bandwidth measurement session (ipv4, ipv6) requires a unique token."
+  authorization "$_auth_endpoint" "$AGENT_TOKEN"
+  if [ $? -eq 0 ]; then
+    _task_tcpbw "6"
+  else
+    _info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
+  fi
 
   # 6. task report
   _info "Start task REPORT"
@@ -109,6 +115,7 @@ _main_orchestrate(){
     _info "Task REPORT failed"
     return 1
   }
+  _info "Published $_report_dir/result.json report to $_endpoint"
   _info "End task REPORT"
 }
 
@@ -140,6 +147,7 @@ _task_twamp(){
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
   if [ "$_task_status" -ne 0 ]; then
+    _error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
@@ -175,6 +183,7 @@ _task_tcpbw(){
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
   if [ "$_task_status" -ne 0 ]; then
+    _error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
