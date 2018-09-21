@@ -18,6 +18,8 @@
 #include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 #include "json-c/json.h"
 #include "curl/curl.h"
@@ -112,6 +114,7 @@ static int message_send(int socket, int timeout, void *message, size_t len)
 
 static int create_measure_socket(char *host, char *port, char *sessionid)
 {
+    const int one = 1;
     int fd_measure;
 
     struct sockaddr_storage remote_addr_control;
@@ -153,6 +156,10 @@ static int create_measure_socket(char *host, char *port, char *sessionid)
     if (ret_socket <= 0) {
         WARNING_LOG("message_send problem");
         return -1;
+    }
+    if (setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one))) {
+	WARNING_LOG("failed to set TCP_NODELAY");
+	return -1;
     }
 
     return fd_measure;
