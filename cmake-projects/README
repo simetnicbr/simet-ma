@@ -1,0 +1,11 @@
+Local modifications:
+
+JSONFILTER (jsonpath):
+	https://git.openwrt.org/project/jsonpath.git
+	added libubox/, do a static build (and use libubox-static for that)
+
+libubox (in jsonpath/libubox/)
+	https://git.openwrt.org/project/libubox.git
+	disabled all install() CMake commands, since we use it only during the build
+
+These modifications are available as patches on this directory.

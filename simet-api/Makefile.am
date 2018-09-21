@@ -18,19 +18,26 @@ simetlibdir=$(libdir)/simet
 EXTRA_DIST=
 CLEANFILES=
 
+if SIMETBOX_BUILD
+dist_bin_SCRIPTS = simetbox_register_ma.sh
+jsonpathprefix=
+else
+dist_bin_SCRIPTS = simet_register_ma.sh
+jsonpathprefix=$(bindir)/
+endif
+
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
-	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g"  "$^" > "$@"
+	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
+	    -e "s!@JSONFILTERPREFIX@!$(jsonpathprefix)!g" \
+	    "$^" > "$@"
 
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
-	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g"  "$^" > "$@"
+	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
+	    -e "s!@JSONFILTERPREFIX@!$(jsonpathprefix)!g" \
+	    "$^" > "$@"
 
-if SIMETBOX_BUILD
-dist_bin_SCRIPTS = simetbox_register_ma.sh
-else
-dist_bin_SCRIPTS = simet_register_ma.sh
-endif
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
 EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)

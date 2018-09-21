@@ -1,0 +1,71 @@
+diff -ru orig.jsonpath/ast.c jsonpath/ast.c
+--- orig.jsonpath/ast.c	2018-10-11 11:39:16.329251656 -0300
++++ jsonpath/ast.c	2018-10-10 17:12:05.795452663 -0300
+@@ -21,7 +21,7 @@
+ #include <stdlib.h>
+ #include <stdarg.h>
+ #include <string.h>
+-#include <libubox/utils.h>
++#include "libubox/utils.h"
+ 
+ struct jp_opcode *
+ jp_alloc_op(struct jp_state *s, int type, int num, char *str, ...)
+diff -ru orig.jsonpath/CMakeLists.txt jsonpath/CMakeLists.txt
+--- orig.jsonpath/CMakeLists.txt	2018-10-11 11:39:16.329251656 -0300
++++ jsonpath/CMakeLists.txt	2018-10-11 11:37:43.100092488 -0300
+@@ -21,25 +21,35 @@
+ ENDIF()
+ 
+ ADD_CUSTOM_COMMAND(
+-  OUTPUT contrib/lemon
+-  DEPENDS contrib/lemon.c contrib/lempar.c
+-  COMMAND gcc -o contrib/lemon contrib/lemon.c
++  OUTPUT lemon
++  DEPENDS ${CMAKE_SOURCE_DIR}/contrib/lemon.c ${CMAKE_SOURCE_DIR}/contrib/lempar.c
++  COMMAND gcc -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
+   COMMENT "Generating lemon parser generator"
+ )
+ 
+ ADD_CUSTOM_COMMAND(
+-  OUTPUT parser.c
+-  DEPENDS parser.y contrib/lemon
+-  COMMAND ./contrib/lemon parser.y
++  OUTPUT ${CMAKE_SOURCE_DIR}/parser.c
++  DEPENDS ${CMAKE_SOURCE_DIR}/parser.y lemon
++  COMMAND cd "${CMAKE_SOURCE_DIR}" && ${CMAKE_BINARY_DIR}/lemon -T${CMAKE_SOURCE_DIR}/contrib/lempar.c parser.y
+   COMMENT "Generating parser.c"
+ )
+ 
+ FIND_PATH(ubox_include_dir libubox/list.h)
+-INCLUDE_DIRECTORIES(${ubox_include_dir})
++IF(ubox_include_dir MATCHES "NOTFOUND$")
++  ADD_SUBDIRECTORY(libubox)
++  INCLUDE_DIRECTORIES(libubox)
++ELSE()
++  INCLUDE_DIRECTORIES(${ubox_include_dir})
++ENDIF()
+ 
+ SET_PROPERTY(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "lemon;parser.h;parser.out")
+ SET_SOURCE_FILES_PROPERTIES("parser.c" PROPERTIES GENERATED TRUE)
++
++SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
++SET(BUILD_SHARED_LIBS OFF)
++SET(CMAKE_EXE_LINKER_FLAGS "-static")
++
+ ADD_EXECUTABLE(jsonpath main.c ast.c lexer.c parser.c matcher.c)
+-TARGET_LINK_LIBRARIES(jsonpath ubox ${json})
++TARGET_LINK_LIBRARIES(jsonpath ubox-static ${json})
+ 
+ INSTALL(TARGETS jsonpath RUNTIME DESTINATION bin)
+diff -ru orig.jsonpath/main.c jsonpath/main.c
+--- orig.jsonpath/main.c	2018-10-11 11:39:16.333251706 -0300
++++ jsonpath/main.c	2018-10-10 17:12:05.807452815 -0300
+@@ -26,7 +26,7 @@
+ 	#include <json-c/json.h>
+ #endif
+ 
+-#include <libubox/list.h>
++#include "libubox/list.h"
+ 
+ #include "lexer.h"
+ #include "parser.h"
