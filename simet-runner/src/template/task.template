@@ -17,7 +17,7 @@
     ### begin
     # _first=$(find $_task_dir/tables -mindepth 1 -maxdepth 1 | head -n1)
     $(cat $_first)
-    # for _follower in $(find $_task_dir/tables -mindepth 1 -maxdepth 1 | (read; cat)) ; do
+    # for _follower in $(find $_task_dir/tables -mindepth 1 -maxdepth 1 | sed -e '1 d') ; do
     , 
     $(cat $_follower)
     # done

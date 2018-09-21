@@ -1,8 +1,13 @@
 Files with "simetbox" in the name are SIMETBOX-specific, they usually have a
 "simet" counterpart that is generic.
 
-For a SIMETBOX build, ensure you configure everything with
+For a SIMETBOX build, ensure you would typically want this:
   --enable-simetbox --prefix=/usr --sysconfdir=/etc --localstatedir=/var
+(and openwrt will already set everything but --enable-simetbox for you)
+
+For a Linux build, watch out for localstatedir, we do -NOT- create ${localstatedir}/lock
+and this can become a problem if $prefix is set.  An example of the correct usage is:
+  --prefix=/opt/simet --localstatedir=/var
 
 
 Conventions:

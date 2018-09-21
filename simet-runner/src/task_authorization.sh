@@ -11,7 +11,7 @@
 #
 # Dependencies:
 # - curl
-# - jsonfilter
+# - jsonfilter (configured as $JSONFILTER)
 #
 ################################################################################
 
@@ -39,13 +39,13 @@ authorization() {
     return 1
   fi
  
-  local _allowed=$(jsonfilter -i $BASEDIR/auth_response.json -e "@.measureAllowed")
+  local _allowed=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measureAllowed")
   if [ $_allowed != "true" ]; then
     _info "Authorization request denied at: $_endpoint"
     return 1
   fi
 
   _debug "Authorization success at: $_endpoint"
-  AUTHORIZATION_TOKEN=$(jsonfilter -i $BASEDIR/auth_response.json -e "@.measurementToken")
+  AUTHORIZATION_TOKEN=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measurementToken")
 }
 # keep line

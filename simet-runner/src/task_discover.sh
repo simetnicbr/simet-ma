@@ -39,7 +39,7 @@
 #
 # Dependencies:
 # - curl
-# - jsonfilter (default installed at OpenWRT)
+# - jsonfilter (default installed at OpenWRT) as $JSONFILTER
 #
 ################################################################################
 
@@ -57,7 +57,7 @@ discover_next_peer() {
   local _peer="undefined"
   GLOBAL_STATE_CURRENT_PEER=$(( $GLOBAL_STATE_CURRENT_PEER + 1 ))
   _debug "Probing for peer at list position: $GLOBAL_STATE_CURRENT_PEER"
-  _peer=$(jsonfilter -i "$BASEDIR/services.json" -t "@[$GLOBAL_STATE_CURRENT_PEER]")
+  _peer=$($JSONFILTER -i "$BASEDIR/services.json" -t "@[$GLOBAL_STATE_CURRENT_PEER]")
   if [ "$_peer" != "" ]; then
     return 0
   else
@@ -105,7 +105,7 @@ _discover_service(){
   
   _service="$1"
   _element="$2"
-  _extracted=$( jsonfilter -i "$BASEDIR/services.json" -e "@[$GLOBAL_STATE_CURRENT_PEER].$_service[0].$_element" )
+  _extracted=$($JSONFILTER -i "$BASEDIR/services.json" -e "@[$GLOBAL_STATE_CURRENT_PEER].$_service[0].$_element")
   echo "$_extracted"
 }
 
