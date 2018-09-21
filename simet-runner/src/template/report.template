@@ -5,7 +5,7 @@
       ### begin
       # _first=$(find $_report_dir/*/result.json | head -n1)
       $(cat $_first)
-      # for _follower in $(find $_report_dir/*/result.json | (read; cat)) ; do
+      # for _follower in $(find $_report_dir/*/result.json | sed -e '1 d') ; do
       , 
       $(cat $_follower)
       # done
