@@ -15,6 +15,7 @@ AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
 AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
 API_AGENT_TOKEN=${API_AGENT_TOKEN:-https://api.simet.nic.br/measurement/jwt}
+JSONFILTER=${JSONFILTER:-jsonfilter}
 
 USERAGENT="-A simet-agent-unix"
 CURLOPT="-q -s -m 15 --max-filesize 4000 --retry 10 --retry-max-time 3600"
@@ -36,7 +37,7 @@ gettoken() {
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
 	apicall || abend "failed to contact agent-token service"
-	SID=$(jsonfilter -i "$OUTFILE" -e "AID=@.agentId" -e "AT=@.token") || abend "illegal response from agent-token service"
+	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agentId" -e "AT=@.token") || abend "illegal response from agent-token service"
 	rm -f "$OUTFILE"
 	eval "$SID" || abend "internal error"
 	[ x"$AID" != x"$OLDAID" ] && echo "$AID" > "$AGENT_ID_FILE"
