@@ -24,7 +24,6 @@ simetma_sources = src/log.sh \
 		src/task_discover.sh \
 		src/task_geolocation.sh \
 		src/vendor/sempl.sh \
-		src/task_report.sh \
 		src/main.sh
 
 simet-ma_run.sh: $(simetma_sources)
