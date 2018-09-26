@@ -1,0 +1,5 @@
+Source code structure:
+
+<main project dir>
+  m4/         - autotools macros
+  src/        - module
