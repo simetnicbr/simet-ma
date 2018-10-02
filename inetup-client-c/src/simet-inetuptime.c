@@ -471,15 +471,63 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         if (s->socket == -1)
             continue;
 
-        /* The use of SO_SNDTIMEO+EINPROGRESS for connect() timeout is a Linuxism,
-         * alternatively, do this using select()/poll() */
+        /* FIXME: do this using select()/poll(), but we have to make it
+         * indepondent and async so that we can return to caller to process
+         * other concurrent connect()s to other server streams in the
+         * meantime.  And that must happen in the middle of the
+         * getaddrinfo() loop */
+
+        /* The use of SO_SNDTIMEO for blocking connect() timeout is not
+         * mandated by POSIX and it is implemented only in [non-ancient]
+         * Linux */
         const struct timeval so_timeout = {
             .tv_sec = simet_uptime2_tcp_timeout,
             .tv_usec = 0,
         };
-        if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)))
-            TRACE_LOG(s, "failed to set connect() timeout using SO_SNDTIMEO");
-        setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout));
+        if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
+            setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
+            TRACE_LOG(s, "failed to set socket timeouts using SO_*TIMEO");
+        }
+
+        /* RFC-0793/RFC-5482 user timeout.
+         *
+         * WARNING: Linux seems to be using twice the value set, but trying to
+         * compensate for this (by giving it half the value we want) is dangerous
+         * unless we do track it down to be sure it has been enshrined as ABI
+         */
+        const unsigned int ui = (unsigned int)simet_uptime2_tcp_timeout * 1000U;
+        if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
+            WARNING_LOG("failed to enable TCP timeouts, measurement error will increase");
+        }
+
+#if 0
+        /* RFC-1122 TCP keep-alives as a fallback for timeouts.
+         *
+         * Cheap bug defense against application-layer keepalive messages not being sent, but otherwise
+         * useless as the kernel resets the TCP Keep-Alive timers on socket send().
+         *
+         * Linux seems to do the expected with this one, and timeout at
+         * KEEPIDLE + KEEPINTVL * KEEPCNT.
+         *
+         * Note: we don't account for KEEPIDLE in the code below
+         */
+        const int tcp_keepcnt = 3;
+        int tcp_keepintvl = simet_uptime2_tcp_timeout / tcp_keepcnt;
+        if (tcp_keepintvl < 5)
+            tcp_keepintvl = 5;
+        int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
+        if (tcp_keepidle < 5)
+            tcp_keepidle = 5;
+        const int one = 1;
+        if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
+            setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
+            setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
+            setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(int))) {
+            WARNING_LOG("failed to enable TCP Keep-Alives, measurement error might increase");
+        } else {
+            DEBUG_LOG("RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+        }
+#endif
 
         if (connect(s->socket, airp->ai_addr, airp->ai_addrlen) != -1)
             break;
@@ -494,11 +542,6 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     freeaddrinfo(air);
 
     s->state = SIMET_INETUP_P_C_RECONNECT; /* if we abort, ensure we will cleanup */
-
-    const unsigned int ui = (unsigned int)simet_uptime2_tcp_timeout * 1000U;
-    if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
-        WARNING_LOG("failed to set TCP timeout, might not operate correctly");
-    }
 
     /* Get metadata of the connected socket */
     struct sockaddr_storage sa;
