@@ -615,8 +615,13 @@ int main(int argc, char **argv) {
         switch (option) {
         case 't':
             intarg = atoi(optarg);
-            if (intarg > simet_uptime2_keepalive_interval)
+            if (intarg >= 15)
                 simet_uptime2_tcp_timeout = intarg;
+
+            if (simet_uptime2_keepalive_interval >= simet_uptime2_tcp_timeout)
+                simet_uptime2_keepalive_interval = simet_uptime2_tcp_timeout / 2;
+            if (simet_uptime2_keepalive_interval > 30)
+                simet_uptime2_keepalive_interval = 30;
             break;
         case 'd':
             agent_id = optarg;
@@ -650,6 +655,10 @@ int main(int argc, char **argv) {
     server_name = argv[optind++];
     if (optind < argc)
         server_port = argv[optind];
+
+    DEBUG_LOG("timeout=%d, keepalive=%d, server=\"%s\", port=%s",
+              simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
+              server_name, server_port);
 
     /* init */
     /* this can be easily converted to use up-to-# servers per ai_family, etc */
