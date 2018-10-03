@@ -41,6 +41,8 @@ static const char *task_name = NULL;
 static int simet_uptime2_keepalive_interval = 30; /* seconds */
 static int simet_uptime2_tcp_timeout = 60; /* seconds, for data to be ACKed as well as connect() */
 
+static time_t client_start_timestamp;
+
 #define BACKOFF_LEVEL_MAX 8
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
     { 1, 10, 10, 30, 30, 60, 60, 300 };
@@ -262,7 +264,8 @@ static void simet_uptime2_keepalive_update(struct simet_inetup_server * const s)
    s->keepalive_clock = reltime();
 }
 
-static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s, const char * const name)
+static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
+                                     const time_t when, const char * const name)
 {
     json_object *jroot;
     json_object *jarray;
@@ -278,7 +281,7 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s, const
         goto err_exit;
 
     json_object_object_add(jo, "name", json_object_new_string(name));
-    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(reltime()));
+    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(when));
 
     if (json_object_array_add(jarray, jo))
         goto err_exit;
@@ -313,9 +316,15 @@ err_exit:
  * Returns: 0 or -errno
  */
 
+static int simet_uptime2_msg_clientlifetime(struct simet_inetup_server * const s, int is_start)
+{
+    return xx_simet_uptime2_sndevent(s, (is_start)? client_start_timestamp : reltime(),
+                                        (is_start)? "ma_clientstart" : "ma_clientstop");
+}
+
 static int simet_uptime2_msg_link(struct simet_inetup_server * const s, int link_is_up)
 {
-    return xx_simet_uptime2_sndevent(s, (link_is_up)? "ma_link" : "ma_nolink");
+    return xx_simet_uptime2_sndevent(s, reltime(), (link_is_up)? "ma_link" : "ma_nolink");
 }
 
 static int simet_uptime2_msg_keepalive(struct simet_inetup_server * const s)
@@ -427,7 +436,9 @@ static int uptimeserver_refresh(struct simet_inetup_server * const s)
     }
 
     /* FIXME: this is correct, but not being done the right way */
-    if (simet_uptime2_msg_link(s, 1))
+    if (simet_uptime2_msg_clientlifetime(s, 1))
+        simet_uptime2_reconnect(s);
+    else if (simet_uptime2_msg_link(s, 1))
         simet_uptime2_reconnect(s);
 
     return 0;
@@ -713,6 +724,8 @@ int main(int argc, char **argv) {
     const char *server_port = "22000";
     int intarg;
 
+    client_start_timestamp = reltime();
+
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
     while ((option = getopt (argc, argv, "46hVc:l:t:d:m:M:b:j:")) != -1) {
@@ -805,6 +818,7 @@ int main(int argc, char **argv) {
 #if 0
             case SIMET_INETUP_P_C_DISCONNECT:
                 /* not implemented, unreachable */
+                arrange to send ma_clientstop before close();
                 servers_pollfds[s].fd = -1;
             case SIMET_INETUP_P_C_SHUTDOWN:
                 /* not implemented, unreachable */
