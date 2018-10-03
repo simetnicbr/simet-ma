@@ -50,6 +50,19 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
  * helpers
  */
 
+static time_t reltime(void)
+{
+    struct timespec now;
+
+    if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
+        return now.tv_sec;
+    } else {
+        ERROR_LOG("clock_gettime(CLOCK_MONOTONIC) returned an error!");
+        /* FIXME: consider abort(EXIT_FAILURE) */
+        return 0; /* kaboom! most likely :-( */
+    }
+}
+
 static const char *str_ip46(int ai_family)
 {
     switch (ai_family) {
@@ -243,21 +256,55 @@ static int uptimeserver_flush(struct simet_inetup_server * const s)
     return 0;
 }
 
-static void xx_clocknow(time_t *now_seconds)
-{
-    struct timespec now;
-
-    if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
-        *now_seconds = now.tv_sec;
-    } else {
-        *now_seconds = 0; /* clock broken */
-    }
-}
-
 /* update keepalive timer every time we send a message of any time */
 static void simet_uptime2_keepalive_update(struct simet_inetup_server * const s)
 {
-    xx_clocknow(&s->keepalive_clock);
+   s->keepalive_clock = reltime();
+}
+
+static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s, const char * const name)
+{
+    json_object *jroot;
+    json_object *jarray;
+    json_object *jo;
+    int rc = -ENOMEM;
+
+    TRACE_LOG(s, "sending %s event", name);
+
+    jo = json_object_new_object();
+    jroot = json_object_new_object();
+    jarray = json_object_new_array();
+    if (!jroot || !jarray || !jo)
+        goto err_exit;
+
+    json_object_object_add(jo, "name", json_object_new_string(name));
+    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(reltime()));
+
+    if (json_object_array_add(jarray, jo))
+        goto err_exit;
+    jo = NULL;
+
+    json_object_object_add(jroot, "events", jarray);
+    jarray = NULL;
+
+    const char *jsonstr = json_object_to_json_string(jroot);
+    if (jsonstr) {
+        TRACE_LOG(s, "ma_event message: %s", jsonstr);
+        rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_EVENTS, strlen(jsonstr), jsonstr);
+        if (!rc)
+            simet_uptime2_keepalive_update(s);
+    } else {
+        rc = -EFAULT;
+    }
+
+    /* free(jsonstr); -- not! it is managed by json-c */
+
+err_exit:
+    json_object_put(jo);
+    json_object_put(jarray);
+    json_object_put(jroot);
+
+    return rc;
 }
 
 /*
@@ -265,6 +312,11 @@ static void simet_uptime2_keepalive_update(struct simet_inetup_server * const s)
  *
  * Returns: 0 or -errno
  */
+
+static int simet_uptime2_msg_link(struct simet_inetup_server * const s, int link_is_up)
+{
+    return xx_simet_uptime2_sndevent(s, (link_is_up)? "ma_link" : "ma_nolink");
+}
 
 static int simet_uptime2_msg_keepalive(struct simet_inetup_server * const s)
 {
@@ -321,11 +373,12 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
         json_object_object_add(jo, "task-name", json_object_new_string(task_name));
     json_object_object_add(jo, "task-version", json_object_new_string(PACKAGE_VERSION));
     json_object_object_add(jo, "uptime-seconds", json_object_new_int64(uptime));
+    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(reltime()));
 
     const char *jsonstr = json_object_to_json_string(jo);
     if (jsonstr) {
         TRACE_LOG(s, "ma_connect message: %s", jsonstr);
-        rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_MACONNECT, strlen(jsonstr), jsonstr);
+        rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_CONNECT, strlen(jsonstr), jsonstr);
     } else {
         rc = -EFAULT;
     }
@@ -343,7 +396,7 @@ err_exit:
 
 static void xx_server_backoff_reset(struct simet_inetup_server * const s)
 {
-    xx_clocknow(&s->backoff_clock);
+    s->backoff_clock = reltime();
 }
 
 /* jump to the reconnect state, used by state machine workers */
@@ -372,6 +425,10 @@ static int uptimeserver_refresh(struct simet_inetup_server * const s)
         simet_uptime2_keepalive_update(s);
         s->state = SIMET_INETUP_P_C_MAINLOOP;
     }
+
+    /* FIXME: this is correct, but not being done the right way */
+    if (simet_uptime2_msg_link(s, 1))
+        simet_uptime2_reconnect(s);
 
     return 0;
 }

@@ -7,8 +7,9 @@
 #include <sys/socket.h>
 
 /* SIMET2 Uptime2 protocol constants */
-#define SIMET_INETUP_P_MSGTYPE_MACONNECT  0x0000U
+#define SIMET_INETUP_P_MSGTYPE_CONNECT    0x0000U
 #define SIMET_INETUP_P_MSGTYPE_KEEPALIVE  0x0001U
+#define SIMET_INETUP_P_MSGTYPE_EVENTS     0x0002U
 
 enum simet_inetup_protocol_state {
     SIMET_INETUP_P_C_INIT = 0,		/* Initial setup, go to connect */
