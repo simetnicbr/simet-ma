@@ -193,11 +193,11 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     s->queue.rd_pos += sent;
 
 #if 0
-    /* commented out - we can tolerate 200ms extra delay from Naggle just fine */
+    /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
+     * and we already asked for TCP_NODELAY after connect() */
 
     const int zero = 0;
     const int one = 1;
-
     /* Ask kernel to flush buffer every time our local queue is empty */
     if (s->queue.wr_pos <= s->queue.rd_pos) {
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
@@ -430,6 +430,8 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     int backoff;
     int r;
 
+    const int int_one = 1;
+
     assert(s && server_name && server_port);
     assert(s->state == SIMET_INETUP_P_C_INIT || s->state == SIMET_INETUP_P_C_RECONNECT);
 
@@ -518,11 +520,10 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
         if (tcp_keepidle < 5)
             tcp_keepidle = 5;
-        const int one = 1;
         if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
             setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
             setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
-            setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(int))) {
+            setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
             WARNING_LOG("failed to enable TCP Keep-Alives, measurement error might increase");
         } else {
             DEBUG_LOG("RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
@@ -542,6 +543,9 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     freeaddrinfo(air);
 
     s->state = SIMET_INETUP_P_C_RECONNECT; /* if we abort, ensure we will cleanup */
+
+    /* Disable Naggle, we don't need it (but we can tolerate it) */
+    setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
 
     /* Get metadata of the connected socket */
     struct sockaddr_storage sa;
