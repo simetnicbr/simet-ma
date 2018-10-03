@@ -703,7 +703,7 @@ int main(int argc, char **argv) {
     if (optind < argc)
         server_port = argv[optind];
 
-    DEBUG_LOG("timeout=%d, keepalive=%d, server=\"%s\", port=%s",
+    DEBUG_LOG("timeout=%ds, keepalive=%ds, server=\"%s\", port=%s",
               simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
               server_name, server_port);
 
