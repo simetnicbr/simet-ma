@@ -204,7 +204,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
     }
 #endif
-    TRACE_LOG(s, "send() %zd out of %zu bytes", sent, send_sz);
+    /* TRACE_LOG(s, "send() %zd out of %zu bytes", sent, send_sz); */
 
     xx_tcpaq_compact(s);
     return 0;
@@ -727,7 +727,7 @@ int main(int argc, char **argv) {
             struct simet_inetup_server *s = servers[j];
             int wait = 0;
 
-            DEBUG_LOG("%s(%u): main loop, currently at state %u", str_ip46(s->ai_family), s->connection_id, s->state);
+            /* DEBUG_LOG("%s(%u): main loop, currently at state %u", str_ip46(s->ai_family), s->connection_id, s->state); */
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
@@ -765,7 +765,7 @@ int main(int argc, char **argv) {
                 minwait = 0;
             }
         }
-        DEBUG_LOG("------ (minwait: %ld) ------", minwait);
+        /* DEBUG_LOG("------ (minwait: %ld) ------", minwait); */
 
         if (minwait > 0) {
             /* optimized for a small number of servers */
