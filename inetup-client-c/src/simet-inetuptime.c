@@ -18,7 +18,6 @@
 #include <netdb.h>
 
 #include <time.h>
-#include <sys/sysinfo.h>
 
 #include "simet-inetuptime.h"
 #include "logger.h"
@@ -352,16 +351,11 @@ static int simet_uptime2_msg_keepalive(struct simet_inetup_server * const s)
 static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
 {
     json_object *jo;
-    struct sysinfo si;
-    long uptime = 0;
     int rc = -ENOMEM;
 
     assert(s);
 
     TRACE_LOG(s, "sending ma_connect event");
-
-    if (sysinfo(&si) == 0)
-        uptime = si.uptime;
 
     jo = json_object_new_object();
     if (!jo)
@@ -397,7 +391,6 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (task_name)
         json_object_object_add(jo, "task-name", json_object_new_string(task_name));
     json_object_object_add(jo, "task-version", json_object_new_string(PACKAGE_VERSION));
-    json_object_object_add(jo, "uptime-seconds", json_object_new_int64(uptime));
     json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(reltime()));
 
     const char *jsonstr = json_object_to_json_string(jo);
