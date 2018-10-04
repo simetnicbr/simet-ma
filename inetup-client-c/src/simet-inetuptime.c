@@ -47,6 +47,9 @@ static time_t client_start_timestamp;
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
     { 1, 10, 10, 30, 30, 60, 60, 300 };
 
+/* events that can tolerate it, will oportunistically fire if called within
+ * TIMERFUZZ seconds interval before they are scheduled to fire */
+#define SIMET_INETUP_TIMERFUZZ 5
 
 /*
  * helpers
@@ -57,12 +60,25 @@ static time_t reltime(void)
     struct timespec now;
 
     if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
-        return now.tv_sec;
+        return (now.tv_sec > 0)? now.tv_sec : 0;  /* this helps the optimizer and squashes several warnings */
     } else {
         ERROR_LOG("clock_gettime(CLOCK_MONOTONIC) returned an error!");
         /* FIXME: consider abort(EXIT_FAILURE) */
         return 0; /* kaboom! most likely :-( */
     }
+}
+
+/* returns: 0 = expired, otherwise seconds left to time out
+ * written for clarity, and no integer overflows */
+static time_t timer_check(const time_t timestamp, const time_t rel_timeout)
+{
+    if (timestamp <= 0 || rel_timeout <= 0)
+        return 0; /* timer expired as fail-safe */
+    const time_t now = reltime();
+    if (now < timestamp)
+        return 0; /* timer expired due to wrap or timestamp in the future */
+    const time_t now_rel = now - timestamp;
+    return (rel_timeout > now_rel)? rel_timeout - now_rel : 0;
 }
 
 static const char *str_ip46(int ai_family)
@@ -448,16 +464,9 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
 {
     assert(s);
 
-    if (s->keepalive_clock != 0) {
-        struct timespec now;
-        int ds;
-
-        if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
-            ds = (now.tv_sec >= s->keepalive_clock)? now.tv_sec - s->keepalive_clock : INT_MAX;
-            if (ds < simet_uptime2_keepalive_interval)
-                return simet_uptime2_keepalive_interval - ds;
-        }
-    }
+    time_t waittime_left = timer_check(s->keepalive_clock, simet_uptime2_keepalive_interval);
+    if (waittime_left > SIMET_INETUP_TIMERFUZZ)
+        return waittime_left;
 
     if (simet_uptime2_msg_keepalive(s)) {
         simet_uptime2_reconnect(s);
@@ -507,17 +516,9 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         tcpaq_close(s);
 
     /* Backoff timer */
-    if (s->backoff_clock != 0) {
-        struct timespec now;
-        unsigned int ds;
-
-        if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
-            ds = (now.tv_sec >= s->backoff_clock)? now.tv_sec - s->backoff_clock : UINT_MAX;
-            if (ds < backoff_times[s->backoff_level])
-                return (int)(backoff_times[s->backoff_level] - ds);
-        }
-    }
-
+    time_t waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
+    if (waittime_left > 0)
+        return waittime_left;
     xx_server_backoff_reset(s);
     if (s->backoff_level < BACKOFF_LEVEL_MAX-1)
         s->backoff_level++;
