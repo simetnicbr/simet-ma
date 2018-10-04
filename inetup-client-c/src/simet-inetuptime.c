@@ -93,7 +93,7 @@ static const char *str_ip46(int ai_family)
 
 #define TRACE_LOG(s, ...) \
     do { LOG_MESSAGE(stderr, "TRACE"); \
-         fprintf(stderr,  "%s(%u): ", str_ip46(s->ai_family), s->connection_id); \
+         fprintf(stderr, "%s(%u)@%lds: ", str_ip46(s->ai_family), s->connection_id, (long int)reltime() - client_start_timestamp); \
          fprintf(stderr, __VA_ARGS__); \
          fprintf(stderr, "\n"); \
     } while(0)
