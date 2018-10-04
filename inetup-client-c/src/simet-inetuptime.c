@@ -412,17 +412,22 @@ err_exit:
  * SIMET2 Uptime2 connection lifetime messages and handling
  */
 
-static void xx_server_backoff_reset(struct simet_inetup_server * const s)
-{
-    s->backoff_clock = reltime();
-}
-
 /* jump to the reconnect state, used by state machine workers */
+/* resets the backoff timer, so it should be used only after we're sure the
+ * server is not doing close() because it is denying service */
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
 {
-    s->state = SIMET_INETUP_P_C_RECONNECT;
+    if (s->state != SIMET_INETUP_P_C_RECONNECT) {
+        TRACE_LOG(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
+        s->state = SIMET_INETUP_P_C_RECONNECT;
+        s->backoff_clock = reltime();
+    }
+}
+
+/* call this after we are sure the server likes us */
+static void simet_uptime2_backoff_reset(struct simet_inetup_server * const s)
+{
     s->backoff_level = 0;
-    xx_server_backoff_reset(s);
 }
 
 /*
@@ -512,7 +517,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     time_t waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
     if (waittime_left > 0)
         return waittime_left;
-    xx_server_backoff_reset(s);
+    s->backoff_clock = reltime();
     if (s->backoff_level < BACKOFF_LEVEL_MAX-1)
         s->backoff_level++;
     backoff = (int) backoff_times[s->backoff_level];
@@ -597,8 +602,13 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         close(s->socket);
         s->socket = -1;
     }
+
+    /* FIXME: backoff_clock update required because we are doing blocking connects(),
+     * so several seconds will have elapsed already */
+    s->backoff_clock = reltime();
+
     if (!airp) {
-        TRACE_LOG(s, "could not connect, will retry later");
+        TRACE_LOG(s, "could not connect, will retry in %d seconds", backoff);
         return backoff;
     }
 
@@ -804,8 +814,16 @@ int main(int argc, char **argv) {
                 break;
             case SIMET_INETUP_P_C_REFRESH:
                 wait = uptimeserver_refresh(s);
+                if (!s->backoff_reset_clock)
+                    s->backoff_reset_clock = reltime();
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
+                if (s->backoff_reset_clock &&
+                        timer_check(s->backoff_reset_clock, simet_uptime2_tcp_timeout * 2) == 0) {
+                    TRACE_LOG(s, "assuming server is willing to provide service, backoff timer reset");
+                    simet_uptime2_backoff_reset(s);
+                    s->backoff_reset_clock = 0;
+                }
                 wait = uptimeserver_keepalive(s);
                 /* state change messages go here */
                 break;

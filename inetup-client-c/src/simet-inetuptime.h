@@ -48,6 +48,7 @@ struct simet_inetup_server {
     time_t keepalive_clock;
     unsigned int backoff_level;
     time_t backoff_clock;
+    time_t backoff_reset_clock;
 
     unsigned int connection_id;
 
