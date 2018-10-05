@@ -18,6 +18,7 @@
 #include <netdb.h>
 
 #include <time.h>
+#include <signal.h>
 
 #include "simet-inetuptime.h"
 #include "logger.h"
@@ -41,6 +42,9 @@ static int simet_uptime2_keepalive_interval = 30; /* seconds */
 static int simet_uptime2_tcp_timeout = 60; /* seconds, for data to be ACKed as well as connect() */
 
 static time_t client_start_timestamp;
+
+static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
+static volatile int got_reload_signal = 0;  /* SIGHUP */
 
 #define BACKOFF_LEVEL_MAX 8
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
@@ -106,6 +110,38 @@ static struct json_object * xx_json_object_new_in64_as_str(const int64_t v)
     return json_object_new_string(buf);
 }
 #endif
+
+
+/*
+ * Signal handling
+ */
+
+static void handle_exitsig(const int sig)
+{
+    got_exit_signal = sig;
+}
+
+static void handle_reloadsig(const int sig)
+{
+    got_reload_signal = sig;
+}
+
+static void init_signals(void)
+{
+    struct sigaction sa;
+
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = &handle_exitsig;
+
+    if (sigaction(SIGQUIT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL))
+        WARNING_LOG("failed to set signal handlers, precision during restarts will suffer");
+
+    sa.sa_handler = &handle_reloadsig;
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGHUP, &sa, NULL))
+        WARNING_LOG("failed to set SIGHUP handler");
+}
+
 
 /*
  * TCP async queueing
@@ -778,6 +814,8 @@ int main(int argc, char **argv) {
     if (optind < argc)
         server_port = argv[optind];
 
+    init_signals();
+
     DEBUG_LOG("timeout=%ds, keepalive=%ds, server=\"%s\", port=%s",
               simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
               server_name, server_port);
@@ -801,6 +839,9 @@ int main(int argc, char **argv) {
         for (j = 0; j < servers_count; j++) {
             struct simet_inetup_server *s = servers[j];
             int wait = 0;
+
+            if (got_exit_signal)
+                break;
 
             /* DEBUG_LOG("%s(%u): main loop, currently at state %u", str_ip46(s->ai_family), s->connection_id, s->state); */
 
@@ -844,12 +885,18 @@ int main(int argc, char **argv) {
             if (wait >= 0 && wait < minwait)
                 minwait = wait;
 
+            if (got_exit_signal)
+                break;
+
             if (uptimeserver_flush(s)) {
                 simet_uptime2_reconnect(s);
                 minwait = 0;
             }
         }
         /* DEBUG_LOG("------ (minwait: %ld) ------", minwait); */
+
+        if (got_exit_signal)
+            break;
 
         if (minwait > 0) {
             /* optimized for a small number of servers */
@@ -865,13 +912,20 @@ int main(int argc, char **argv) {
                             j, (unsigned int)servers_pollfds[j].events,
                             j, (unsigned int)servers_pollfds[j].revents);
                     }
+                    if (got_exit_signal)
+                        break;
                 }
             } else if (poll_res == -1 && (errno != EINTR && errno != EAGAIN)) {
                 ERROR_LOG("internal error, memory corruption or out of memory");
                 return EXIT_FAILURE;
             }
         }
-    } while (1);
+    } while (!got_exit_signal);
+
+    if (got_exit_signal)
+        DEBUG_LOG("received exit signal %d, exiting...", got_exit_signal);
+    else
+        DEBUG_LOG("all servers connections have been shutdown, exiting...");
 
     return EXIT_SUCCESS;
 }
