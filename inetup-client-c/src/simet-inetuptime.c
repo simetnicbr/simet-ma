@@ -114,7 +114,8 @@ static struct json_object * xx_json_object_new_in64_as_str(const int64_t v)
  *    we can be message-atomic at the higher level)
  * 2. commit message to the local queue, we can now return success no matter what.
  * 3. attempt to send() to kernel buffer immediately and return even if nothing or
- *    partial send.  Whatever is left will get sent async by the main loop.
+ *    partial send.  Whatever is left will get sent async by calls to
+ *    tcpaq_send_nowait() -- which we call in the program main loop.
  */
 
 static void tcpaq_close(struct simet_inetup_server * const s)
@@ -855,9 +856,10 @@ int main(int argc, char **argv) {
             int poll_res = poll(servers_pollfds, servers_count, minwait * 1000U);
             if (poll_res > 0) {
                 for (j = 0; j < servers_count; j++) {
-                    if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR))
+                    if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
+                        TRACE_LOG(servers[j], "connection to server lost");
                         simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
-                    else if (servers_pollfds[j].revents) {
+                    } else if (servers_pollfds[j].revents) {
                         TRACE_LOG(servers[j], "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
                             j, servers_pollfds[j].fd,
                             j, (unsigned int)servers_pollfds[j].events,
