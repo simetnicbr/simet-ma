@@ -54,6 +54,9 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
  * TIMERFUZZ seconds interval before they are scheduled to fire */
 #define SIMET_INETUP_TIMERFUZZ 5
 
+/* time we wait to flush queue to kernel before we drop it during disconnect */
+#define SIMET_DISCONNECT_WAIT_TIMEOUT 5
+
 /*
  * helpers
  */
@@ -218,6 +221,12 @@ static int tcpaq_queue(struct simet_inetup_server * const s, void *data, size_t 
     return 0;
 }
 
+static int tcpaq_is_queue_empty(struct simet_inetup_server * const s)
+{
+    /* do it in a fail-save manner against queue accounting bugs */
+    return (s->queue.rd_pos >= s->queue.wr_pos || s->queue.rd_pos >= s->queue.buffer_size);
+}
+
 static void xx_tcpaq_compact(struct simet_inetup_server * const s)
 {
     /* FIXME: also compact partially transmitted using a watermark */
@@ -243,7 +252,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         return -ENOTCONN;
     if (s->queue.wr_pos == 0)
         return 0;
-    if (s->queue.rd_pos >= s->queue.wr_pos || s->queue.rd_pos >= s->queue.buffer_size) {
+    if (tcpaq_is_queue_empty(s)) {
         xx_tcpaq_compact(s);
         return 0;
     }
@@ -277,6 +286,20 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     return 0;
 }
 
+#if 0
+/* Tries hard to flush queue, but only up to timeout seconds */
+static int tcpaq_send_timeout(struct simet_inetup_server * const s, time_t timeout)
+{
+    const time_t tstart = reltime();
+    int rc = -EAGAIN;
+
+    while (rc && !tcpaq_is_queue_empty(s) && timer_check(tstart, timeout)) {
+        rc = tcpaq_send_nowait(s);
+    }
+
+    return rc;
+}
+#endif
 
 /*
  * SIMET2 Uptime2 protocol helpers
@@ -449,15 +472,30 @@ err_exit:
  * SIMET2 Uptime2 connection lifetime messages and handling
  */
 
-/* jump to the reconnect state, used by state machine workers */
-/* resets the backoff timer, so it should be used only after we're sure the
- * server is not doing close() because it is denying service */
+/* jump to the reconnect state, used by state machine workers
+ *
+ * resets the backoff timer, so it should be used only after we're sure the
+ * server is not doing close() because it is denying service
+ */
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
 {
-    if (s->state != SIMET_INETUP_P_C_RECONNECT) {
+    if (s->state != SIMET_INETUP_P_C_RECONNECT && !got_exit_signal) {
         TRACE_LOG(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
         s->state = SIMET_INETUP_P_C_RECONNECT;
         s->backoff_clock = reltime();
+    }
+}
+
+/* jump to the disconnect state, unless it is already disconnecting */
+static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
+{
+    if (s->state != SIMET_INETUP_P_C_DISCONNECT &&
+            s->state != SIMET_INETUP_P_C_DISCONNECT_WAIT &&
+            s->state != SIMET_INETUP_P_C_SHUTDOWN) {
+        s->state = SIMET_INETUP_P_C_DISCONNECT;
+        s->disconnect_clock = 0;
+
+        TRACE_LOG(s, "client disconnecting...");
     }
 }
 
@@ -681,6 +719,64 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     return 0;
 }
 
+static int uptimeserver_disconnect(struct simet_inetup_server *s)
+{
+    int rc = 0;
+
+    if (s->socket == -1) {
+        /* not connected */
+        s->state = SIMET_INETUP_P_C_SHUTDOWN;
+        s->disconnect_clock = 0;
+        return 0;
+    }
+
+    if (!s->disconnect_clock) {
+        s->disconnect_clock = reltime();
+        TRACE_LOG(s, "attempting clean disconnection for up to %d seconds", SIMET_DISCONNECT_WAIT_TIMEOUT);
+    }
+
+    if (!simet_uptime2_msg_clientlifetime(s, 0)) {
+        /* queued sucessfully */
+        s->state = SIMET_INETUP_P_C_DISCONNECT_WAIT;
+        return 0;
+    }
+
+    /* will have to retry queueing again, check timeout */
+    rc = timer_check(s->disconnect_clock, SIMET_DISCONNECT_WAIT_TIMEOUT);
+    if (!rc)
+        s->state = SIMET_INETUP_P_C_DISCONNECT_WAIT; /* timed out, kick to next stage */
+
+    return rc;
+}
+
+static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
+{
+    if (s->socket == -1) {
+        /* not connected */
+        s->state = SIMET_INETUP_P_C_SHUTDOWN;
+        s->disconnect_clock = 0;
+        return 0;
+    }
+
+    if (!s->disconnect_clock)
+        s->disconnect_clock = reltime(); /* should not happen */
+
+    int rc = timer_check(s->disconnect_clock, SIMET_DISCONNECT_WAIT_TIMEOUT);
+    if (!rc || tcpaq_is_queue_empty(s)) {
+        /* tcpaq queue is empty, or we are out of time */
+        tcpaq_close(s);
+        s->socket = -1;
+        s->disconnect_clock = 0;
+
+        TRACE_LOG(s, "client disconnected");
+
+        s->state = SIMET_INETUP_P_C_SHUTDOWN;
+        return 0;
+    }
+
+    return rc;
+}
+
 static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
 {
     static unsigned int next_connection_id = 1;
@@ -834,20 +930,22 @@ int main(int argc, char **argv) {
     /* state machine loop */
     do {
         time_t minwait = 300;
-        unsigned int j;
+        unsigned int j, num_shutdown;
 
+        num_shutdown = 0;
         for (j = 0; j < servers_count; j++) {
             struct simet_inetup_server *s = servers[j];
             int wait = 0;
 
             if (got_exit_signal)
-                break;
+                simet_uptime2_disconnect(s);
 
             /* DEBUG_LOG("%s(%u): main loop, currently at state %u", str_ip46(s->ai_family), s->connection_id, s->state); */
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
                 /* FIXME: add POLLIN if a backchannel is added, etc */
+                servers_pollfds[j].fd = -1;
                 servers_pollfds[j].events = POLLRDHUP;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
@@ -869,14 +967,20 @@ int main(int argc, char **argv) {
                 wait = uptimeserver_keepalive(s);
                 /* state change messages go here */
                 break;
-#if 0
+
             case SIMET_INETUP_P_C_DISCONNECT:
-                /* not implemented, unreachable */
-                arrange to send ma_clientstop before close();
-                servers_pollfds[s].fd = -1;
+                wait = uptimeserver_disconnect(s);
+                break;
+            case SIMET_INETUP_P_C_DISCONNECT_WAIT:
+                wait = uptimeserver_disconnectwait(s);
+                break;
+
             case SIMET_INETUP_P_C_SHUTDOWN:
-                /* not implemented, unreachable */
-#endif
+                num_shutdown++;
+                servers_pollfds[j].fd = -1;
+                wait = INT_MAX;
+                break;
+
             default:
                 ERROR_LOG("internal error or memory corruption");
                 return EXIT_FAILURE;
@@ -885,9 +989,6 @@ int main(int argc, char **argv) {
             if (wait >= 0 && wait < minwait)
                 minwait = wait;
 
-            if (got_exit_signal)
-                break;
-
             if (uptimeserver_flush(s)) {
                 simet_uptime2_reconnect(s);
                 minwait = 0;
@@ -895,7 +996,7 @@ int main(int argc, char **argv) {
         }
         /* DEBUG_LOG("------ (minwait: %ld) ------", minwait); */
 
-        if (got_exit_signal)
+        if (num_shutdown >= servers_count && got_exit_signal)
             break;
 
         if (minwait > 0) {
@@ -912,15 +1013,13 @@ int main(int argc, char **argv) {
                             j, (unsigned int)servers_pollfds[j].events,
                             j, (unsigned int)servers_pollfds[j].revents);
                     }
-                    if (got_exit_signal)
-                        break;
                 }
             } else if (poll_res == -1 && (errno != EINTR && errno != EAGAIN)) {
                 ERROR_LOG("internal error, memory corruption or out of memory");
                 return EXIT_FAILURE;
             }
         }
-    } while (!got_exit_signal);
+    } while (1);
 
     if (got_exit_signal)
         DEBUG_LOG("received exit signal %d, exiting...", got_exit_signal);

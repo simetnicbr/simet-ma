@@ -16,7 +16,8 @@ enum simet_inetup_protocol_state {
     SIMET_INETUP_P_C_RECONNECT,		/* TCP (re)connection with backoff control, go to refresh */
     SIMET_INETUP_P_C_REFRESH,		/* (re-)send full state, go to mainloop */
     SIMET_INETUP_P_C_MAINLOOP,		/* keepalive and events loop */
-    SIMET_INETUP_P_C_DISCONNECT,	/* send shutdown notification, force TCP disconnect */
+    SIMET_INETUP_P_C_DISCONNECT,	/* send shutdown notification */
+    SIMET_INETUP_P_C_DISCONNECT_WAIT,	/* wait for queue drain, force connection shutdown */
     SIMET_INETUP_P_C_SHUTDOWN,		/* do nothing, terminal state */
 
     SIMET_INETUP_P_C_MAX
@@ -46,6 +47,7 @@ struct simet_inetup_server {
 
     enum simet_inetup_protocol_state state;
     time_t keepalive_clock;
+    time_t disconnect_clock;
     unsigned int backoff_level;
     time_t backoff_clock;
     time_t backoff_reset_clock;
