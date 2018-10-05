@@ -1019,6 +1019,12 @@ int main(int argc, char **argv) {
                 return EXIT_FAILURE;
             }
         }
+
+        if (got_reload_signal && !got_exit_signal) {
+            got_reload_signal = 0;
+            for (j = 0; j < servers_count; j++)
+                simet_uptime2_reconnect(servers[j]);
+        }
     } while (1);
 
     if (got_exit_signal)
