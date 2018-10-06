@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include "netinet-tcp-compat.h"
 #include <netdb.h>
 
 #include <time.h>
