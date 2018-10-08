@@ -1,4 +1,13 @@
 #shellcheck shell=ash
+# Copyright (c) 2017 John Patterson
+#
+# Source code fraction, THE LICENSE OF THIS source code fraction is NOT
+# the license of the whole work, or of any files it was included.
+# Refer for the main program source code for license details
+#
+# This source code fraction (vendor/sempl.sh) is distributed under
+# the MIT license.
+#
 # Reference: https://github.com/nextrevision/sempl/blob/master/sempl
 
 __sempl_path=$0

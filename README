@@ -1,25 +1,32 @@
+NIC.br SIMET-MA: SIMET2 Measurement Agent
+Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>
+
+
+Developer notes:
+
 Files with "simetbox" in the name are SIMETBOX-specific, they usually have a
 "simet" counterpart that is generic.
 
-For a SIMETBOX build, ensure you would typically want this:
+For a SIMETBOX build, you would typically want this:
   --enable-simetbox --prefix=/usr --sysconfdir=/etc --localstatedir=/var
 (and openwrt will already set everything but --enable-simetbox for you)
 
-For a Linux build, watch out for localstatedir, we do -NOT- create ${localstatedir}/lock
-and this can become a problem if $prefix is set.  An example of the correct usage is:
-  --prefix=/opt/simet --localstatedir=/var
+For a Linux build, watch out for localstatedir, we do -NOT- create
+${localstatedir}/lock and this can become a problem if $prefix is set.  An
+example of the correct usage is: --prefix=/opt/simet --localstatedir=/var
 
 
 Conventions:
 
 look into simet-api/Makefile.am for conventions for scripts and config files.
 
-NOTE: simet config goes into $SYSCONFDIR/simet/<foo>.  simet components, to $LIBDIR/simet/<foo>.
-I.e. they are prefixed by "simet/".
+Configuration:
+ * Hardcoded under $LIBDIR/simet/*conf
+ * User-overriden through $SYSCONFDIR/simet/<same name as above>.conf
 
-VERSIONING:
+Versioning:
   The main version is set by the toplevel "version" file.  If working from
-  a VCS checkout, it will be based on "git describe" instead (see version.sh).
+  a git checkout, it will be based on "git describe" instead (see version.sh).
 
   Please always commit an up-to-date version file and then tag the new release:
 
