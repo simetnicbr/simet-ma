@@ -2,6 +2,159 @@ NIC.br SIMET-MA: SIMET2 Measurement Agent
 Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>
 
 
+
+SIMET2 overview:
+
+The SIMET2 measurement system consists of:
+
+ * Centralized UI servers (handling data analysis pipelines, storage,
+   search and retrieval, via web interfaces or REST APIs);
+ * Centralized coordination servers (handling measurement agent
+   registry, authorization, and resource usage control);
+ * Distributed measurement peers (hosted at IXPs, e.g. IX.br);
+ * Measurement Agents (clients).
+
+The architecture is based on IETF LMAP, and other IETF IPPM/LMAP work.
+
+At bootstrap or factory reset, as well as periodically, the client
+(SIMET measurement agent, or SIMET MA) will connect with the SIMET
+central servers to register themselves and obtain (or update) their
+agent-id and an agent authorization token ("agent token").
+
+The SIMET MA is identified by its SIMET agent-id, and access to the
+SIMET API is granted by its agent token [if valid].  The SIMET MA should
+persist its agent-id and agent token in non-volatile storage, to create
+an useful measurement history that allows the user to refer to past
+measurements, etc.
+
+Some MAs (embedded devices like home routers, all SIMETBOXes, etc) are
+*also* identified by a factory-provided unique number, typically an
+Ethernet/WiFi MAC address.  This *greatly* simplifies end-user support,
+as the agent-id might change.
+
+Depending on the measurement it wants to perform, the MA will also have
+to contact a SIMET API to request a measurement peer slot and a
+"measurement token", which is an authorization to run that measurement
+task against that specific measurement peer.
+
+Measurement tokens are also used by the SIMET system for resource
+control, and for load distribution (e.g. to avoid thousands of MAs
+deciding to run throughput measurements at the same time on the same
+network).
+
+
+Playing nice with the central resources, or SIMET2 MA fleet control:
+
+A SIMET MA measurement agent must, *before* it tries to use any SIMET
+service, get assigned an agent-id and agent authorization token (which
+it should persist in non-volatile storage).
+
+Very long-lived MAs need not persist these in non-volatile memory, but
+MAs that are subject to resets/reboots/power-cycles often (e.g. home
+routers) should: they may end up banned from SIMET if they request agent
+tickets too often.
+
+The pair of (agent-id, agent token) should be refreshed every so often,
+as they might expire or get invalidated due to internal changes on the
+SIMET system server-side.  They should be refreshed at least once a week.
+
+To refresh, the MA supplies the agent token it had to the API as if
+requesting a new one, and it will get the same agent token and agent-id
+back if they are still valid, or new ones if they need to be replaced.
+
+To reduce measurement downtime, the MA should also try to refresh the
+authentication token any time a SIMET API reports error 401 (access
+denied).
+
+If a measurement agent gets a 4xx reply while trying to get its agent-id
+and agent token, it must wait some time before trying again.  It is
+acceptable to have a back-off strategy of: once in five minutes, then
+once in 30 minutes, then once an hour after that.
+
+If a measurement agent gets a 5xx reply while trying to get, or refresh,
+its agent-id and agent token, it must delete them, consider itself
+unregistered from the SIMET system, and it must no longer attempt to
+access any SIMET services until it is power-cycled.
+
+APIs and measurement tasks that require a measurement token are
+considered "expensive" or have some sort of fleet-wide orchestration
+requirement.  The client *MUST NOT* attempt to connect to them or carry
+that measurement task unless it has obtained *fresh*, valid measurement
+token for it.
+
+Measurement tokens are not to be persisted: they are volatile, one-use,
+and short-lived.
+
+
+
+SIMET2 core measurements:
+
+ * TWAMP
+   - Measures round-trip latency, packet loss and reordering, and jitter
+   - Can measure coarse one-way latency (precision one-way measurement
+     would require the client and server clocks to be synchronized).
+ * tcpbw
+   - Measures TCP throughput using multiple streams
+ * inetup
+   - Measures Internet availability ("uptime"), as defined by a
+     long-lived, very low bandwidth TCP stream to a measurement server
+     hosted "in the Internet" (*never* locally in the ISP).
+
+SIMET2 ancillary measurements:
+ * geoloc
+   - Measurement agent geolocation.  It has to be good enough to locate
+     the MA down to its "census tract" (in Brazil, "Setores Censitários"
+     as defined by IBGE).  More accuracy in these measurements might
+     result in better placement of the results on heat maps, but that's
+     all.
+
+Future SIMET2 Measurements:
+  * udpbw (to be added to the SIMET2 Core)
+    - Measures UDP throughput using multiple streams
+  * BCP-38 filtering
+  * DNS and DNSSEC-related tests
+  * CDN latency and preferred node (legacy, might be dropped)
+  * ALEXA top-# access/latency/landing page load time (legacy, might be
+    dropped)
+  * ...
+
+
+About geolocation and SIMET:
+
+The main value of SIMET to NIC.br and CGI.br is to gather trusted,
+neutral, *census-tract-level geolocalized* measurements of the quality
+of Internet access [in Brazil].
+
+The geolocalized information is used by NIC.br (through CETIC.br) to
+generate *anonymous*, aggregated reports of Internet access parameters.
+These are made available to the general public at no cost.  The CETIC.br
+reports are, in turn, used by third parties such as private enterprises
+(typically for market analysis) and government bodies (public policy
+development and market regulation).
+
+Refer to: https://cetic.br/
+
+
+Other uses of SIMET-collected information:
+
+The SIMET MAs are also used to detect widespread issues and practices by
+ISPs (such as measure IPv6 adoption, CGNAT adoption, check for bogon
+filtering...).  Such reports are presented to the wide ISP and network
+operators community through the NIC.br-hosted GTER (Brazilian's network
+operators work group, akin to NANOG) meetings that happen at least once
+an year.  They are also reported to CGI.br for multi-stakeholder
+decision making about some widespread issue that would benefit from
+official guidance.
+
+
+Legacy SIMET:
+
+NIC.br measurement agents based on OpenWRT (aka SIMETBOX) also ship code from
+the legacy version of SIMET.  This legacy architecture is being phased out and
+will be entirely replaced by SIMET2 modules.
+
+
+
 Developer notes:
 
 Files with "simetbox" in the name are SIMETBOX-specific, they usually have a
