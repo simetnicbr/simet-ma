@@ -24,6 +24,57 @@
 #include <unistd.h>
 #include <getopt.h>
 
+#include <fcntl.h>
+#include <errno.h>
+
+#include "logger.h"
+
+int log_level = 2;
+const char *progname = PACKAGE_NAME;
+
+
+static int is_valid_fd(const int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+static void fix_fds(const int fd, const int fl)
+{
+    int nfd;
+
+    if (is_valid_fd(fd))
+            return;
+
+    nfd = open("/dev/null", fl);
+    if (nfd == -1 || dup2(nfd, fd) == -1) {
+            print_err("could not attach /dev/null to file descriptor %d: %s",
+                      fd, strerror(errno));
+            /* if (nfd != -1) close(nfd); - disabled as we're going to exit() now */
+            exit(EXIT_FAILURE);
+    }
+    if (nfd != fd)
+            close(nfd);
+}
+
+/*
+ * glibc does not ensure sanity of the standard streams at program start
+ * for non suid/sgid applications.  The streams are initialized as open
+ * and not in an error state even when their underlying FDs are invalid
+ * (closed).  These FDs will later become valid due to an unrelated
+ * open(), which will cause undesired behavior (such as data corruption)
+ * should the stream be used.
+ *
+ * freopen() cannot be used to fix this directly, due to a glibc 2.14+ bug
+ * when freopen() is called on an open stream that has an invalid FD which
+ * also happens to be the first available FD.
+ */
+static void sanitize_std_fds(void)
+{
+   /* do it in file descriptor numerical order! */
+   fix_fds(STDIN_FILENO,  O_RDONLY);
+   fix_fds(STDOUT_FILENO, O_WRONLY);
+   fix_fds(STDERR_FILENO, O_RDWR);
+}
 
 static const char program_copyright[]=
 	"Copyright (c) 2018 NIC.br\n\n"
@@ -39,12 +90,15 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
+    fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
 	    "[-d <agent-id>] [-j <token> ] "
 	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
 		"\t-h\tprint usage help and exit\n"
+		"\t-V\tprint program version and copyright, and exit\n"
+		"\t-v\tverbose mode (repeat for increased verbosity)\n"
+		"\t-q\tquiet mode (repeat for errors-only)\n"
 		"\t-4\ttest over IPv4 (default)\n"
 		"\t-6\ttest over IPv6\n"
 		"\t-t\tconnection timeout in seconds\n"
@@ -67,45 +121,59 @@ int main(int argc, char **argv) {
     int test_lenght = 11;
     int numstreams = 5;
 
-    int option;
+    progname = argv[0];
+    sanitize_std_fds();
 
+    int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "46hVc:l:t:d:j:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:")) != -1) {
         switch (option) {
-	    case '4':
-		family = 4;
-		break;
-	    case '6':
-		family = 6;
-		break;
-	    case 'l':
-		test_lenght = atoi(optarg);
-		break;
-            case 't':
-                timeout_test = atoi(optarg);
-                break;
-	    case 'c':
-		numstreams = atoi(optarg);
-		break;
-            case 'd':
-                agent_id = optarg;
-                break;
-            case 'j':
-                token = optarg;
-                break;
-	    case 'h':
-		print_usage(argv[0], 1);
-		/* fall-through */ /* silence bogus warning */
-	    case 'V':
-		print_version();
-		/* fall-through */ /* silence bogus warning */
-	    default:
-		print_usage(argv[0], 0);
+        case 'v':
+            if (log_level < 1)
+                log_level = 2;
+            else if (log_level < 3)
+                log_level++;
+            break;
+        case 'q':
+            if (log_level <= 0)
+                log_level = -1;
+            else
+                log_level = 0;
+            break;
+	case '4':
+	    family = 4;
+	    break;
+	case '6':
+	    family = 6;
+	    break;
+	case 'l':
+	    test_lenght = atoi(optarg);
+	    break;
+	case 't':
+	    timeout_test = atoi(optarg);
+	    break;
+	case 'c':
+	    numstreams = atoi(optarg);
+	    break;
+	case 'd':
+	    agent_id = optarg;
+	    break;
+	case 'j':
+	    token = optarg;
+	    break;
+	case 'h':
+	    print_usage(progname, 1);
+	    /* fall-through */ /* silence bogus warning */
+	case 'V':
+	    print_version();
+	    /* fall-through */ /* silence bogus warning */
+	default:
+	    print_usage(progname, 0);
         }
     };
 
     if (optind >= argc || argc - optind != 1)
-	print_usage(argv[0], 0);
+	print_usage(progname, 0);
 
     control_url = argv[optind];
 
@@ -123,11 +191,12 @@ int main(int argc, char **argv) {
 	.sample_period_ms = 500U,
     };
 
+    print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
+
     int value = tcp_client_run(ctx);
 
-    if (value != 0) {
-        fprintf(stderr, "TCP CLIENT RUN ERROR\n");
-    }
+    if (value != 0)
+        print_err("TCP CLIENT RUN ERROR");
 
     return 0;
 }
