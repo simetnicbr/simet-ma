@@ -18,9 +18,6 @@
 #include "twampc_config.h"
 #include "twamp.h"
 
-#include "logger.h"
-#include "report.h"
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -30,10 +27,14 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <time.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+
+#include "logger.h"
+#include "report.h"
 
 #include "libubox/usock.h"
 
@@ -66,8 +67,6 @@ int twamp_run_client(TWAMPParameters param) {
 
     int simet_err = 0;
 
-    INFO_LOG("Start TWAMP Client");
-
     ServerGreeting *srvGreetings = malloc(SERVER_GREETINGS_SIZE);
     SetupResponse *stpResponse = malloc(SETUP_RESPONSE_SIZE);
     memset(stpResponse, 0 , SETUP_RESPONSE_SIZE);
@@ -87,24 +86,24 @@ int twamp_run_client(TWAMPParameters param) {
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
     fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param.family), param.host, param.port, &remote_addr_control, 2000);
     if (fd_control < 0) {
-        ERROR_LOG(fd_control, "could not resolve server name or address");
+        print_err("could not resolve server name or address");
         simet_err = 1;
         goto MEM_FREE;
     }
 
     fd_ready = usock_wait_ready(fd_control, 5000);
     if (fd_ready != 0) {
-        ERROR_LOG(fd_ready, "connection to server failed");
+        print_err("connection to server failed");
         simet_err = 1;
         goto MEM_FREE;
     }
 
-    INFO_LOG("CONTROL socket connected");
+    print_msg(MSG_NORMAL, "CONTROL socket connected");
 
     // Store remote address for report
     char hostAddr[INET6_ADDRSTRLEN];
     if (get_ip_str(&remote_addr_control, hostAddr, INET6_ADDRSTRLEN) == NULL) {
-        WARNING_LOG("get_ip_str problem");
+        print_warn("get_ip_str problem");
     }
     report->address = hostAddr;
 
@@ -120,97 +119,97 @@ int twamp_run_client(TWAMPParameters param) {
     // SERVER GREETINGS
     ret_socket = message_server_greetings(fd_control, 10, srvGreetings);
     if (ret_socket != SERVER_GREETINGS_SIZE) {
-        INFO_LOG("message_server_greetings problem");
+        print_err("message_server_greetings problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
-    INFO_LOG("Server Greetings received");
+    print_msg(MSG_DEBUG, "server Greetings received");
 
     if (message_validate_server_greetings(srvGreetings) != 0) {
-        ERROR_LOG(0, "message_validate_server_greetings problem");
+        print_err("message_validate_server_greetings problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
     // SETUP RESPONSE
-    INFO_LOG("Preparing Setup Response message");
+    print_msg(MSG_DEBUG, "preparing Setup Response message");
 
     if (message_format_setup_response(srvGreetings, stpResponse) != 0) {
-        ERROR_LOG(0, "message_setup_response problem");
+        print_err("message_setup_response problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
     ret_socket = message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE);
     if (ret_socket <= 0) {
-        INFO_LOG("message_send problem");
+        print_err("message_send problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
-    INFO_LOG("Setup Response message sent");
+    print_msg(MSG_DEBUG, "Setup Response message sent");
 
     // SERVER START
     ret_socket = message_server_start(fd_control, 10, srvStart);
     if (ret_socket <= 0) {
-        INFO_LOG("message_server_start problem");
+        print_err("message_server_start problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
     if(srvStart->Accept != 0) {
-        INFO_LOG("Test not accepted: %"PRIu8 ,srvStart->Accept);
+        print_err("test not accepted: %"PRIu8 ,srvStart->Accept);
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
-    INFO_LOG("Server Start received");
+    print_msg(MSG_NORMAL, "Server Start received, creating test session(s)...");
 
     // REQUEST SESSION
     socklen_t addr_len = sizeof(local_addr_control);
     memset(&local_addr_control, 0, addr_len);
 	if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, (socklen_t *) &addr_len) < 0){
-        INFO_LOG("getsockname problem");
+        print_err("getsockname problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
 	}
 
     char str[INET6_ADDRSTRLEN];
     if (get_ip_str(&local_addr_control, str, INET6_ADDRSTRLEN) == NULL) {
-        INFO_LOG("get_ip_str problem");
+        print_err("get_ip_str problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
-    INFO_LOG("local address is %s", str);
+    print_msg(MSG_NORMAL, "local address is %s", str);
 
     // CREATE SOCKET
     memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
     fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, 2000);
     if (fd_test < 0) {
-        ERROR_LOG(fd_test, "usock_inet_timeout problem");
+        print_err("usock_inet_timeout problem");
         simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
     fd_ready = usock_wait_ready(fd_test, 5000);
     if (fd_ready != 0) {
-        ERROR_LOG(fd_ready, "usock_wait_ready problem");
+        print_err("usock_wait_ready problem");
         simet_err = 1;
         goto TEST_CLOSE;
     }
 
-    INFO_LOG("TEST socket connected");
-    DEBUG_LOG("sin_addr: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
-    DEBUG_LOG("sin_port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
+    print_msg(MSG_NORMAL, "TEST socket connected");
+    print_msg(MSG_DEBUG, "sin_addr: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
+    print_msg(MSG_DEBUG, "sin_port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
 
     // Get Sender Port
     uint16_t sender_port = 862;
     addr_len = sizeof(local_addr_measure);
     memset(&local_addr_measure, 0, addr_len);
 	if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0){
-        INFO_LOG("getsockname problem");
+        print_msg(MSG_DEBUG, "getsockname problem");
         simet_err = 1;
         goto TEST_CLOSE;
 	}
@@ -219,12 +218,12 @@ int twamp_run_client(TWAMPParameters param) {
     switch(local_addr_measure.ss_family) {
         case AF_INET:
             sender_port = ntohs(((struct sockaddr_in *) &local_addr_measure)->sin_port);
-            INFO_LOG("PORT IPv4 %u", sender_port);
+            print_msg(MSG_DEBUG, "PORT IPv4 %u", sender_port);
             break;
 
         case AF_INET6:
             sender_port = ntohs(((struct sockaddr_in6 *) &local_addr_measure)->sin6_port);
-            INFO_LOG("PORT IPv6: %u", sender_port);
+            print_msg(MSG_DEBUG, "PORT IPv6: %u", sender_port);
             break;
 
         default:
@@ -232,14 +231,14 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     if (message_format_request_session(param.family, sender_port, rqtSession) != 0) {
-        INFO_LOG("message_format_request_session problem");
+        print_msg(MSG_DEBUG, "message_format_request_session problem");
         simet_err = 1;
         goto TEST_CLOSE;
     }
 
     ret_socket = message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE);
     if (ret_socket <= 0) {
-        INFO_LOG("message_send problem");
+        print_msg(MSG_DEBUG, "message_send problem");
         simet_err = 1;
         goto TEST_CLOSE;
     }
@@ -247,20 +246,21 @@ int twamp_run_client(TWAMPParameters param) {
     // ACCEPT SESSION
     ret_socket = message_accept_session(fd_control, 10, actSession);
     if (ret_socket <= 0) {
-        INFO_LOG("message_server_start problem");
+        print_msg(MSG_DEBUG, "message_server_start problem");
         simet_err = 1;
         goto TEST_CLOSE;
     }
 
     if(actSession->Accept != 0) {
-        INFO_LOG("Test not accepted: %"PRIu8 ,actSession->Accept);
+        print_err("test not accepted: %"PRIu8 ,actSession->Accept);
         simet_err = 1;
         goto TEST_CLOSE;
     }
 
+    /* FIXME: log this better */
     uint16_t receiver_port = actSession->Port;
     report->serverPort = (unsigned int)receiver_port;
-    DEBUG_LOG("Session Port: %"PRIu16, receiver_port);
+    print_msg(MSG_DEBUG, "session port: %"PRIu16, receiver_port);
 
     testPort = malloc(sizeof(char) * 6);
     snprintf(testPort, 6, "%u", receiver_port);
@@ -268,25 +268,27 @@ int twamp_run_client(TWAMPParameters param) {
     add_remote_port(&remote_addr_measure, receiver_port);
     addr_len = sizeof(remote_addr_measure);
 
-    DEBUG_LOG("Update Remote Port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
-    DEBUG_LOG("Addr value: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
+    /* FIXME: log it like inetupc, this is broken
+    print_msg(MSG_DEBUG, "update remote port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
+    print_msg(MSG_DEBUG, "addr value: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
+    */
 
-    DEBUG_LOG("fd_test before: %d", fd_test);
+    print_msg(MSG_DEBUG, "fd_test before: %d", fd_test);
 
-    if (connect(fd_test, (struct sockaddr *) &remote_addr_measure, remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) :
-sizeof(struct sockaddr_in6)) != 0) {
-        ERRNO_LOG("connect to remote measurement peer problem");
+    if (connect(fd_test, (struct sockaddr *) &remote_addr_measure,
+                remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0) {
+        print_err("connect to remote measurement peer problem: %s", strerror(errno));
         simet_err = 1;
         goto TEST_CLOSE;
     }
 
-    DEBUG_LOG("fd_test after: %d", fd_test);
+    print_msg(MSG_DEBUG, "fd_test after: %d", fd_test);
 
     // START SESSION
     strSession->Type = 2;
     ret_socket = message_send(fd_control, 10, strSession, START_SESSIONS_SIZE);
     if (ret_socket <= 0) {
-        INFO_LOG("message_send problem");
+        print_err("message_send problem");
         simet_err = 1;
         goto TEST_CLOSE;
     }
@@ -294,52 +296,56 @@ sizeof(struct sockaddr_in6)) != 0) {
     // START ACK
     ret_socket = message_start_ack(fd_control, 10, strAck);
     if (ret_socket <= 0) {
-        INFO_LOG("message_start_ack problem");
+        print_err("message_start_ack problem");
         simet_err = 1;
         goto TEST_CLOSE;
     }
     
     if (strAck->Accept == 0) {
-        INFO_LOG("Accept == 0. Start Test");
+        print_msg(MSG_NORMAL, "measurement starting...");
         t_param.test_socket = fd_test;
+
         twamp_test(t_param);
 
         message_format_stop_sessions(stpSessions);
         message_send(fd_control, 10, stpSessions, sizeof(StopSessions));
     } else {
-        INFO_LOG("Accept != 0. Accept: %"PRIu8, strAck->Accept);
+        print_err("Accept != 0, got %"PRIu8, strAck->Accept);
         goto TEST_CLOSE;
     }
 
+    print_msg(MSG_IMPORTANT, "measurement finished");
+
     twamp_report(report);
 
-    DEBUG_LOG("Total packet sent: %u -- Total packets received: %u", t_param.report->result->packets_sent, t_param.report->result->received_packets);
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u",
+            t_param.report->result->packets_sent, t_param.report->result->received_packets);
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
-        ERRNO_LOG("TEST socket shutdown problem");
+        print_err("TEST socket shutdown problem: %s", strerror(errno));
         goto CONTROL_CLOSE;
     }
-    INFO_LOG("TEST socket shutdown OK");
+    print_msg(MSG_DEBUG, "TEST socket shutdown OK");
 
     if (close(fd_test) != 0) {
-        ERRNO_LOG("TEST socket close problem");
+        print_err("TEST socket close problem: %s", strerror(errno));
         goto CONTROL_CLOSE;
     }
-    INFO_LOG("TEST socket close OK");
+    print_msg(MSG_DEBUG, "TEST socket close OK");
 
 CONTROL_CLOSE:
     if (shutdown(fd_control, SHUT_RDWR) != 0) {
-        ERRNO_LOG("CONTROL socket shutdown problem");
+        print_err("CONTROL socket shutdown problem: %s", strerror(errno));
         goto MEM_FREE;
     }
-    INFO_LOG("CONTROL socket shutdown OK");
+    print_msg(MSG_DEBUG, "CONTROL socket shutdown OK");
 
     if (close(fd_control) != 0) {
-        ERRNO_LOG("CONTROL socket close problem");
+        print_err("CONTROL socket close problem: %s", strerror(errno));
         goto MEM_FREE;
     }
-    INFO_LOG("CONTROL socket close OK");
+    print_msg(MSG_DEBUG, "CONTROL socket close OK");
 
 MEM_FREE:
     free(srvGreetings);
@@ -444,7 +450,7 @@ static void *twamp_callback_thread(void *p) {
 
 		if (bytes_recv != sizeof(UnauthReflectedPacket)) {
             // Somthing is wrong
-            WARNING_LOG("Unexpected message size. bytes_recv(%d) != sizeof(UnauthReflectedPacket)", bytes_recv);
+            print_warn("unexpected message size. bytes_recv(%d) != sizeof(UnauthReflectedPacket)", bytes_recv);
         } else {
             // Save result
             t_param->report->result->raw_data[pkg_count].time = timeval_to_timestamp(&tv_recv);
@@ -490,7 +496,7 @@ static int twamp_test(TestParameters test_param) {
 
         send_resp = message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket));
         if (send_resp == -1) {
-            WARNING_LOG("message_send returned -1");
+            print_warn("message_send returned -1");
             counter--;
         }
         usleep(test_param.param.packets_interval_ns);
@@ -498,9 +504,9 @@ static int twamp_test(TestParameters test_param) {
     }
 
     if (pthread_join(receiver_thread, NULL) == 0) {
-        DEBUG_LOG("[THREAD] twamp_callback_thread ended OK!");
+        print_msg(MSG_DEBUG, "[THREAD] twamp_callback_thread ended OK!");
     } else {
-        WARNING_LOG("[THREAD] twamp_callback_thread ended with problem!");
+        print_warn("[THREAD] twamp_callback_thread ended with problem!");
     }
 
     test_param.report->result->packets_sent = counter;
@@ -532,9 +538,9 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                INFO_LOG("receive_reflected_packet select timeout");
+                print_msg(MSG_DEBUG, "receive_reflected_packet select timeout");
             } else {
-                ERROR_LOG(fd_ready, "receive_reflected_packet select problem");
+                print_msg(MSG_DEBUG, "receive_reflected_packet select problem");
             }
 
             break;
@@ -547,7 +553,7 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
                 // Caso recv apresente algum erro
                 if (recv_size <= 0) {
                     if (recv_size == 0) {
-                        INFO_LOG("recv problem: recv_size == 0");
+                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
                         break;
                     }
 
@@ -555,7 +561,7 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         continue;
                     } else {
-                        ERRNO_LOG("recv message problem");
+                        print_err("recv message problem: %s", strerror(errno));
                         break;
                     }
                 }
@@ -577,9 +583,9 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
                     return recv_total;
                 }
 
-                WARNING_LOG("recv_total different then expected");
+                print_warn("recv_total different then expected");
             } else {
-                WARNING_LOG("socket not in rset");
+                print_warn("socket not in rset");
             }
         }
 

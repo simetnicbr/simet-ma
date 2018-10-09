@@ -20,6 +20,8 @@
 #include "logger.h"
 
 #include <stdint.h>
+#include <unistd.h>
+#include <string.h>
 #include <errno.h>
 
 #include <sys/types.h>
@@ -53,9 +55,9 @@ int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetin
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                WARNING_LOG("message_server_greetings select timeout!");
+                print_msg(MSG_DEBUG, "message_server_greetings select timeout!");
             } else {
-                ERROR_LOG(fd_ready, "message_server_greetings select problem!");
+                print_err("message_server_greetings select problem!");
             }
         } else {
             if (FD_ISSET((unsigned long)socket, &rset)) {
@@ -64,7 +66,7 @@ int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetin
                 // Caso recv apresente algum erro
                 if (recv_size <= 0) {
                     if (recv_size == 0) {
-                        INFO_LOG("recv problem: recv_size == 0");
+                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
                         break;
                     }
 
@@ -72,7 +74,7 @@ int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetin
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         continue;
                     } else {
-                        ERRNO_LOG("recv message problem");
+                        print_err("recv message problem: %s", strerror(errno));
                         break;
                     }
                 }
@@ -88,9 +90,9 @@ int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetin
                     return recv_total;
                 }
 
-                WARNING_LOG("recv_total different then expected!");
+                print_msg(MSG_DEBUG, "recv_total different then expected!");
             } else {
-                WARNING_LOG("socket not in rset!");
+                print_msg(MSG_DEBUG, "socket not in rset!");
             }
         }
 
@@ -120,9 +122,9 @@ int message_server_start(int socket, int timeout, ServerStart *srvStart) {
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                WARNING_LOG("message_server_greetings select timeout!");
+                print_msg(MSG_DEBUG, "message_server_greetings select timeout!");
             } else {
-                ERROR_LOG(fd_ready, "message_server_greetings select problem!");
+                print_err("message_server_greetings select problem!");
             }
         } else {
             if (FD_ISSET((unsigned long)socket, &rset)) {
@@ -131,7 +133,7 @@ int message_server_start(int socket, int timeout, ServerStart *srvStart) {
                 // Caso recv apresente algum erro
                 if (recv_size <= 0) {
                     if (recv_size == 0) {
-                        INFO_LOG("recv problem: recv_size == 0");
+                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
                         break;
                     }
 
@@ -139,7 +141,7 @@ int message_server_start(int socket, int timeout, ServerStart *srvStart) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         continue;
                     } else {
-                        ERRNO_LOG("recv message problem");
+                        print_err("recv message problem: %s", strerror(errno));
                         break;
                     }
                 }
@@ -154,9 +156,9 @@ int message_server_start(int socket, int timeout, ServerStart *srvStart) {
                     return recv_total;
                 }
 
-                WARNING_LOG("recv_total different then expected!");
+                print_msg(MSG_DEBUG, "recv_total different then expected!");
             } else {
-                WARNING_LOG("socket not in rset!");
+                print_msg(MSG_DEBUG, "socket not in rset!");
             }
         }
 
@@ -186,9 +188,9 @@ int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                WARNING_LOG("message_accept_session select timeout!");
+                print_msg(MSG_DEBUG, "message_accept_session select timeout!");
             } else {
-                ERROR_LOG(fd_ready, "message_accept_session select problem!");
+                print_err("message_accept_session select problem!");
             }
         } else {
             if (FD_ISSET((unsigned long)socket, &rset)) {
@@ -197,7 +199,7 @@ int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
                 // Caso recv apresente algum erro
                 if (recv_size <= 0) {
                     if (recv_size == 0) {
-                        INFO_LOG("recv problem: recv_size == 0");
+                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
                         break;
                     }
 
@@ -205,7 +207,7 @@ int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         continue;
                     } else {
-                        ERRNO_LOG("recv message problem");
+                        print_err("recv message problem: %s", strerror(errno));
                         break;
                     }
                 }
@@ -219,9 +221,9 @@ int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
                     return recv_total;
                 }
 
-                WARNING_LOG("recv_total different then expected!");
+                print_msg(MSG_DEBUG, "recv_total different then expected!");
             } else {
-                WARNING_LOG("socket not in rset!");
+                print_msg(MSG_DEBUG, "socket not in rset!");
             }
         }
 
@@ -251,9 +253,9 @@ int message_start_ack(int socket, int timeout, StartAck *strAck) {
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                WARNING_LOG("message_accept_session select timeout!");
+                print_msg(MSG_DEBUG, "message_accept_session select timeout!");
             } else {
-                ERROR_LOG(fd_ready, "message_accept_session select problem!");
+                print_err("message_accept_session select problem!");
             }
         } else {
             if (FD_ISSET((unsigned long)socket, &rset)) {
@@ -262,7 +264,7 @@ int message_start_ack(int socket, int timeout, StartAck *strAck) {
                 // Caso recv apresente algum erro
                 if (recv_size <= 0) {
                     if (recv_size == 0) {
-                        INFO_LOG("recv problem: recv_size == 0");
+                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
                         break;
                     }
 
@@ -270,7 +272,7 @@ int message_start_ack(int socket, int timeout, StartAck *strAck) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         continue;
                     } else {
-                        ERRNO_LOG("recv message problem");
+                        print_err("recv message problem: %s", strerror(errno));
                         break;
                     }
                 }
@@ -282,9 +284,9 @@ int message_start_ack(int socket, int timeout, StartAck *strAck) {
                     return recv_total;
                 }
 
-                WARNING_LOG("recv_total different then expected!");
+                print_msg(MSG_DEBUG, "recv_total different then expected!");
             } else {
-                WARNING_LOG("socket not in rset!");
+                print_msg(MSG_DEBUG, "socket not in rset!");
             }
         }
 
@@ -316,9 +318,9 @@ int message_send(int socket, int timeout, void *message, size_t len) {
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                WARNING_LOG("message_send select timeout!");
+                print_msg(MSG_DEBUG, "message_send select timeout!");
             } else {
-                ERROR_LOG(fd_ready, "message_send select problem!");
+                print_err("message_send select problem!");
             }
         } else {
             if (FD_ISSET((unsigned long)socket, &wset)) {
@@ -329,9 +331,9 @@ int message_send(int socket, int timeout, void *message, size_t len) {
                     return send_size;
                 }
 
-                WARNING_LOG("send_total different then expected!");
+                print_msg(MSG_DEBUG, "send_total different then expected!");
             } else {
-                WARNING_LOG("socket not in wset!");
+                print_msg(MSG_DEBUG, "socket not in wset!");
             }
         }
     } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
@@ -346,7 +348,7 @@ int message_send(int socket, int timeout, void *message, size_t len) {
 
 int message_validate_server_greetings(ServerGreeting *srvGreetings) {
     if (srvGreetings->Modes == 0) {
-        INFO_LOG("Modes == 0 - the server does not wish to communicate");
+        print_msg(MSG_IMPORTANT, "the server does not wish to communicate");
         return -1;
     }
 

@@ -19,16 +19,31 @@
 #define LOGGER_H_
 
 #include <stdio.h>
-#include <string.h>
-#include <features.h>
-#include <errno.h>
 
-#define DEBUG_LOG(...) do {LOG_MESSAGE(stderr, "DEBUG"); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");} while(0)
-#define INFO_LOG(...) do {LOG_MESSAGE(stderr, "INFO"); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");} while(0)
-#define WARNING_LOG(...) do {LOG_MESSAGE(stderr, "WARNING"); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");} while(0)
-#define ERROR_LOG(err, ...) do {LOG_MESSAGE(stderr, "ERROR"); fprintf(stderr, "(#%d %s) ", err, strerror(err)); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");} while(0)
-#define ERRNO_LOG(...) do {LOG_MESSAGE(stderr, "ERRNO"); fprintf(stderr, "(#%d %s) ", errno, strerror(errno)); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");} while(0)
+extern int log_level; /* 0: errors; 1: quiet; 2: normal; 3: debug/verbose ; 4: trace */
+extern const char *progname;
 
-#define LOG_MESSAGE(output, level) do {fprintf(output, "%s %s [%s] {%s-%d}: ", __DATE__, __TIME__, level, __FILE__, __LINE__);} while(0)
+#define MSG_ALWAYS    0
+#define MSG_IMPORTANT 1
+#define MSG_NORMAL    2
+#define MSG_DEBUG     3
+#define MSG_TRACE     4
+
+#define print_msg_u(format, arg...) \
+    do { fflush(stdout); fprintf(stderr, "%s: " format "\n", progname, ## arg); } while (0)
+
+#define print_msg(level, format, arg...) \
+    do { \
+        if (log_level >= (level)) { \
+            fflush(stdout); \
+            fprintf(stderr, "%s: " format "\n", progname, ## arg); \
+        } \
+    } while (0)
+
+#define print_err(format, arg...) \
+    do { fflush(stdout); fprintf(stderr, "%s: error: " format "\n", progname, ## arg); } while (0)
+
+#define print_warn(format, arg...) \
+    do { fflush(stdout); fprintf(stderr, "%s: warning: " format "\n", progname, ## arg); } while (0)
 
 #endif /* LOGGER_H_ */
