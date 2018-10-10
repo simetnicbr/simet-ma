@@ -65,4 +65,6 @@ gettoken() {
 	:
 }
 
+AGENT_LOCK_DIR=$(dirname "$AGENT_TOKEN_LOCK")
+[ -d "$AGENT_LOCK_DIR" ] || mkdir -p -m 0755 -- "$AGENT_LOCK_DIR"
 ( flock -n -x 9 && gettoken ) <&- 9>> "$AGENT_TOKEN_LOCK"
