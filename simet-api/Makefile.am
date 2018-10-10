@@ -15,6 +15,8 @@
 
 simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
+EXTRA_DIST=
+CLEANFILES=
 
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
@@ -29,16 +31,20 @@ dist_bin_SCRIPTS = simetbox_register_ma.sh
 else
 dist_bin_SCRIPTS = simet_register_ma.sh
 endif
+# _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
+EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
+CLEANFILES += $(dist_bin_SCRIPTS)
 
-create-dirs:
-	[ -d "$(DESTDIR)$(simetconfdir)" ] || mkdir -m 0700 -p "$(DESTDIR)$(simetconfdir)"
-
-install-exec-hook: create-dirs
-install-data-hook: create-dirs
+# Ensures the empty directories we don't create at runtime do exist
+install-data-local:
+	$(MKDIR_P) -m 0700 -- "$(DESTDIR)$(simetconfdir)"
 
 dist_simetlib_DATA  = conf/simet-ma.conf agent-version.txt
+EXTRA_DIST += conf/simet-ma.conf.in
+CLEANFILES += $(dist_simetlib_DATA)
 
-CLEANFILES = $(dist_simetlib_DATA) $(dist_bin_SCRIPTS)
+# Other non-source files we want in the source tarball
+EXTRA_DIST += API.md
 
 agent-version.txt:
 	echo $(PACKAGE)/$(PACKAGE_VERSION) > "$@" && chmod 0644 "$@"

@@ -21,9 +21,19 @@ EXTRA_DIST  = autogen.sh version version.sh
 version:
 	$(top_srcdir)/version.sh > version
 
+dist-local: version
+
+# Creates a tarball of binaries, akin to how "make dist" creates a source distribution tarball
+bin-dist: all
+	test -d "$(abs_top_builddir)"
+	-rm -rf "$(abs_top_builddir)/binary-dist"
+	$(MKDIR_P) -- "$(abs_top_builddir)/binary-dist"
+	$(MAKE) install-strip DESTDIR="$(abs_top_builddir)/binary-dist"
+	tar zcf "${PACKAGE}-${VERSION}.binaries.tar.gz" --owner=root --group=root -C "$(abs_top_builddir)/binary-dist" .
+	rm -rf "$(abs_top_builddir)/binary-dist"
+
+# SIMET internal: reminder of how to update the version file
 .PHONY: bump-version
 bump-version:
 	-rm -f version
 	$(top_srcdir)/version.sh > version
-
-dist-local: version
