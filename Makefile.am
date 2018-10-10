@@ -33,6 +33,6 @@ bin-dist: all
 	test -d "$(abs_top_builddir)"
 	-rm -rf "$(abs_top_builddir)/binary-dist"
 	mkdir -p "$(abs_top_builddir)/binary-dist"
-	$(MAKE) install DESTDIR="$(abs_top_builddir)/binary-dist"
+	$(MAKE) install-strip DESTDIR="$(abs_top_builddir)/binary-dist"
 	tar zcf "${PACKAGE}-${VERSION}.binaries.tar.gz" --owner=root --group=root -C "$(abs_top_builddir)/binary-dist" .
 	rm -rf "$(abs_top_builddir)/binary-dist"
