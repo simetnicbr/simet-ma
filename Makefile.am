@@ -27,3 +27,12 @@ bump-version:
 	$(top_srcdir)/version.sh > version
 
 dist-local: version
+
+# Creates a tarball of binaries, akin to how "make dist" creates a source distribution tarball
+bin-dist: all
+	test -d "$(abs_top_builddir)"
+	-rm -rf "$(abs_top_builddir)/binary-dist"
+	mkdir -p "$(abs_top_builddir)/binary-dist"
+	$(MAKE) install DESTDIR="$(abs_top_builddir)/binary-dist"
+	tar zcf "${PACKAGE}-${VERSION}.binaries.tar.gz" --owner=root --group=root -C "$(abs_top_builddir)/binary-dist" .
+	rm -rf "$(abs_top_builddir)/binary-dist"
