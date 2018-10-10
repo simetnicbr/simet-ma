@@ -35,11 +35,9 @@ endif
 EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
-create-dirs:
-	[ -d "$(DESTDIR)$(simetconfdir)" ] || mkdir -m 0700 -p "$(DESTDIR)$(simetconfdir)"
-
-install-exec-hook: create-dirs
-install-data-hook: create-dirs
+# Ensures the empty directories we don't create at runtime do exist
+install-data-local:
+	$(MKDIR_P) -m 0700 -- "$(DESTDIR)$(simetconfdir)"
 
 dist_simetlib_DATA  = conf/simet-ma.conf agent-version.txt
 EXTRA_DIST += conf/simet-ma.conf.in
