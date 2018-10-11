@@ -238,7 +238,12 @@ _main_setup(){
   # 2. prepare env variables
   export REPORT_SCHEDULE="$LMAP_SCHEDULE"
   export REPORT_EVENT="$_time_of_exection"
-  export REPORT_MAC_ADDRESS=$( get_mac_address.sh )
+  REPORT_MAC_ADDRESS_TAG_ENTRY=
+  _macaddress=$( get_mac_address.sh 2>/dev/null | tr -d -c "0-9a-fA-F" )
+  if [ -n "$_macaddress" ] ; then
+     REPORT_MAC_ADDRESS_TAG_ENTRY=", \"macaddress:${_macaddress}\""
+  fi
+  export REPORT_MAC_ADDRESS_TAG_ENTRY
 }
 
 _main_cleanup(){
