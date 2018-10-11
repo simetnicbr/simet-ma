@@ -21,7 +21,8 @@
 # Commands required to prepare tree for building after a clean
 # checkout:
 #
-# Embedded libubox build dependencies: libjson-c-dev cmake
+# Embedded libubox/jsonpath build dependencies:
+#   libjson-c-dev cmake
 #
 # Main project build dependencies:
 #   autoconf, automake, libtool (recent versions!)

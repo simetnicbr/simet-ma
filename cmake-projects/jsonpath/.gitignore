@@ -1,0 +1,7 @@
+Makefile
+CMakeCache.txt
+CMakeFiles
+*.cmake
+install_manifest.txt
+jsonpath
+parser.[ch]

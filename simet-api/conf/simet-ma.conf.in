@@ -14,4 +14,4 @@ LMAP_SCHEDULE="anatel-resolution-574"
 LMAP_TASK_NAME_PREFIX="simet2_simet-agent-unix_"
 TWAMPC=@BINDIR@/twampc
 TCPBWC=@BINDIR@/tcpbwc
-JSONFILTER=jsonfilter
+JSONFILTER=@JSONFILTERPREFIX@jsonfilter

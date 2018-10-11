@@ -24,7 +24,7 @@ AC_COPYRIGHT([Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>])
 
 AC_CONFIG_AUX_DIR([.])
 AC_CANONICAL_HOST
-AM_INIT_AUTOMAKE([1.13 foreign no-dist-gzip dist-xz -Wall])
+AM_INIT_AUTOMAKE([1.13 foreign tar-pax no-dist-gzip dist-xz -Wall])
 AC_CONFIG_FILES([Makefile])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
 

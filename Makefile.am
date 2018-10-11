@@ -15,7 +15,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-SUBDIRS     = simet-api twamp-client-c tcpbw-client-c inetup-client-c simet-runner
+SUBDIRS     = simet-api twamp-client-c tcpbw-client-c inetup-client-c simet-runner cmake-projects
 EXTRA_DIST  = autogen.sh version version.sh
 
 version:

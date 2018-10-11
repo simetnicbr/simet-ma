@@ -1,0 +1,5 @@
+/Makefile
+/Makefile.in
+/jsonpath/contrib/lemon
+/jsonpath/parser.out
+simet-build-dir/
