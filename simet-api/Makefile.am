@@ -20,22 +20,22 @@ CLEANFILES=
 
 if SIMETBOX_BUILD
 dist_bin_SCRIPTS = simetbox_register_ma.sh
-jsonpathprefix=
+jsonfilter=jsonfilter
 else
 dist_bin_SCRIPTS = simet_register_ma.sh
-jsonpathprefix=$(bindir)/
+jsonfilter=$(bindir)/jsonpath
 endif
 
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@JSONFILTERPREFIX@!$(jsonpathprefix)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    "$^" > "$@"
 
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@JSONFILTERPREFIX@!$(jsonpathprefix)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
