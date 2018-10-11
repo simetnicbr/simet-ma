@@ -24,7 +24,7 @@ AC_COPYRIGHT([Copyright (c) 2017,2018 NIC.br <medicoes@simet.nic.br>])
 
 AC_CONFIG_SRCDIR([src/twampc.c])
 AC_CANONICAL_HOST
-AM_INIT_AUTOMAKE([1.13 gnu no-dist-gzip dist-xz -Wall])
+AM_INIT_AUTOMAKE([1.13 gnu tar-pax no-dist-gzip dist-xz -Wall])
 AC_CONFIG_HEADERS([twampc_config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
