@@ -6,8 +6,7 @@
   "option": $_task_options,
   "conflict": [],
   "tag": [
-    "task-version:$_task_version",
-     "macaddress:$REPORT_MAC_ADDRESS"
+    "task-version:$_task_version"${REPORT_MAC_ADDRESS_TAG_ENTRY}
   ],
   "event": "$REPORT_EVENT",
   "start": "$_task_start",
