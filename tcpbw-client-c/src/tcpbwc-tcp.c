@@ -27,6 +27,7 @@
 #include <inttypes.h>
 
 #include <assert.h>
+#include <errno.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -84,7 +85,7 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 	buflen = TCP_MAX_BUFSIZE;
     }
 
-    DEBUG_LOG("Will use a TCP buffer of length %zu", buflen);
+    print_msg(MSG_DEBUG, "will use a TCP buffer of length %zu", buflen);
 
     void *buf = calloc(1, buflen);
     *p = buf;
@@ -110,7 +111,7 @@ static int message_send(int socket, int timeout, void *message, size_t len)
         fd_ready = select(socket + 1, NULL, &wset, NULL, &tv_timeo);
 
         if (fd_ready <= 0) {
-            WARNING_LOG("select: %i", fd_ready);
+            print_warn("select: %i", fd_ready);
 	} else {
             if (FD_ISSET((unsigned long)socket, &wset)) {
                 send_size = send(socket, message + send_total, len - (unsigned long)send_total, 0);
@@ -119,9 +120,9 @@ static int message_send(int socket, int timeout, void *message, size_t len)
                 if ((unsigned long)send_total == len)
                     return send_size;
 
-                WARNING_LOG("send_total different then expected!");
+                print_warn("send_total different then expected!");
             } else {
-                WARNING_LOG("socket not in wset!");
+                print_warn("socket not in wset!");
             }
         }
     } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
@@ -138,13 +139,13 @@ static int create_measure_socket(char *host, char *port, char *sessionid)
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
     fd_measure = usock_inet_timeout(USOCK_TCP, host, port, &remote_addr_control, 2000);
     if (fd_measure < 0) {
-        WARNING_LOG("usock_inet_timeout fd_measure: %i", fd_measure);
+        print_warn("usock_inet_timeout fd_measure: %i", fd_measure);
         return -1;
     }
 
     int fd_ready = usock_wait_ready(fd_measure, 5000);
     if (fd_ready != 0) {
-        WARNING_LOG("usock_wait_ready fd_ready: %i", fd_ready);
+        print_warn("usock_wait_ready fd_ready: %i", fd_ready);
         return -1;
     }
 
@@ -160,22 +161,22 @@ static int create_measure_socket(char *host, char *port, char *sessionid)
 
     uint32_t u32buf = htonl(1);
     if (message_send(fd_measure, 10, &u32buf, sizeof(uint32_t)) <= 0) {
-        WARNING_LOG("message_send problem");
+        print_warn("message_send problem");
         return -1;
     }
     uint32_t ss = htonl(strlen(sessionid));
     int ret_socket = message_send(fd_measure, 10, &ss, sizeof(uint32_t));
     if (ret_socket <= 0) {
-        WARNING_LOG("message_send problem");
+        print_warn("message_send problem");
         return -1;
     }
     ret_socket = message_send(fd_measure, 10, sessionid, strlen(sessionid));
     if (ret_socket <= 0) {
-        WARNING_LOG("message_send problem");
+        print_warn("message_send problem");
         return -1;
     }
     if (setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one))) {
-	WARNING_LOG("failed to set TCP_NODELAY");
+	print_warn("failed to set TCP_NODELAY");
 	return -1;
     }
 
@@ -208,7 +209,7 @@ static int check_curl_error(CURLcode e)
 {
     if (e == CURLE_OK)
 	return 0;
-    WARNING_LOG("%s: %s", curl_easy_strerror(e), (curl_errmsg) ? curl_errmsg : "(no info)");
+    print_warn("%s: %s", curl_easy_strerror(e), (curl_errmsg) ? curl_errmsg : "(no info)");
     return -1;
 }
 
@@ -240,7 +241,7 @@ static int prepare_command_channel(CURL * const handle,
 
     /* FIXME: we have not overriden the default output handling */
 
-    DEBUG_LOG("Will issue API call: %s", endpoint);
+    print_msg(MSG_DEBUG, "will issue API call: %s", endpoint);
 
     return 0;
 }
@@ -254,7 +255,7 @@ static int issue_simple_command(CURL * const handle, const int emptybody)
         check_curl_error(curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status)))
 	return -1;
     if (status != ((emptybody)? 204: 200)) {
-	WARNING_LOG("API call returned unexpected status code: %li", status);
+	print_warn("API call returned unexpected status code: %li", status);
 	return -1;
     }
 
@@ -327,7 +328,7 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 
     json_object_put(j_obj);
 
-    DEBUG_LOG("peer=%s : %s, streams=%u, measurement_duration=%us, sampling_period=%ums",
+    print_msg(MSG_DEBUG, "peer=%s : %s, streams=%u, measurement_duration=%us, sampling_period=%ums",
 	    ctx->host_name, ctx->port, ctx->numstreams, ctx->test_duration, ctx->sample_period_ms);
     return 0;
 
@@ -335,7 +336,7 @@ err_exit:
     if (j_obj)
 	json_object_put(j_obj);
 
-    WARNING_LOG("Invalid/unknown reply from server: %s", json);
+    print_warn("invalid/unknown reply from server: %s", json);
     return -1;
 }
 
@@ -352,7 +353,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
     if (!mem || !realsize)
 	return 0;
     if (realsize > 0x40000000) {
-	WARNING_LOG("insanely large body received, ignoring!");
+	print_warn("insanely large body received, ignoring!");
 	return 0;
     }
 
@@ -362,7 +363,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 	mem->memory = realloc(mem->memory, mem->allocated);
     }
     if (!mem->memory) {
-        WARNING_LOG("out of memory (realloc returned NULL)");
+        print_warn("out of memory (realloc returned NULL)");
         return 0;
     }
 
@@ -496,8 +497,6 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 /* do not call twice */
 int tcp_client_run(MeasureContext ctx)
 {
-    DEBUG_LOG("Running TCP Client");
-
     CURL *curl;
     int rc = -1;
 
@@ -515,7 +514,7 @@ int tcp_client_run(MeasureContext ctx)
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
     if (!curl || setup_curl_err_handling(curl)) {
-	WARNING_LOG("failed to initialize libcurl");
+	print_warn("failed to initialize libcurl");
 	return -1;
     }
 
@@ -525,6 +524,7 @@ int tcp_client_run(MeasureContext ctx)
         slist = curl_slist_append(slist, strbuf);
     }
 
+    print_msg(MSG_IMPORTANT, "measurent session setup...");
     if (prepare_command_channel(curl, ctx.control_url, "/session/request", slist, ctx.timeout_test, ctx.family))
 	goto err_exit;
 
@@ -542,6 +542,7 @@ int tcp_client_run(MeasureContext ctx)
     unsigned int streamcount = 0;
     if (ctx.numstreams >= MAX_CONCURRENT_SESSIONS)
 	ctx.numstreams = MAX_CONCURRENT_SESSIONS;
+    print_msg(MSG_NORMAL, "opening up to %u measurement streams", ctx.numstreams);
     FD_ZERO(&sockListFDs);
     for (i = 0; i < ctx.numstreams; i++) {
 	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
@@ -552,30 +553,31 @@ int tcp_client_run(MeasureContext ctx)
 	    if (m_socket > sockListLastFD)
 		sockListLastFD = m_socket;
 	} else {
-	    WARNING_LOG("m_socket == -1");
+	    print_warn("m_socket == -1");
 	}
 	sockList[i] = m_socket;
     }
     if (!streamcount) {
-	WARNING_LOG("Could not open any test streams, aborting test");
+	print_warn("could not open any test streams, aborting test");
 	return -1;
     }
-    DEBUG_LOG("Opened %u measurement streams", streamcount);
+    print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
+	      "will use %u measurement streams", streamcount);
 
     /* Create a single buffer with a good size */
     sockBufferSz = new_tcp_buffer(sockList[0], &sockBuffer);
     if (!sockBufferSz) {
-	WARNING_LOG("Could not allocate socket buffer");
+	print_err("could not allocate socket buffer");
 	return -1;
     }
 
-    DEBUG_LOG("Sending request /session/start-upload");
+    print_msg(MSG_DEBUG, "sending request /session/start-upload");
     if (prepare_command_channel(curl, ctx.control_url, "/session/start-upload", slist, ctx.timeout_test, ctx.family))
 	goto err_exit;
     if (issue_simple_command(curl, 1))
 	goto err_exit;
 
-    DEBUG_LOG("Sending packets...");
+    print_msg(MSG_IMPORTANT, "starting upload measurement (send)");
     sendUploadPackets(ctx);
 
     if (prepare_command_channel(curl, ctx.control_url, "/session/finish-upload", slist, ctx.timeout_test, ctx.family))
@@ -603,7 +605,7 @@ int tcp_client_run(MeasureContext ctx)
     if (issue_simple_command(curl, 1))
 	goto err_exit;
 
-    DEBUG_LOG("Receiving packets...");
+    print_msg(MSG_IMPORTANT, "starting download measurement (receive)");
     receiveDownloadPackets(ctx, &rcv, &rcvcounter);
 
     if (prepare_command_channel(curl, ctx.control_url, "/session/finish-download", slist, ctx.timeout_test, ctx.family))
@@ -621,13 +623,14 @@ int tcp_client_run(MeasureContext ctx)
 	}
     }
     if (streamcount) {
-	DEBUG_LOG("Internal error: stream leak!");
+	print_msg(MSG_DEBUG, "internal error: stream leak!");
     }
     FD_ZERO(&sockListFDs);
     sockListLastFD = -1;
 
     json_object *j_obj_upload = NULL;
 
+    print_msg(MSG_NORMAL, "requesting upload measurement results from measurement peer");
     if (prepare_command_channel(curl, ctx.control_url, "/session/get-upload-samples", slist, ctx.timeout_test, ctx.family))
 	goto err_exit;
     if (chunk.memory && chunk.allocated)
@@ -637,21 +640,21 @@ int tcp_client_run(MeasureContext ctx)
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
     if (issue_simple_command(curl, 0)) {
 	/* FIXME: goto err_exit; ? */
-	WARNING_LOG("failed to get upload measurements from server");
+	print_warn("failed to get upload measurements from server");
 	/* FIXME: need an empty json of some sort on j_obj_upload? */
     } else {
 	j_obj_upload = json_tokener_parse(chunk.memory);
     }
 
-    DEBUG_LOG("Will attempt to generate report for %lu download rows", rcvcounter);
-
     /* FIXME: does not belong here, but on caller */
     json_object *report_obj = createReport(j_obj_upload, rcv, rcvcounter);
     if (report_obj) {
-	OUTPUT("%s", json_object_to_json_string(report_obj));
+	fprintf(stdout, "%s", json_object_to_json_string(report_obj));
     }
 
     rc = 0;
+
+    print_msg(MSG_IMPORTANT, "tcp bandwidth measurements finished");
 
 err_exit:
     free(chunk.memory);

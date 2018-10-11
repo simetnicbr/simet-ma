@@ -55,7 +55,7 @@ json_object *createReport(json_object *jresults, DownResult *downloadRes, uint32
 
     if (!json_object_is_type(jresults, json_type_array))
     {
-        WARNING_LOG("Received unusable data from server, ignoring...");
+        print_warn("Received unusable data from server, ignoring...");
         jresults = NULL;
     }
 

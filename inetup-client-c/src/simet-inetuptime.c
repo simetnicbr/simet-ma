@@ -24,9 +24,11 @@
 
 #include <limits.h>
 #include <string.h>
+#include <errno.h>
 #include <getopt.h>
 #include <assert.h>
 
+#include <fcntl.h>
 #include <sys/poll.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -49,6 +51,9 @@
 #else
 #include <json.h>
 #endif
+
+int  log_level = 2;
+const char *progname = PACKAGE_NAME;
 
 static struct simet_inetup_server **servers = NULL;
 static const char *agent_id = NULL;
@@ -87,7 +92,7 @@ static time_t reltime(void)
     if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
         return (now.tv_sec > 0)? now.tv_sec : 0;  /* this helps the optimizer and squashes several warnings */
     } else {
-        ERROR_LOG("clock_gettime(CLOCK_MONOTONIC) returned an error!");
+        print_err("clock_gettime(CLOCK_MONOTONIC) failed!");
         /* FIXME: consider abort(EXIT_FAILURE) */
         return 0; /* kaboom! most likely :-( */
     }
@@ -117,12 +122,25 @@ static const char *str_ip46(int ai_family)
     return "ip";
 }
 
-#define TRACE_LOG(s, ...) \
-    do { LOG_MESSAGE(stderr, "TRACE"); \
-         fprintf(stderr, "%s(%u)@%lds: ", str_ip46(s->ai_family), s->connection_id, (long int)reltime() - client_start_timestamp); \
-         fprintf(stderr, __VA_ARGS__); \
-         fprintf(stderr, "\n"); \
-    } while(0)
+#define protocol_trace(protocol_stream, format, arg...) \
+    do { \
+        if (log_level >= MSG_TRACE) { \
+            fflush(stdout); \
+            fprintf(stderr, "%s: trace: %s(%u)@%lds: " format "\n", progname, \
+                    str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
+                    (long int)reltime() - client_start_timestamp, ## arg); \
+        } \
+    } while (0)
+
+#define protocol_info(protocol_stream, format, arg...) \
+    do { \
+        if (log_level >= MSG_NORMAL) { \
+            fflush(stdout); \
+            fprintf(stderr, "%s: trace: %s(%u)@%lds: " format "\n", progname, \
+                    str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
+                    (long int)reltime() - client_start_timestamp, ## arg); \
+        } \
+    } while (0)
 
 #if 0
 static struct json_object * xx_json_object_new_in64_as_str(const int64_t v)
@@ -156,12 +174,12 @@ static void init_signals(void)
     sa.sa_handler = &handle_exitsig;
 
     if (sigaction(SIGQUIT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL))
-        WARNING_LOG("failed to set signal handlers, precision during restarts will suffer");
+        print_warn("failed to set signal handlers, precision during restarts will suffer");
 
     sa.sa_handler = &handle_reloadsig;
     sa.sa_flags = SA_RESTART;
     if (sigaction(SIGHUP, &sa, NULL))
-        WARNING_LOG("failed to set SIGHUP handler");
+        print_warn("failed to set SIGHUP handler");
 }
 
 
@@ -233,7 +251,7 @@ static int tcpaq_queue(struct simet_inetup_server * const s, void *data, size_t 
     s->queue.wr_pos += size;
 
     if (s->queue.wr_pos > s->queue.wr_pos_reserved) {
-        WARNING_LOG("internal error: stream %u went past reservation, coping with it", s->connection_id);
+        print_warn("internal error: stream %u went past reservation, coping with it", s->connection_id);
         s->queue.wr_pos_reserved = s->queue.wr_pos;
     }
 
@@ -282,7 +300,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         int err = errno;
         if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
             return 0;
-        TRACE_LOG(s, "send() error: %s", strerror(err));
+        protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
     }
     s->queue.rd_pos += sent;
@@ -299,7 +317,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
     }
 #endif
-    /* TRACE_LOG(s, "send() %zd out of %zu bytes", sent, send_sz); */
+    /* protocol_trace(s, "send() %zd out of %zu bytes", sent, send_sz); */
 
     xx_tcpaq_compact(s);
     return 0;
@@ -366,7 +384,7 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
     json_object *jo;
     int rc = -ENOMEM;
 
-    TRACE_LOG(s, "sending %s event", name);
+    protocol_trace(s, "sending %s event", name);
 
     jo = json_object_new_object();
     jroot = json_object_new_object();
@@ -386,7 +404,7 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
-        TRACE_LOG(s, "ma_event message: %s", jsonstr);
+        protocol_trace(s, "ma_event message: %s", jsonstr);
         rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_EVENTS, strlen(jsonstr), jsonstr);
         if (!rc)
             simet_uptime2_keepalive_update(s);
@@ -423,7 +441,7 @@ static int simet_uptime2_msg_link(struct simet_inetup_server * const s, int link
 
 static int simet_uptime2_msg_keepalive(struct simet_inetup_server * const s)
 {
-    TRACE_LOG(s, "sending ma_keepalive event");
+    protocol_trace(s, "sending ma_keepalive event");
     return xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_KEEPALIVE, 0, NULL);
 }
 
@@ -434,7 +452,7 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
 
     assert(s);
 
-    TRACE_LOG(s, "sending ma_connect event");
+    protocol_trace(s, "sending ma_connect event");
 
     jo = json_object_new_object();
     if (!jo)
@@ -474,7 +492,7 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
 
     const char *jsonstr = json_object_to_json_string(jo);
     if (jsonstr) {
-        TRACE_LOG(s, "ma_connect message: %s", jsonstr);
+        protocol_trace(s, "ma_connect message: %s", jsonstr);
         rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_CONNECT, strlen(jsonstr), jsonstr);
     } else {
         rc = -EFAULT;
@@ -499,7 +517,7 @@ err_exit:
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
 {
     if (s->state != SIMET_INETUP_P_C_RECONNECT && !got_exit_signal) {
-        TRACE_LOG(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
+        protocol_trace(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
         s->state = SIMET_INETUP_P_C_RECONNECT;
         s->backoff_clock = reltime();
     }
@@ -514,7 +532,7 @@ static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
         s->state = SIMET_INETUP_P_C_DISCONNECT;
         s->disconnect_clock = 0;
 
-        TRACE_LOG(s, "client disconnecting...");
+        protocol_info(s, "client disconnecting...");
     }
 }
 
@@ -616,7 +634,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         s->backoff_level++;
     backoff = (int) backoff_times[s->backoff_level];
 
-    TRACE_LOG(s, "attempting connection to %s, port %s", server_name, server_port);
+    protocol_info(s, "attempting connection to %s, port %s", server_name, server_port);
 
     memset(&ai, 0, sizeof(ai));
     ai.ai_flags = AI_ADDRCONFIG;
@@ -626,7 +644,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
     r = getaddrinfo(server_name, server_port, &ai, &air);
     if (r != 0) {
-        TRACE_LOG(s, "getaddrinfo returned %s", gai_strerror(r));
+        protocol_trace(s, "getaddrinfo returned %s", gai_strerror(r));
         return backoff;
     }
     for (airp = air; airp != NULL; airp = airp->ai_next) {
@@ -649,7 +667,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         };
         if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
             setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
-            TRACE_LOG(s, "failed to set socket timeouts using SO_*TIMEO");
+            protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
         }
 
         /* RFC-0793/RFC-5482 user timeout.
@@ -660,7 +678,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
          */
         const unsigned int ui = (unsigned int)simet_uptime2_tcp_timeout * 1000U;
         if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
-            WARNING_LOG("failed to enable TCP timeouts, measurement error will increase");
+            print_warn("failed to enable TCP timeouts, measurement error will increase");
         }
 
 #if 0
@@ -685,9 +703,9 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
             setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
             setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
             setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
-            WARNING_LOG("failed to enable TCP Keep-Alives, measurement error might increase");
+            print_warn("failed to enable TCP Keep-Alives, measurement error might increase");
         } else {
-            DEBUG_LOG("RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+            protocol_trace(s, "RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
         }
 #endif
 
@@ -702,7 +720,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     s->backoff_clock = reltime();
 
     if (!airp) {
-        TRACE_LOG(s, "could not connect, will retry in %d seconds", backoff);
+        protocol_trace(s, "could not connect, will retry in %d seconds", backoff);
         return backoff;
     }
 
@@ -721,16 +739,16 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     sa.ss_family = AF_UNSPEC;
     if (getpeername(s->socket, (struct sockaddr *)&sa, &sa_len) || 
         xx_nameinfo(&sa, sa_len, &s->peer_family, &s->peer_name, &s->peer_port))
-        WARNING_LOG("failed to get peer metadata, coping with it");
+        print_warn("failed to get peer metadata, coping with it");
 
     sa_len = sizeof(struct sockaddr_storage);
     sa.ss_family = AF_UNSPEC;
     if (getsockname(s->socket, (struct sockaddr *)&sa, &sa_len) ||
         xx_nameinfo(&sa, sa_len, &s->local_family, &s->local_name, &s->local_port))
-        WARNING_LOG("failed to get local metadata, coping with it");
+        print_warn("failed to get local metadata, coping with it");
 
     /* done... */
-    TRACE_LOG(s, "connected: local %s:[%s]:%s, remote %s:[%s]:%s",
+    protocol_info(s, "connected: local %s:[%s]:%s, remote %s:[%s]:%s",
             str_ip46(s->local_family), s->local_name, s->local_port,
             str_ip46(s->peer_family), s->peer_name, s->peer_port);
 
@@ -751,7 +769,7 @@ static int uptimeserver_disconnect(struct simet_inetup_server *s)
 
     if (!s->disconnect_clock) {
         s->disconnect_clock = reltime();
-        TRACE_LOG(s, "attempting clean disconnection for up to %d seconds", SIMET_DISCONNECT_WAIT_TIMEOUT);
+        protocol_trace(s, "attempting clean disconnection for up to %d seconds", SIMET_DISCONNECT_WAIT_TIMEOUT);
     }
 
     if (!simet_uptime2_msg_clientlifetime(s, 0)) {
@@ -787,7 +805,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
         s->socket = -1;
         s->disconnect_clock = 0;
 
-        TRACE_LOG(s, "client disconnected");
+        protocol_info(s, "client disconnected");
 
         s->state = SIMET_INETUP_P_C_SHUTDOWN;
         return 0;
@@ -854,25 +872,72 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-V] [-t <timeout>] "
+    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] "
         "[-d <agent-id>] [-m <string>] [-b <boot id>] [-j <token> ] [-M <string>] "
         "<server name> [<server port>]\n", p);
+
     if (mode) {
-    fprintf(stderr, "\n"
-        "\t-h\tprint usage help and exit\n"
-        "\t-V\tprint program version and copyright, and exit\n"
-        "\t-t\tprotocol timeout in seconds\n"
-        "\t-d\tmeasurement agent id\n"
-        "\t-m\tmeasurement agent hardcoded id\n"
-        "\t-M\tmeasurement task name\n"
-        "\t-b\tboot id (e.g. from /proc/sys/kernel/random/boot_id)\n"
-        "\t-j\taccess credentials\n"
-        "\n"
-        "server name: DNS name of server\n"
-        "server port: TCP port on server\n"
-        "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server");
+        fprintf(stderr, "\n"
+            "\t-h\tprint usage help and exit\n"
+            "\t-V\tprint program version and copyright, and exit\n"
+            "\t-v\tverbose mode (repeat for increased verbosity)\n"
+            "\t-q\tquiet mode (repeat for errors-only)\n"
+            "\t-t\tprotocol timeout in seconds\n"
+            "\t-d\tmeasurement agent id\n"
+            "\t-m\tmeasurement agent hardcoded id\n"
+            "\t-M\tmeasurement task name\n"
+            "\t-b\tboot id (e.g. from /proc/sys/kernel/random/boot_id)\n"
+            "\t-j\taccess credentials\n"
+            "\n"
+            "server name: DNS name of server\n"
+            "server port: TCP port on server\n"
+            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server");
     }
+
     exit((mode)? EXIT_SUCCESS : EXIT_FAILURE);
+}
+
+static int is_valid_fd(const int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+static void fix_fds(const int fd, const int fl)
+{
+    int nfd;
+
+    if (is_valid_fd(fd))
+            return;
+
+    nfd = open("/dev/null", fl);
+    if (nfd == -1 || dup2(nfd, fd) == -1) {
+            print_err("could not attach /dev/null to file descriptor %d: %s",
+                      fd, strerror(errno));
+            /* if (nfd != -1) close(nfd); - disabled as we're going to exit() now */
+            exit(EXIT_FAILURE);
+    }
+    if (nfd != fd)
+            close(nfd);
+}
+
+/*
+ * glibc does not ensure sanity of the standard streams at program start
+ * for non suid/sgid applications.  The streams are initialized as open
+ * and not in an error state even when their underlying FDs are invalid
+ * (closed).  These FDs will later become valid due to an unrelated
+ * open(), which will cause undesired behavior (such as data corruption)
+ * should the stream be used.
+ *
+ * freopen() cannot be used to fix this directly, due to a glibc 2.14+ bug
+ * when freopen() is called on an open stream that has an invalid FD which
+ * also happens to be the first available FD.
+ */
+static void sanitize_std_fds(void)
+{
+   /* do it in file descriptor numerical order! */
+   fix_fds(STDIN_FILENO,  O_RDONLY);
+   fix_fds(STDOUT_FILENO, O_WRONLY);
+   fix_fds(STDERR_FILENO, O_RDWR);
 }
 
 int main(int argc, char **argv) {
@@ -880,12 +945,27 @@ int main(int argc, char **argv) {
     const char *server_port = "22000";
     int intarg;
 
+    progname = argv[0];
+    sanitize_std_fds();
+
     client_start_timestamp = reltime();
 
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "46hVc:l:t:d:m:M:b:j:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:m:M:b:j:")) != -1) {
         switch (option) {
+        case 'v':
+            if (log_level < 1)
+                log_level = 2;
+            else if (log_level < 3)
+                log_level++;
+            break;
+        case 'q':
+            if (log_level <= 0)
+                log_level = -1;
+            else
+                log_level = 0;
+            break;
         case 't':
             intarg = atoi(optarg);
             if (intarg >= 15)
@@ -912,18 +992,18 @@ int main(int argc, char **argv) {
             agent_token = optarg;
             break;
         case 'h':
-            print_usage(argv[0], 1);
+            print_usage(progname, 1);
             /* fall-through */
         case 'V':
             print_version();
             /* fall-through */
         default:
-            print_usage(argv[0], 0);
+            print_usage(progname, 0);
         }
     };
 
     if (optind >= argc || argc - optind > 2)
-        print_usage(argv[0], 0);
+        print_usage(progname, 0);
 
     server_name = argv[optind++];
     if (optind < argc)
@@ -931,7 +1011,8 @@ int main(int argc, char **argv) {
 
     init_signals();
 
-    DEBUG_LOG("timeout=%ds, keepalive=%ds, server=\"%s\", port=%s",
+    print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
+    print_msg(MSG_DEBUG, "timeout=%ds, keepalive=%ds, server=\"%s\", port=%s",
               simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
               server_name, server_port);
 
@@ -942,7 +1023,7 @@ int main(int argc, char **argv) {
     servers = calloc(servers_count, sizeof(struct simet_inetup_server *));
     if (!servers_pollfds || !servers ||
             uptimeserver_create(&servers[0], AF_INET) || uptimeserver_create(&servers[1], AF_INET6)) {
-        ERROR_LOG("out of memory");
+        print_err("out of memory");
         return EXIT_FAILURE;
     }
 
@@ -959,7 +1040,10 @@ int main(int argc, char **argv) {
             if (got_exit_signal)
                 simet_uptime2_disconnect(s);
 
-            /* DEBUG_LOG("%s(%u): main loop, currently at state %u", str_ip46(s->ai_family), s->connection_id, s->state); */
+#if 0
+            print_msg(MSG_DEBUG, "%s(%u): main loop, currently at state %u",
+                    str_ip46(s->ai_family), s->connection_id, s->state);
+#endif
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
@@ -979,7 +1063,7 @@ int main(int argc, char **argv) {
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (s->backoff_reset_clock &&
                         timer_check(s->backoff_reset_clock, simet_uptime2_tcp_timeout * 2) == 0) {
-                    TRACE_LOG(s, "assuming server is willing to provide service, backoff timer reset");
+                    protocol_trace(s, "assuming server is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
                     s->backoff_reset_clock = 0;
                 }
@@ -1001,7 +1085,7 @@ int main(int argc, char **argv) {
                 break;
 
             default:
-                ERROR_LOG("internal error or memory corruption");
+                print_err("internal error or memory corruption");
                 return EXIT_FAILURE;
             }
 
@@ -1013,7 +1097,10 @@ int main(int argc, char **argv) {
                 minwait = 0;
             }
         }
-        /* DEBUG_LOG("------ (minwait: %ld) ------", minwait); */
+
+#if 0
+        print_msg(MSG_DEBUG, "main loop: stream loop end, minwait=%ld", minwait);
+#endif
 
         if (num_shutdown >= servers_count && got_exit_signal)
             break;
@@ -1024,17 +1111,18 @@ int main(int argc, char **argv) {
             if (poll_res > 0) {
                 for (j = 0; j < servers_count; j++) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
-                        TRACE_LOG(servers[j], "connection to server lost");
+                        protocol_info(servers[j], "connection to server lost");
                         simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
                     } else if (servers_pollfds[j].revents) {
-                        TRACE_LOG(servers[j], "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
+                        protocol_trace(servers[j],
+                            "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
                             j, servers_pollfds[j].fd,
                             j, (unsigned int)servers_pollfds[j].events,
                             j, (unsigned int)servers_pollfds[j].revents);
                     }
                 }
             } else if (poll_res == -1 && (errno != EINTR && errno != EAGAIN)) {
-                ERROR_LOG("internal error, memory corruption or out of memory");
+                print_err("internal error, memory corruption or out of memory");
                 return EXIT_FAILURE;
             }
         }
@@ -1047,9 +1135,9 @@ int main(int argc, char **argv) {
     } while (1);
 
     if (got_exit_signal)
-        DEBUG_LOG("received exit signal %d, exiting...", got_exit_signal);
+        print_msg(MSG_NORMAL, "received exit signal %d, exiting...", got_exit_signal);
     else
-        DEBUG_LOG("all servers connections have been shutdown, exiting...");
+        print_msg(MSG_NORMAL, "all servers connections have been shutdown, exiting...");
 
     return EXIT_SUCCESS;
 }
