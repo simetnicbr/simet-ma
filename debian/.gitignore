@@ -1,0 +1,5 @@
+simet-ma/
+files
+*.debhelper
+*.debhelper.log
+simet-ma.substvars
