@@ -6,6 +6,9 @@
 # see: dh_installdeb(1)
 
 set -e
+. /usr/share/debconf/confmodule
+
+CONFFILE=/opt/simet/etc/simet/mec.conf
 
 # summary of how this script can be called:
 #        * <postinst> `configure' <most-recently-configured-version>
@@ -22,28 +25,55 @@ set -e
 create_crond() {
     RND1=$(awk 'BEGIN { srand(); print int(60*rand()) " " int(24*rand()) " * * * " }' )
     RND2=$(awk 'BEGIN { srand(); print int(60*rand()) " 0-23/4 * * * " }')
-    cat << CRONDEOF
-# SIMET Measurement Agent
+    cat <<- CRONDEOF
+	# SIMET Measurement Agent
 
-MAILTO=""
+	MAILTO=""
 
-# Renew SIMET device authorization tokens and agent-id
-# Renova autorização e identificação da sonda SIMET
-$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
+	# Renew SIMET device authorization tokens and agent-id
+	# Renova autorização e identificação da sonda SIMET
+	$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
 
-# Run the SIMET periodic measurements
-# Executa a medição periódica do SIMET
-$RND2 nicbr-simet if [ -x /opt/simet/bin/simet-ma_periodic.sh ] ; then /opt/simet/bin/simet-ma_periodic.sh >/dev/null 2>&1 || true ; fi
-CRONDEOF
+	# Run the SIMET periodic measurements
+	# Executa a medição periódica do SIMET
+	$RND2 nicbr-simet if [ -x /opt/simet/bin/simet-ma_periodic.sh ] ; then /opt/simet/bin/simet-ma_periodic.sh >/dev/null 2>&1 || true ; fi
+	CRONDEOF
     :
 }
 
+config_write_to_etc() {
+    cat <<- CONFEOF > "$CONFFILE"
+	# this file is automatically updated, changes may be lost
+	# changes to the values of the variables will be preserved
+
+	# MEC INEP code (required) / código INEP da escola (requerido)
+	INEPCODE="$INEPCODE"
+
+	# Optional data for troubleshooting / dados opcionais para suporte técnico
+	MECADDR="$MECADDR"
+	SIMETUSEREMAIL="$SIMETUSEREMAIL"
+	SIMETUSERPHONE="$SIMETUSERPHONE"
+	CONFEOF
+}
+
 case "$1" in
-    configure)
+    configure|reconfigure)
+	db_get simet-ma/mec-inepcode
+	INEPCODE="$RET"
+	db_get simet-ma/mec-schooladdress
+	MECADDR="$RET"
+	db_get simet-ma/mec-schoolemail
+	SIMETUSEREMAIL="$RET"
+	db_get simet-ma/mec-schoolphone
+	SIMETUSERPHONE="$RET"
+	db_stop
+
         adduser --quiet --system --group --no-create-home --home /opt/simet \
                 --gecos "NIC.br SIMET Measurement Agent" nicbr-simet
 	chgrp nicbr-simet /opt/simet/etc/simet
-	chmod 0770 /opt/simet/etc/simet
+	chmod 02770 /opt/simet/etc/simet
+
+	config_write_to_etc
 
 	#FIXME: the first time we need to change the contents of the
 	#generated crontab, the [ -e ] test must be replaced
@@ -51,6 +81,7 @@ case "$1" in
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
+	db_stop
     ;;
 
     *)
