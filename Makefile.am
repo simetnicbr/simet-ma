@@ -37,3 +37,4 @@ bin-dist: all
 bump-version:
 	-rm -f version
 	$(top_srcdir)/version.sh > version
+	-debchange -p --noquery -v "$(shell cat $(top_srcdir)/version | sed -e 's/^v//' -e 's/-/+/g' -e 's/+$$//')" -m "New release"
