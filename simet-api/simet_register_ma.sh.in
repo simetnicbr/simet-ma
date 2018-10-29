@@ -16,6 +16,9 @@
 # along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 
+# parameters:
+#   --boot   (optional) shorten wait times and not restart the service
+
 OUTFILE=
 abend() {
 	echo "$0: $*" >&2
@@ -29,18 +32,26 @@ AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
 AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
 API_AGENT_TOKEN=${API_AGENT_TOKEN:-https://api.simet.nic.br/measurement/jwt}
+SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma restart}
 JSONFILTER=${JSONFILTER:-jsonfilter}
 
 USERAGENT="-A simet-agent-unix"
-CURLOPT="-q -s -m 15 --max-filesize 4000 --retry 10 --retry-max-time 3600"
+CURLOPT="-q -s -m 15 --max-filesize 4000"
+CURLOPT2="--retry 10 --retry-max-time 3600"
+
+case "$1" in
+	--boot)
+		shift
+		CURLOPT2="--retry 3 --retry-max-time 30"
+		SIMETMA_RECONFIG=
+	;;
+esac
 
 apicall() {
-	until curl $CURLOPT $USERAGENT \
+	curl $CURLOPT $CURLOPT2 $USERAGENT \
 		-X POST -f -L -j -o "$OUTFILE" \
 		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
-		"$API_AGENT_TOKEN" ; do
-			sleep 14400
-	done
+		"$API_AGENT_TOKEN"
 }
 
 gettoken() {
@@ -59,6 +70,12 @@ gettoken() {
 
 	if [ ! -r "$AGENT_ID_FILE" ] || [ -z "$AID" ] || [ ! -r "$AGENT_TOKEN_FILE" ] || [ -z "$AT" ] ; then
 		abend "failed to register, please retry later"
+	fi
+
+	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
+		if [ -n "$SIMETMA_RECONFIG" ] ; then
+			$SIMETMA_RECONFIG || true
+		fi
 	fi
 
 	echo "$0: SIMET: LMAP measurement agent id: $AID"
