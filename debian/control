@@ -11,6 +11,7 @@ Homepage: https://simet.nic.br/projetos/
 Package: simet-ma
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Breaks: sysvinit (<< 2.88dsf-52~)
 Description: NIC.br SIMET Measurement Agent
  This is the Measurement Agent for the SIMET system from NIC.br.  It
  performs several measurements of the Internet connectivity against
