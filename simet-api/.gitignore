@@ -4,3 +4,4 @@ agent-version.txt
 conf/simet-ma.conf
 simet*_register_ma.sh
 simet-ma_periodic.sh
+simet_register_ma-hooks.sh

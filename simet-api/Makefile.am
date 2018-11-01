@@ -38,6 +38,9 @@ endif
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    "$^" > "$@"
 
+% :: %.mec
+	cp -f "$^" "$@"
+
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
 EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in simet-ma_periodic.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
@@ -46,8 +49,12 @@ CLEANFILES += $(dist_bin_SCRIPTS)
 install-data-local:
 	$(MKDIR_P) -m 0700 -- "$(DESTDIR)$(simetconfdir)"
 
-dist_simetlib_DATA  = conf/simet-ma.conf agent-version.txt
-EXTRA_DIST += conf/simet-ma.conf.in
+# lib/simet
+dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt
+if MECINEP_BUILD
+dist_simetlib_DATA += simet_register_ma-hooks.sh
+endif
+EXTRA_DIST += conf/simet-ma.conf.in simet_register_ma-hooks.sh.in.mec
 CLEANFILES += $(dist_simetlib_DATA)
 
 # Other non-source files we want in the source tarball
