@@ -41,3 +41,17 @@
      take the shared lock to block measurements, take the exclusive
      lock to measure.
 
+## Hooks
+
+  Some of the API scripts (in shell) have (shell) hooks, or can have its
+  internal functions replaced (via functions named FUNCTION_override).
+
+  Hooks are highly integrated with the script, you usually need to
+  manipulate local variables, etc.  As such, please read the script to
+  know what hooks are available.
+
+### simet_register_ma.sh (in the future, maybe simetbox_register_ma.sh)
+
+  <libdir>/simet/simet_register_ma-hooks.sh
+  <sysconf dir>/simet/simet_register_ma-hooks.sh
+

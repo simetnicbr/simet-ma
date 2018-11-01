@@ -21,9 +21,31 @@
 
 OUTFILE=
 abend() {
-	echo "$0: $*" >&2
+	logger -s -t simet-ma -p daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
+}
+
+is_call_implemented() {
+	command -V $1 > /dev/null 2>&1
+}
+
+call() {
+	cmd="$1"
+	shift
+	if is_call_implemented ${cmd}_override ; then
+		${cmd}_override "$@"
+        else
+		${cmd} "$@"
+	fi
+}
+
+call_hook() {
+	cmd="$1"
+	shift
+	if is_call_implemented ${cmd} ; then
+		${cmd} "$@"
+	fi
 }
 
 [ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
@@ -34,6 +56,10 @@ AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock
 API_AGENT_TOKEN=${API_AGENT_TOKEN:-https://api.simet.nic.br/measurement/jwt}
 SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma restart}
 JSONFILTER=${JSONFILTER:-jsonfilter}
+
+# Load hooks and overrides
+[ -r @SIMETLIBDIR@/simet_register_ma-hooks.sh ] && . @SIMETLIBDIR@/simet_register_ma-hooks.sh
+[ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
 
 USERAGENT="-A simet-agent-unix"
 CURLOPT="-q -s -m 15 --max-filesize 4000"
@@ -47,11 +73,24 @@ case "$1" in
 	;;
 esac
 
-apicall() {
+#overridable
+simet_reginfo_api_call() {
 	curl $CURLOPT $CURLOPT2 $USERAGENT \
 		-X POST -f -L -j -o "$OUTFILE" \
 		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
 		"$API_AGENT_TOKEN"
+}
+
+#overridable
+simet_reginfo_api_parse() {
+	$JSONFILTER -i "$OUTFILE" -e "AID=@.agentId" -e "AT=@.token"
+}
+
+#overridable
+simet_reginfo_restart_services() {
+	if [ -n "$SIMETMA_RECONFIG" ] ; then
+		$SIMETMA_RECONFIG || true
+	fi
 }
 
 gettoken() {
@@ -61,24 +100,35 @@ gettoken() {
 	[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
-	apicall || abend "failed to contact agent-token service"
-	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agentId" -e "AT=@.token") || abend "illegal response from agent-token service"
+
+	call_hook before_reginfo_api_call
+
+	call simet_reginfo_api_call || abend "failed to contact agent-token service"
+	SID=$(call simet_reginfo_api_parse) || abend "illegal response from agent-token service"
 	rm -f "$OUTFILE"
 	eval "$SID" || abend "internal error"
+
+	call_hook before_reginfo_replace
+
 	[ x"$AID" != x"$OLDAID" ] && echo "$AID" > "$AGENT_ID_FILE"
 	[ x"$AT"  != x"$OLDAT"  ] && echo "$AT" > "$AGENT_TOKEN_FILE"
 
+	call_hook after_reginfo_replace
+
 	if [ ! -r "$AGENT_ID_FILE" ] || [ -z "$AID" ] || [ ! -r "$AGENT_TOKEN_FILE" ] || [ -z "$AT" ] ; then
+		call_hook failed_to_register
 		abend "failed to register, please retry later"
 	fi
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
-		if [ -n "$SIMETMA_RECONFIG" ] ; then
-			$SIMETMA_RECONFIG || true
-		fi
+		logger -s -t simet-ma -p daemon.notice "SIMET: agent-id or authorization token has changed"
+		call simet_reginfo_restart_services
+		call_hook registered_changed
+	else
+		call_hook registered_nochanges
 	fi
 
-	echo "$0: SIMET: LMAP measurement agent id: $AID"
+	logger -s -t simet-ma -p daemon.info "SIMET: LMAP measurement agent id: $AID"
 	:
 }
 
