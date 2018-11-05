@@ -45,4 +45,17 @@ AM_CONDITIONAL([SIMETBOX_BUILD], [test x$simetbox = xtrue])
 AM_COND_IF([SIMETBOX_BUILD],
 	   [AC_MSG_NOTICE([building for SIMETBOX (OpenWRT)])] )
 
+AC_ARG_ENABLE([simet-mecinep],
+    [AC_HELP_STRING([--enable-simet-mecinep],
+        [add code to handle MEC INEP identification for the MA])],
+    [case "${enableval}" in
+        yes) simetmecinep=true ;;
+        no)  simetmecinep=false ;;
+        *) AC_MSG_ERROR([bad value ${enableval} for --enable-simet-mecinep]) ;;
+     esac],
+    [simetmecinep=false])
+AM_CONDITIONAL([MECINEP_BUILD], [test x$simetmecinep = xtrue])
+AM_COND_IF([MECINEP_BUILD],
+	   [AC_MSG_NOTICE([including support for MEC INEP metadata during MA register])] )
+
 AC_OUTPUT
