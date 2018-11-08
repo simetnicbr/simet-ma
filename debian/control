@@ -2,7 +2,7 @@ Source: simet-ma
 Section: net
 Priority: optional
 Maintainer: Equipe SIMET <medicoes@simet.nic.br>
-Build-Depends: debhelper (>= 9), cmake, pkg-config, libjson-c-dev, libcurl4-gnutls-dev | libcurl-dev
+Build-Depends: debhelper (>= 9), cmake, pkg-config, libjson-c-dev, libcurl4-gnutls-dev | libcurl-dev, lsb-release
 Standards-Version: 4.1.0
 Homepage: https://simet.nic.br/projetos/
 #Vcs-Browser: https://salsa.debian.org/debian/simet-ma
@@ -11,6 +11,7 @@ Homepage: https://simet.nic.br/projetos/
 Package: simet-ma
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Recommends: unattended-upgrades, apt-transport-https
 Breaks: sysvinit (<< 2.88dsf-52~)
 Description: NIC.br SIMET Measurement Agent
  This is the Measurement Agent for the SIMET system from NIC.br.  It

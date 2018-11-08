@@ -36,6 +36,7 @@ configure: configure.ac Makefile.am
 override_dh_auto_clean:
 	dh_testdir
 	rm -f build-stamp configure-stamp
+	rm -f etc.apt.sources.list.d/nicbr-simet.apt.source.list
 	[ ! -f Makefile ] || $(MAKE) distclean
 	rm -f config.sub config.guess configure config.log
 	rm -f */config.sub */config.guess */configure */config.log
@@ -52,3 +53,10 @@ override_dh_auto_clean:
 
 override_dh_auto_test:
 	test "$(PKGDEBVER)" = "$(PKGVER)"
+
+override_dh_install:
+	CODENAME=$$( lsb_release -sc ) && DISTRO=$$( lsb_release -si | tr A-Z a-z ) && \
+	  sed -e "s/@codename@/$${CODENAME}/g" -e "s/@distro@/$${DISTRO}/g" \
+		< debian/etc.apt.sources.list.d/simet.apt.source.template \
+		> debian/etc.apt.sources.list.d/nicbr-simet.apt.source.list
+	dh_install
