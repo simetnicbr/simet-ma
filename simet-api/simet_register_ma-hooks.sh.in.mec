@@ -41,7 +41,7 @@ __send_mecinep_info() {
 	  }
 	}
 	EOF
-	if curl $CURLOPT $CURLOPT2 $USERAGENT -f -L -T "$OUTFILE" "$API" >/dev/null ; then
+	if curl $CURLOPT $CURLOPT2 -A "$USERAGENT" -f -L -T "$OUTFILE" "$API" >/dev/null ; then
 		logger -s -t simet-ma -p daemon.notice "SIMET: agent is connected to group INEP${INEPCODE}"
 	else
 		logger -s -t simet-ma -p daemon.error "SIMET: failed to connect to group INEP${INEPCODE}, will retry later"
