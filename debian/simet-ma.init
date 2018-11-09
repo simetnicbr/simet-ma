@@ -3,7 +3,7 @@
 ### BEGIN INIT INFO
 # Required-Start:    $local_fs $remote_fs $time
 # Required-Stop:     $local_fs $remote_fs $time
-# Provides:
+# Provides:          simet-ma
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 6
 # Short-Description: SIMET-MA inetupd daemon and boot services
