@@ -1,0 +1,6 @@
+simet-ma/
+files
+*.debhelper
+*.debhelper.log
+simet-ma.substvars
+etc.apt.sources.list.d/*.list

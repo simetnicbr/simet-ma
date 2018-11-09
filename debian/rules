@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+# debian/rules for simet-ma (MEC INEP version)
+# Copyright (c) 2018 NIC.br
+# Published and distributed under the same license as the main work
+
+# Target: Debhelper v9, since we need to be compatible with Ubuntu 16.04 LTS
+# it is fine if we do better on newer, as long as the build works and produces
+# usable results on Ubuntu 16.04 LTS+, Debian 8+
+
+export DH_VERBOSE = 1
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+# see ENVIRONMENT in dpkg-buildflags(1)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
+
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+%:
+	dh $@
+
+# This is example for Cmake (See https://bugs.debian.org/641051 )
+#	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)
+
+# change configure options _and_ ensure bootstrap/retool
+override_dh_auto_configure: configure
+	dh_auto_configure -- --prefix=/opt/simet --localstatedir=/var --libdir=/opt/simet/lib --sysconfdir=/opt/simet/etc \
+		--enable-simet-mecinep
+
+# retool using upstream's bootstrap script
+configure: configure.ac Makefile.am
+	@dh_testdir
+	./autogen.sh
+
+# enforce recreation of every autobuilt file on every build
+override_dh_auto_clean:
+	dh_testdir
+	rm -f build-stamp configure-stamp
+	rm -f etc.apt.sources.list.d/nicbr-simet.apt.source.list
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f config.sub config.guess configure config.log
+	rm -f */config.sub */config.guess */configure */config.log
+	rm -fr autom4te.cache
+	rm -f Makefile.in aclocal.m4 Makefile
+	rm -f */Makefile.in */aclocal.m4 */Makefile */src/Makefile.in */src/Makefile
+	rm -f compile depcomp install-sh missing
+	rm -f */compile */depcomp */install-sh */missing
+	rm -f inetup-client-c/simet-inetuptime_config.h.in
+	rm -f tcpbw-client-c/tcpbwc_config.h.in
+	rm -f twamp-client-c/twampc_config.h.in
+	rm -f cmake-projects/jsonpath/parser.h cmake-projects/jsonpath/parser.out
+	rm -f */version
+
+override_dh_auto_test:
+	test "$(PKGDEBVER)" = "$(PKGVER)"
+
+override_dh_install:
+	CODENAME=$$( lsb_release -sc ) && DISTRO=$$( lsb_release -si | tr A-Z a-z ) && \
+	  sed -e "s/@codename@/$${CODENAME}/g" -e "s/@distro@/$${DISTRO}/g" \
+		< debian/etc.apt.sources.list.d/simet.apt.source.template \
+		> debian/etc.apt.sources.list.d/nicbr-simet.apt.source.list
+	dh_install

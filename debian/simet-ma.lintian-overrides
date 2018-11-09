@@ -1,0 +1,2 @@
+# We are an add-on vendor package that uses /opt/simet
+simet-ma: dir-or-file-in-opt

@@ -1,0 +1,3 @@
+debian/etc.apt/* etc/apt/
+debian/etc.apt.conf.d/* etc/apt/apt.conf.d/
+debian/etc.apt.sources.list.d/*list etc/apt/sources.list.d/

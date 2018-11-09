@@ -1,0 +1,81 @@
+Template: simet-ma/title
+Type: title
+Description: SIMET Measurement Agent (Connected Schools Program)
+Description-pt_BR.UTF-8: Medidor Educação Conectada (MEC-SIMET)
+
+Template: simet-ma/cover
+Type: note
+Description: SIMET Measurement Agent - Connected Schools Program
+ Connected Schools Program, Internet Quality Measurement
+ .
+ Uses SIMET technology by NIC.br
+Description-pt_BR.UTF-8: Medidor Educação Conectada (MEC-SIMET)
+ Medidor de qualidade do acesso Internet, programa Educação
+ Conectada do MEC.
+ .
+ Por favor, informe corretamente nas próxima(s) tela(s) as
+ informações pedidas, para que as medições da qualidade da
+ Internet feitas por esse programa sejam corretamente
+ associadas à escola.
+ .
+ Este medidor utiliza tecnologia SIMET do NIC.br
+
+Template: simet-ma/mec-inepcode
+Type: string
+Description: INEP code:
+ This school's INEP code.  The installer will attempt to
+ fetch the school details from its INEP code.
+Description-pt_BR.UTF-8: Código INEP:
+ Por favor informe o código INEP da escola.  O Instalador
+ tentará obter as informações da escola automaticamente
+ através da Internet.
+
+Template: simet-ma/mec-inepcheck
+Type: boolean
+Default: false
+Description: School is ${INEPNAME} (INEP ${INEPCODE}) ?
+ INEP ${INEPCODE} corresponds to school ${INEPNAME}.
+ Is this the correct INEP code/school ?
+Description-pt_BR.UTF-8: É a escola ${INEPNAME} (INEP: ${INEPCODE}) ?
+ O código INEP ${INEPCODE} corresponde à escola ${INEPNAME}.
+ É esse o código INEP correto?
+
+Template: simet-ma/mec-ineperror
+Type: error
+Description: INEP validation error
+ The INEP code is invalid, please enter a valid INEP code.
+Description-pt_BR.UTF-8: Código INEP inválido
+ O código INEP está incorreto ou é desconhecido, por favor
+ entre um código INEP válido.  O código INEP é formado
+ apenas por números, e normalmente possui 8 dígitos.
+
+Template: simet-ma/mec-schooladdress
+Type: string
+Description: School's address:
+ The address of this school.
+Description-pt_BR.UTF-8: Endereço da escola:
+ Por favor informe o endereço da escola (rua, número e complemento,
+ bairro, cidade/estado, CEP).
+
+Template: simet-ma/mec-schoolemail
+Type: string
+Description: School's email:
+ An email address the Connected Schools Program can use to
+ contact the school should any issues arise that need to be
+ reported to the school, or that require some sort of action
+ from the school.
+Description-pt_BR.UTF-8: email da escola:
+ Por favor informe um endereço de email que possa ser usado
+ para contactar a escola caso necessário.
+
+Template: simet-ma/mec-schoolphone
+Type: string
+Description: School telephone:
+ A telephone number the Connected Schools Program can use to
+ contact the school should any issues arise that need to be
+ reported to the school, or that require some sort of action
+ from the school.
+Description-pt_BR.UTF-8: Telefone da escola:
+ Por favor informe um número de telefone (de preferência fixo)
+ que possa ser utilizado para contactar a escola caso necessário.
+

@@ -18,8 +18,10 @@
 SUBDIRS     = simet-api twamp-client-c tcpbw-client-c inetup-client-c simet-runner cmake-projects
 EXTRA_DIST  = autogen.sh version version.sh
 
+# we need to use an intermetiate variable, otherwise the shell dirties the
+# repository creating the output file *before* running the version.sh script
 version:
-	$(top_srcdir)/version.sh > version
+	VER=$$( $(top_srcdir)/version.sh ) && echo "$${VER}" > version
 
 dist-local: version
 
@@ -37,3 +39,4 @@ bin-dist: all
 bump-version:
 	-rm -f version
 	$(top_srcdir)/version.sh > version
+	-debchange -p --noquery -v "$(shell cat $(top_srcdir)/version | sed -e 's/^v//' -e 's/-/+/g' -e 's/+$$//')" -m "New release"
