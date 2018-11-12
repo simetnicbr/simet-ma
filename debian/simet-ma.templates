@@ -32,7 +32,7 @@ Description-pt_BR.UTF-8: Código INEP:
 
 Template: simet-ma/mec-inepcheck
 Type: boolean
-Default: false
+Default: true
 Description: School is ${INEPNAME} (INEP ${INEPCODE}) ?
  INEP ${INEPCODE} corresponds to school ${INEPNAME}.
  Is this the correct INEP code/school ?
