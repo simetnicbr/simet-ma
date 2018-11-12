@@ -4,7 +4,7 @@ Source: http://simet.nic.br/projetos/
 
 Files: *
 Copyright: 2017-2018 NIC.br
-License: GPL-3.0+
+License: do not redistribute or modify
 
 Files: debian/*
 Copyright: 2018 NIC.br <medicoes@simet.nic.br>
