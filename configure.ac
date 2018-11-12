@@ -16,7 +16,7 @@ dnl You should have received a copy of the GNU General Public License
 dnl along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ([2.69])
-AC_INIT([simet-agent-unix], m4_esyscmd_s([./version.sh]),
+AC_INIT([simet-ma], m4_esyscmd_s([./version.sh]),
         [medicoes@simet.nic.br],
         [simet-ma],
         [http://simet.nic.br])
