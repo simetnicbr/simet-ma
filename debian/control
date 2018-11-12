@@ -29,3 +29,7 @@ Description: NIC.br SIMET Measurement Agent
  and also to generate reports of any relevant issues affecting a large
  number of Brazillian users to CGI.br - Brazil's Internet Steering
  Committee.
+ .
+ The source code is free, however modified versions must be renamed
+ and rebranded, since the use of the SIMET and NIC.br names on any
+ modified versions require an agreement in writing with NIC.br.

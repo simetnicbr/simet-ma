@@ -9,6 +9,10 @@ Description: SIMET Measurement Agent - Connected Schools Program
  Connected Schools Program, Internet Quality Measurement
  .
  Uses SIMET technology by NIC.br
+ .
+ Do not install unless you agree with the license terms.
+ .
+ License: http://download.simet.nic.br/medidor-educ-conectada/linux/licenca-linux.txt
 Description-pt_BR.UTF-8: Medidor Educação Conectada (MEC-SIMET)
  Medidor de qualidade do acesso Internet, programa Educação
  Conectada do MEC.
@@ -18,7 +22,14 @@ Description-pt_BR.UTF-8: Medidor Educação Conectada (MEC-SIMET)
  Internet feitas por esse programa sejam corretamente
  associadas à escola.
  .
+ Não continue a instalar este programa se não estiver de
+ acordo com a licença de uso: ao instalar e utilizar o
+ programa, você se compromete cumprir a licença de uso do
+ mesmo na íntegra.
+ .
  Este medidor utiliza tecnologia SIMET do NIC.br
+ .
+ Licença de uso: http://download.simet.nic.br/medidor-educ-conectada/linux/licenca-linux.txt
 
 Template: simet-ma/mec-inepcode
 Type: string
