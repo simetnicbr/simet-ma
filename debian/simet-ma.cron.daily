@@ -3,4 +3,5 @@
 # Copyright (c) 2018 NIC.br
 # Distributed under the GPLv3+ license
 
+# Refresh agent registry in case it has to change auth tokens
 test -f /opt/simet/bin/simet_register_ma.sh && /opt/simet/bin/simet_register_ma.sh >/dev/null
