@@ -1,7 +1,9 @@
 #!/bin/sh
 # simet-ma.cron.daily - daily maintenance for the SIMET Measurement Agent
 # Copyright (c) 2018 NIC.br
-# Distributed under the GPLv3+ license
+#
+# Distributed under the GPLv3+ license with additional terms and permissions
+# Refer to the COPYING file on the program source for details
 
 # Refresh agent registry in case it has to change auth tokens
 test -f /opt/simet/bin/simet_register_ma.sh && /opt/simet/bin/simet_register_ma.sh >/dev/null
