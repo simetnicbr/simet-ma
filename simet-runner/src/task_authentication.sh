@@ -1,5 +1,5 @@
 #shellcheck shell=ash
-# Copyright (c) 2018 NIC.br  <medicoes@simet.nic.br>
+# Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>
 # Source code fraction, for license information refer to the
 # main program source code.
 

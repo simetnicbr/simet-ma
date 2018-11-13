@@ -144,7 +144,8 @@ operators community through the NIC.br-hosted GTER (Brazilian's network
 operators work group, akin to NANOG) meetings that happen at least once
 an year.  They are also reported to CGI.br for multi-stakeholder
 decision making about some widespread issue that would benefit from
-official guidance.
+official guidance.  All such shared information is anonymised.
+
 
 
 Legacy SIMET:
@@ -189,4 +190,3 @@ Versioning:
   Please always commit an up-to-date version file and then tag the new release:
 
   echo "v1.2.3" > version ; git add version ; git commit -m "version: update" ; git tag -m "simet-ma version $(cat version)" $(cat version)
-
