@@ -161,8 +161,8 @@ _task_twamp(){
   mkdir -p "$_task_dir/tables"
   _debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
-  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
     _error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
@@ -197,8 +197,8 @@ _task_tcpbw(){
   mkdir -p "$_task_dir/tables"
   _debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
   eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path}  > $_task_dir/tables/tcpbw.json"
-  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
     _error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
