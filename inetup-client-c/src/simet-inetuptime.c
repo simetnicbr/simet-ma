@@ -42,6 +42,7 @@
 #include <signal.h>
 
 #include "simet-inetuptime.h"
+#include "simet_err.h"
 #include "logger.h"
 
 #ifdef HAVE_JSON_JSON_H
@@ -858,7 +859,7 @@ static const char program_copyright[]=
 static void print_version(void)
 {
     fprintf(stdout, "%s %s\n%s\n", PACKAGE_NAME, PACKAGE_VERSION, program_copyright);
-    exit(EXIT_SUCCESS);
+    exit(SEXIT_SUCCESS);
 }
 
 /* FIXME:
@@ -894,7 +895,7 @@ static void print_usage(const char * const p, int mode)
             "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server");
     }
 
-    exit((mode)? EXIT_SUCCESS : EXIT_FAILURE);
+    exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
 
 static int is_valid_fd(const int fd)
@@ -914,7 +915,7 @@ static void fix_fds(const int fd, const int fl)
             print_err("could not attach /dev/null to file descriptor %d: %s",
                       fd, strerror(errno));
             /* if (nfd != -1) close(nfd); - disabled as we're going to exit() now */
-            exit(EXIT_FAILURE);
+            exit(SEXIT_FAILURE);
     }
     if (nfd != fd)
             close(nfd);
@@ -1024,7 +1025,7 @@ int main(int argc, char **argv) {
     if (!servers_pollfds || !servers ||
             uptimeserver_create(&servers[0], AF_INET) || uptimeserver_create(&servers[1], AF_INET6)) {
         print_err("out of memory");
-        return EXIT_FAILURE;
+        return SEXIT_OUTOFRESOURCE;
     }
 
     /* state machine loop */
@@ -1086,7 +1087,7 @@ int main(int argc, char **argv) {
 
             default:
                 print_err("internal error or memory corruption");
-                return EXIT_FAILURE;
+                return SEXIT_INTERNALERR;
             }
 
             if (wait >= 0 && wait < minwait)
@@ -1123,7 +1124,7 @@ int main(int argc, char **argv) {
                 }
             } else if (poll_res == -1 && (errno != EINTR && errno != EAGAIN)) {
                 print_err("internal error, memory corruption or out of memory");
-                return EXIT_FAILURE;
+                return SEXIT_INTERNALERR;
             }
         }
 
@@ -1139,7 +1140,7 @@ int main(int argc, char **argv) {
     else
         print_msg(MSG_NORMAL, "all servers connections have been shutdown, exiting...");
 
-    return EXIT_SUCCESS;
+    return SEXIT_SUCCESS;
 }
 
 /* vim: set et ts=4 sw=4 : */

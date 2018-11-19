@@ -16,6 +16,7 @@
  */
 
 #include "tcpbwc_config.h"
+#include "simet_err.h"
 #include "tcpbwc.h"
 #include "report.h"
 #include "logger.h"
@@ -55,6 +56,8 @@ static int sockListLastFD = -1;
 static void *sockBuffer = NULL;
 static size_t sockBufferSz = 0;
 
+/* FIXME: properly return the several possible errors,
+ * such as connection error, out of memory, etc */
 
 /* Measurement channel handling */
 
@@ -194,7 +197,7 @@ static int setup_curl_err_handling(CURL * const handle)
 	curl_errmsg = calloc(1, CURL_ERROR_SIZE);
     if (!curl_errmsg ||
 	curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, curl_errmsg) != CURLE_OK)
-	return -1;
+	return SEXIT_OUTOFRESOURCE;
     return 0;
 }
 
@@ -210,7 +213,74 @@ static int check_curl_error(CURLcode e)
     if (e == CURLE_OK)
 	return 0;
     print_warn("%s: %s", curl_easy_strerror(e), (curl_errmsg) ? curl_errmsg : "(no info)");
-    return -1;
+    /* Maps from CURLcode to SEXIT_* */
+    switch (e) {
+	case CURLE_COULDNT_RESOLVE_PROXY:
+	case CURLE_COULDNT_RESOLVE_HOST:
+		return SEXIT_DNSERR;
+
+	case CURLE_COULDNT_CONNECT:
+	case CURLE_REMOTE_ACCESS_DENIED:
+		return SEXIT_MP_REFUSED;
+
+	case CURLE_OPERATION_TIMEDOUT:
+		return SEXIT_MP_TIMEOUT;
+
+#ifdef CURLE_HTTP2
+	case CURLE_HTTP2:
+#endif
+#ifdef CURLE_HTTP2_STREAM
+	case CURLE_HTTP2_STREAM:
+#endif
+	case CURLE_PARTIAL_FILE:
+	case CURLE_HTTP_RETURNED_ERROR:
+	case CURLE_TOO_MANY_REDIRECTS:
+	case CURLE_GOT_NOTHING:
+	case CURLE_SEND_ERROR:
+	case CURLE_RECV_ERROR:
+		return SEXIT_CTRLPROT_ERR;
+
+	case CURLE_SSL_CONNECT_ERROR:
+	case CURLE_PEER_FAILED_VERIFICATION:
+	case CURLE_SSL_CERTPROBLEM:
+	case CURLE_SSL_CIPHER:
+	case CURLE_SSL_CACERT:
+#ifdef CURLE_LOGIN_DENIED
+	case CURLE_LOGIN_DENIED:
+#endif
+#ifdef CURLE_SSL_INVALIDCERTSTATUS
+	case CURLE_SSL_INVALIDCERTSTATUS:
+#endif
+#ifdef CURLE_SSL_PINNEDPUBKEYNOTMATCH
+	case CURLE_SSL_PINNEDPUBKEYNOTMATCH:
+#endif
+#ifdef CURLE_SSL_ISSUER_ERROR
+	case CURLE_SSL_ISSUER_ERROR:
+#endif
+#ifdef CURLE_SSL_CRL_BADFILE
+	case CURLE_SSL_CRL_BADFILE:
+#endif
+		return SEXIT_AUTHERR;
+
+	case CURLE_WRITE_ERROR: /* our write callbacks fail due to ENOMEM */
+	case CURLE_OUT_OF_MEMORY:
+		return SEXIT_OUTOFRESOURCE;
+
+	case CURLE_URL_MALFORMAT: /* FIXME: do we get it from cmd line? */
+		return SEXIT_BADCMDLINE;
+
+	case CURLE_UNSUPPORTED_PROTOCOL:
+	case CURLE_FAILED_INIT:
+	case CURLE_NOT_BUILT_IN:
+	case CURLE_HTTP_POST_ERROR:
+	case CURLE_SEND_FAIL_REWIND:
+	case CURLE_SSL_CACERT_BADFILE:
+	case CURLE_SSL_SHUTDOWN_FAILED:
+		return SEXIT_INTERNALERR;
+
+	default:
+		return SEXIT_FAILURE;
+    }
 }
 
 static int prepare_command_channel(CURL * const handle,
@@ -219,12 +289,13 @@ static int prepare_command_channel(CURL * const handle,
 				   const unsigned int timeout, const int family)
 {
     char url[MAX_URL_SIZE];
+    int rc;
 
     assert(endpoint && baseurl);
 
     snprintf(url, MAX_URL_SIZE, "%s%s", baseurl, endpoint);
-    if (check_curl_error(curl_easy_setopt(handle, CURLOPT_URL, url)))
-	return -1;
+    if ((rc = check_curl_error(curl_easy_setopt(handle, CURLOPT_URL, url))))
+	return rc;
 
     curl_easy_setopt(handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1);
@@ -236,8 +307,8 @@ static int prepare_command_channel(CURL * const handle,
 			     ((family == 4)? CURL_IPRESOLVE_V4 :
 			       CURL_IPRESOLVE_WHATEVER));
     if (headers &&
-	check_curl_error(curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers)))
-	return -1;
+	(rc = check_curl_error(curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers))))
+	return rc;
 
     /* FIXME: we have not overriden the default output handling */
 
@@ -250,13 +321,14 @@ static int issue_simple_command(CURL * const handle, const int emptybody)
 {
     assert(handle);
     long status;
+    int rc;
 
-    if (check_curl_error(curl_easy_perform(handle)) ||
-        check_curl_error(curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status)))
-	return -1;
+    if ((rc = check_curl_error(curl_easy_perform(handle))) ||
+        (rc = check_curl_error(curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status))))
+	return rc;
     if (status != ((emptybody)? 204: 200)) {
 	print_warn("API call returned unexpected status code: %li", status);
-	return -1;
+	return SEXIT_CTRLPROT_ERR;
     }
 
     /* FIXME: em caso de erro 4xx, tem um JSON {errorMessage} para mostrar, que
@@ -337,7 +409,7 @@ err_exit:
 	json_object_put(j_obj);
 
     print_warn("invalid/unknown reply from server: %s", json);
-    return -1;
+    return SEXIT_CTRLPROT_ERR;
 }
 
 /**
@@ -353,7 +425,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
     if (!mem || !realsize)
 	return 0;
     if (realsize > 0x40000000) {
-	print_warn("insanely large body received, ignoring!");
+	print_warn("insanely large body received, refusing it!");
 	return 0;
     }
 
@@ -498,7 +570,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 int tcp_client_run(MeasureContext ctx)
 {
     CURL *curl;
-    int rc = -1;
+    int rc;
 
     unsigned int rcvcounter;
     DownResult *rcv;
@@ -514,8 +586,8 @@ int tcp_client_run(MeasureContext ctx)
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
     if (!curl || setup_curl_err_handling(curl)) {
-	print_warn("failed to initialize libcurl");
-	return -1;
+	print_err("failed to initialize libcurl");
+	return SEXIT_OUTOFRESOURCE;
     }
 
     /* Authorization header, must go on every API call */
@@ -525,7 +597,7 @@ int tcp_client_run(MeasureContext ctx)
     }
 
     print_msg(MSG_IMPORTANT, "measurent session setup...");
-    if (prepare_command_channel(curl, ctx.control_url, "/session/request", slist, ctx.timeout_test, ctx.family))
+    if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/request", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
 
     curl_easy_setopt(curl, CURLOPT_POST, 1);
@@ -534,9 +606,9 @@ int tcp_client_run(MeasureContext ctx)
     curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, strbuf);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-    if (issue_simple_command(curl, 0))
+    if ((rc = issue_simple_command(curl, 0)))
 	goto err_exit;
-    if (tcpc_process_request_answer(&ctx, chunk.memory))
+    if ((rc = tcpc_process_request_answer(&ctx, chunk.memory)))
 	goto err_exit;
 
     unsigned int streamcount = 0;
@@ -559,7 +631,7 @@ int tcp_client_run(MeasureContext ctx)
     }
     if (!streamcount) {
 	print_warn("could not open any test streams, aborting test");
-	return -1;
+	return SEXIT_MP_TIMEOUT;
     }
     print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
 	      "will use %u measurement streams", streamcount);
@@ -568,21 +640,21 @@ int tcp_client_run(MeasureContext ctx)
     sockBufferSz = new_tcp_buffer(sockList[0], &sockBuffer);
     if (!sockBufferSz) {
 	print_err("could not allocate socket buffer");
-	return -1;
+	return SEXIT_OUTOFRESOURCE;
     }
 
     print_msg(MSG_DEBUG, "sending request /session/start-upload");
-    if (prepare_command_channel(curl, ctx.control_url, "/session/start-upload", slist, ctx.timeout_test, ctx.family))
+    if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/start-upload", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
-    if (issue_simple_command(curl, 1))
+    if ((rc = issue_simple_command(curl, 1)))
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting upload measurement (send)");
     sendUploadPackets(ctx);
 
-    if (prepare_command_channel(curl, ctx.control_url, "/session/finish-upload", slist, ctx.timeout_test, ctx.family))
+    if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/finish-upload", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
-    if (issue_simple_command(curl, 1))
+    if ((rc = issue_simple_command(curl, 1)))
 	goto err_exit;
 
     /* shutdown upload direction */
@@ -593,24 +665,28 @@ int tcp_client_run(MeasureContext ctx)
 		FD_CLR(sockList[i], &sockListFDs);
 		sockList[i] = -1;
 		streamcount--;
-	    } else if (errno != 0 && errno != EINTR)
+	    } else if (errno != 0 && errno != EINTR) {
+		rc = SEXIT_FAILURE;
 		goto err_exit;
+	    }
 	}
     }
-    if (!streamcount)
+    if (!streamcount) {
+	rc = SEXIT_MP_TIMEOUT; /* FIXME: it aborted on us, really... */
 	goto err_exit;
+    }
 
-    if (prepare_command_channel(curl, ctx.control_url, "/session/start-download", slist, ctx.timeout_test, ctx.family))
+    if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/start-download", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
-    if (issue_simple_command(curl, 1))
+    if ((rc = issue_simple_command(curl, 1)))
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting download measurement (receive)");
     receiveDownloadPackets(ctx, &rcv, &rcvcounter);
 
-    if (prepare_command_channel(curl, ctx.control_url, "/session/finish-download", slist, ctx.timeout_test, ctx.family))
+    if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/finish-download", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
-    if (issue_simple_command(curl, 1))
+    if ((rc = issue_simple_command(curl, 1)))
 	goto err_exit;
 
     /* shutdown and close sockets */
@@ -631,14 +707,14 @@ int tcp_client_run(MeasureContext ctx)
     json_object *j_obj_upload = NULL;
 
     print_msg(MSG_NORMAL, "requesting upload measurement results from measurement peer");
-    if (prepare_command_channel(curl, ctx.control_url, "/session/get-upload-samples", slist, ctx.timeout_test, ctx.family))
+    if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/get-upload-samples", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
     if (chunk.memory && chunk.allocated)
 	memset(chunk.memory, 0, chunk.allocated);
     chunk.used = 0;
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-    if (issue_simple_command(curl, 0)) {
+    if ((rc = issue_simple_command(curl, 0))) {
 	/* FIXME: goto err_exit; ? */
 	print_warn("failed to get upload measurements from server");
 	/* FIXME: need an empty json of some sort on j_obj_upload? */
@@ -652,7 +728,7 @@ int tcp_client_run(MeasureContext ctx)
 	fprintf(stdout, "%s", json_object_to_json_string(report_obj));
     }
 
-    rc = 0;
+    rc = SEXIT_SUCCESS;
 
     print_msg(MSG_IMPORTANT, "tcp bandwidth measurements finished");
 

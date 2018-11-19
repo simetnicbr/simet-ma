@@ -16,7 +16,7 @@
 bin_PROGRAMS = twampc
 
 twampc_SOURCES = libubox/usock.h libubox/usock.c \
-		 logger.h \
+		 logger.h simet_err.h \
 				twamp.h twamp.c \
 				message.h message.c \
 				timestamp.h timestamp.c \

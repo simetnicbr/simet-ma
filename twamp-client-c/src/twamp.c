@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 
+#include "simet_err.h"
 #include "logger.h"
 #include "report.h"
 
@@ -55,8 +56,12 @@ int twamp_run_client(TWAMPParameters param) {
 
     // Create TWAMPReport
     TWAMPReport * report = malloc(sizeof(TWAMPReport));
+    if (!report)
+	return SEXIT_OUTOFRESOURCE;
     report->device_id = param.device_id ? param.device_id : "(unknown)";
     report->result = malloc(sizeof(TWAMPResult));
+    if (!report->result)
+	return SEXIT_OUTOFRESOURCE;
     report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_count);
     report->family = param.family;
     report->host = param.host;
@@ -65,36 +70,48 @@ int twamp_run_client(TWAMPParameters param) {
     t_param.param = param;
     t_param.report = report;
 
-    int simet_err = 0;
-
     ServerGreeting *srvGreetings = malloc(SERVER_GREETINGS_SIZE);
     SetupResponse *stpResponse = malloc(SETUP_RESPONSE_SIZE);
+    if (!srvGreetings || !stpResponse)
+	return SEXIT_OUTOFRESOURCE;
     memset(stpResponse, 0 , SETUP_RESPONSE_SIZE);
     ServerStart *srvStart = malloc(SERVER_START_SIZE);
+    if (!srvStart)
+	return SEXIT_OUTOFRESOURCE;
     
     RequestSession *rqtSession = malloc(REQUEST_SESSION_SIZE);
+    if (!rqtSession)
+	return SEXIT_OUTOFRESOURCE;
     memset(rqtSession, 0 , REQUEST_SESSION_SIZE);
     AcceptSession *actSession = malloc(ACCEPT_SESSION_SIZE);
     StartSessions *strSession = malloc(START_SESSIONS_SIZE);
+    if (!actSession || !strSession)
+	return SEXIT_OUTOFRESOURCE;
     memset(strSession, 0 , START_SESSIONS_SIZE);
     StartAck *strAck = malloc(START_ACK_SIZE);
+    if (!strAck)
+	return SEXIT_OUTOFRESOURCE;
 
     StopSessions *stpSessions = malloc(sizeof(StopSessions));
+    if (!stpSessions)
+	return SEXIT_OUTOFRESOURCE;
     memset(stpSessions, 0 , sizeof(StopSessions));
+
+    int rc;
 
     // CREATE SOCKET
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
     fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param.family), param.host, param.port, &remote_addr_control, 2000);
     if (fd_control < 0) {
         print_err("could not resolve server name or address");
-        simet_err = 1;
+        rc = SEXIT_DNSERR;
         goto MEM_FREE;
     }
 
     fd_ready = usock_wait_ready(fd_control, 5000);
     if (fd_ready != 0) {
         print_err("connection to server failed");
-        simet_err = 1;
+        rc = SEXIT_MP_REFUSED;
         goto MEM_FREE;
     }
 
@@ -116,11 +133,12 @@ int twamp_run_client(TWAMPParameters param) {
         param.family = 6;
     }
 
+    rc = SEXIT_CTRLPROT_ERR;
+
     // SERVER GREETINGS
     ret_socket = message_server_greetings(fd_control, 10, srvGreetings);
     if (ret_socket != SERVER_GREETINGS_SIZE) {
         print_err("message_server_greetings problem");
-        simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
@@ -128,7 +146,6 @@ int twamp_run_client(TWAMPParameters param) {
 
     if (message_validate_server_greetings(srvGreetings) != 0) {
         print_err("message_validate_server_greetings problem");
-        simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
@@ -137,14 +154,12 @@ int twamp_run_client(TWAMPParameters param) {
 
     if (message_format_setup_response(srvGreetings, stpResponse) != 0) {
         print_err("message_setup_response problem");
-        simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
     ret_socket = message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE);
     if (ret_socket <= 0) {
         print_err("message_send problem");
-        simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
@@ -154,13 +169,11 @@ int twamp_run_client(TWAMPParameters param) {
     ret_socket = message_server_start(fd_control, 10, srvStart);
     if (ret_socket <= 0) {
         print_err("message_server_start problem");
-        simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
     if(srvStart->Accept != 0) {
         print_err("test not accepted: %"PRIu8 ,srvStart->Accept);
-        simet_err = 1;
         goto CONTROL_CLOSE;
     }
 
@@ -171,14 +184,14 @@ int twamp_run_client(TWAMPParameters param) {
     memset(&local_addr_control, 0, addr_len);
 	if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, (socklen_t *) &addr_len) < 0){
         print_err("getsockname problem");
-        simet_err = 1;
+        rc = SEXIT_INTERNALERR;
         goto CONTROL_CLOSE;
 	}
 
     char str[INET6_ADDRSTRLEN];
     if (get_ip_str(&local_addr_control, str, INET6_ADDRSTRLEN) == NULL) {
         print_err("get_ip_str problem");
-        simet_err = 1;
+        rc = SEXIT_INTERNALERR;
         goto CONTROL_CLOSE;
     }
 
@@ -189,30 +202,28 @@ int twamp_run_client(TWAMPParameters param) {
     fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, 2000);
     if (fd_test < 0) {
         print_err("usock_inet_timeout problem");
-        simet_err = 1;
+	rc = SEXIT_MP_REFUSED;
         goto CONTROL_CLOSE;
     }
 
     fd_ready = usock_wait_ready(fd_test, 5000);
     if (fd_ready != 0) {
         print_err("usock_wait_ready problem");
-        simet_err = 1;
+	rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
     }
 
     print_msg(MSG_NORMAL, "TEST socket connected");
-    print_msg(MSG_DEBUG, "sin_addr: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
-    print_msg(MSG_DEBUG, "sin_port: %u", ntohs(((struct sockaddr_in *)&remote_addr_measure)->sin_port));
 
     // Get Sender Port
     uint16_t sender_port = 862;
     addr_len = sizeof(local_addr_measure);
     memset(&local_addr_measure, 0, addr_len);
-	if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0){
+	if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0) {
         print_msg(MSG_DEBUG, "getsockname problem");
-        simet_err = 1;
+        rc = SEXIT_INTERNALERR;
         goto TEST_CLOSE;
-	}
+    }
 
     // Verificar se o Endian está invertido....
     switch(local_addr_measure.ss_family) {
@@ -232,14 +243,12 @@ int twamp_run_client(TWAMPParameters param) {
 
     if (message_format_request_session(param.family, sender_port, rqtSession) != 0) {
         print_msg(MSG_DEBUG, "message_format_request_session problem");
-        simet_err = 1;
         goto TEST_CLOSE;
     }
 
     ret_socket = message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE);
     if (ret_socket <= 0) {
         print_msg(MSG_DEBUG, "message_send problem");
-        simet_err = 1;
         goto TEST_CLOSE;
     }
 
@@ -247,13 +256,11 @@ int twamp_run_client(TWAMPParameters param) {
     ret_socket = message_accept_session(fd_control, 10, actSession);
     if (ret_socket <= 0) {
         print_msg(MSG_DEBUG, "message_server_start problem");
-        simet_err = 1;
         goto TEST_CLOSE;
     }
 
     if(actSession->Accept != 0) {
         print_err("test not accepted: %"PRIu8 ,actSession->Accept);
-        simet_err = 1;
         goto TEST_CLOSE;
     }
 
@@ -263,6 +270,10 @@ int twamp_run_client(TWAMPParameters param) {
     print_msg(MSG_DEBUG, "session port: %"PRIu16, receiver_port);
 
     testPort = malloc(sizeof(char) * 6);
+    if (!testPort) {
+	rc = SEXIT_OUTOFRESOURCE;
+	goto TEST_CLOSE;
+    }
     snprintf(testPort, 6, "%u", receiver_port);
 
     add_remote_port(&remote_addr_measure, receiver_port);
@@ -278,18 +289,19 @@ int twamp_run_client(TWAMPParameters param) {
     if (connect(fd_test, (struct sockaddr *) &remote_addr_measure,
                 remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0) {
         print_err("connect to remote measurement peer problem: %s", strerror(errno));
-        simet_err = 1;
+        rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
     }
 
     print_msg(MSG_DEBUG, "fd_test after: %d", fd_test);
+
+    rc = SEXIT_CTRLPROT_ERR;
 
     // START SESSION
     strSession->Type = 2;
     ret_socket = message_send(fd_control, 10, strSession, START_SESSIONS_SIZE);
     if (ret_socket <= 0) {
         print_err("message_send problem");
-        simet_err = 1;
         goto TEST_CLOSE;
     }
 
@@ -297,7 +309,6 @@ int twamp_run_client(TWAMPParameters param) {
     ret_socket = message_start_ack(fd_control, 10, strAck);
     if (ret_socket <= 0) {
         print_err("message_start_ack problem");
-        simet_err = 1;
         goto TEST_CLOSE;
     }
     
@@ -321,29 +332,25 @@ int twamp_run_client(TWAMPParameters param) {
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u",
             t_param.report->result->packets_sent, t_param.report->result->received_packets);
 
+    rc = SEXIT_SUCCESS;
+
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
-        print_err("TEST socket shutdown problem: %s", strerror(errno));
-        goto CONTROL_CLOSE;
+        print_warn("TEST socket shutdown problem: %s", strerror(errno));
     }
-    print_msg(MSG_DEBUG, "TEST socket shutdown OK");
 
     if (close(fd_test) != 0) {
-        print_err("TEST socket close problem: %s", strerror(errno));
-        goto CONTROL_CLOSE;
+        print_warn("TEST socket close problem: %s", strerror(errno));
     }
     print_msg(MSG_DEBUG, "TEST socket close OK");
 
 CONTROL_CLOSE:
     if (shutdown(fd_control, SHUT_RDWR) != 0) {
-        print_err("CONTROL socket shutdown problem: %s", strerror(errno));
-        goto MEM_FREE;
+        print_warn("CONTROL socket shutdown problem: %s", strerror(errno));
     }
-    print_msg(MSG_DEBUG, "CONTROL socket shutdown OK");
 
     if (close(fd_control) != 0) {
-        print_err("CONTROL socket close problem: %s", strerror(errno));
-        goto MEM_FREE;
+        print_warn("CONTROL socket close problem: %s", strerror(errno));
     }
     print_msg(MSG_DEBUG, "CONTROL socket close OK");
 
@@ -368,7 +375,7 @@ MEM_FREE:
         free(report);
     }
 
-    return simet_err;
+    return rc;
 }
 
 static int convert_family(int family) {
