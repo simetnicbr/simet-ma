@@ -1,0 +1,31 @@
+Source: simet-ma
+Section: net
+Priority: optional
+Maintainer: Equipe SIMET <medicoes@simet.nic.br>
+Build-Depends: debhelper (>= 9), cmake, pkg-config, libjson-c-dev, libcurl4-gnutls-dev | libcurl-dev, lsb-release
+Standards-Version: 4.1.0
+Homepage: https://simet.nic.br/projetos/
+#Vcs-Browser: https://salsa.debian.org/debian/simet-ma
+#Vcs-Git: https://salsa.debian.org/debian/simet-ma.git
+
+Package: simet-ma
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Recommends: apt-utils, unattended-upgrades, apt-transport-https
+Breaks: sysvinit (<< 2.88dsf-52~)
+Description: NIC.br SIMET Measurement Agent
+ This is the Measurement Agent for the SIMET system from NIC.br.  It
+ performs several measurements of the Internet connectivity against
+ SIMET measurement peers hosted at the IX.br Internet Exchanges as well
+ as in NIC.br datacenters, and reports the measurement results to the
+ SIMET central servers.
+ .
+ The user can access the measurement results through a web interface.
+ The ISPs can access anonymized measurements done on their networks
+ through a separate interface.
+ .
+ The collected data is used in an aggregated, anonymized format by
+ CETIC.br to produce statistics on Internet connectivity [in Brazil],
+ and also to generate reports of any relevant issues affecting a large
+ number of Brazillian users to CGI.br - Brazil's Internet Steering
+ Committee.

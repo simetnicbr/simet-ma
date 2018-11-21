@@ -1,0 +1,2 @@
+# NIC.br SIMET agent (temp)
+deb [ signed-by=/etc/apt/nicbr-simet.apt.key.gpg pdiffs=no ] https://api.simet.nic.br/simetbox/dl/.simet-ma/apt/@distro@ @codename@ main
