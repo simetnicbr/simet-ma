@@ -22,7 +22,7 @@ if SIMETBOX_BUILD
 dist_bin_SCRIPTS = simetbox_register_ma.sh
 jsonfilter=jsonfilter
 else
-dist_bin_SCRIPTS = simet_register_ma.sh
+dist_bin_SCRIPTS = simet_register_ma.sh simet-ma_periodic.sh
 jsonfilter=$(bindir)/jsonpath
 endif
 
@@ -39,7 +39,7 @@ endif
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
-EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
+EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in simet-ma_periodic.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
 # Ensures the empty directories we don't create at runtime do exist
