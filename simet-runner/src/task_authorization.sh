@@ -22,7 +22,7 @@
 
 authorization() {
   if [ "$MOCK_AUTHORIZATION" = "true" ]; then
-    _debug "Mocking authorization request, with allow."
+    log_debug "Mocking authorization request, with allow."
     AUTHORIZATION_TOKEN="mocked_authorization_token"
     return 0  
   fi
@@ -40,17 +40,17 @@ authorization() {
     --url "$_endpoint" > $BASEDIR/auth_response.json
   
   if [ "$?" -ne 0 ]; then
-    _error "Authorization request failed at: $_endpoint"
+    log_error "Authorization request failed at: $_endpoint"
     return 1
   fi
  
   local _allowed=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measureAllowed")
   if [ $_allowed != "true" ]; then
-    _info "Authorization request denied at: $_endpoint"
+    log_info "Authorization request denied at: $_endpoint"
     return 1
   fi
 
-  _debug "Authorization success at: $_endpoint"
+  log_debug "Authorization success at: $_endpoint"
   AUTHORIZATION_TOKEN=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measurementToken")
 }
 # keep line

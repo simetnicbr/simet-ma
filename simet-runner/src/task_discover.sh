@@ -51,7 +51,7 @@ discover_init() {
   GLOBAL_STATE_CURRENT_PEER=-1
   if [ "$MOCK_API_SERVICE_DISCOVERY" = "true" ]; then
     cp "$MOCK_SERVICE_DISCOVERY_RESPONSE" $BASEDIR/services.json
-    _debug "Mocking request to API_SERVICE_DISCOVERY with precanned response: $BASEDIR/services.json"
+    log_debug "Mocking request to API_SERVICE_DISCOVERY with precanned response: $BASEDIR/services.json"
     return    
   fi
   curl -s "$API_SERVICE_DISCOVERY" > $BASEDIR/services.json
@@ -60,7 +60,7 @@ discover_init() {
 discover_next_peer() {
   local _peer="undefined"
   GLOBAL_STATE_CURRENT_PEER=$(( $GLOBAL_STATE_CURRENT_PEER + 1 ))
-  _debug "Probing for peer at list position: $GLOBAL_STATE_CURRENT_PEER"
+  log_debug "Probing for peer at list position: $GLOBAL_STATE_CURRENT_PEER"
   _peer=$($JSONFILTER -i "$BASEDIR/services.json" -t "@[$GLOBAL_STATE_CURRENT_PEER]")
   if [ "$_peer" != "" ]; then
     return 0
