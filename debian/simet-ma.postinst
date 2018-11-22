@@ -24,19 +24,19 @@ set -e
 create_crond() {
     RND1=$(awk 'BEGIN { srand(); print int(60*rand()) " " int(24*rand()) " * * * " }' )
     RND2=$(awk 'BEGIN { srand(); print int(60*rand()) " 0-23/4 * * * " }')
-    cat << CRONDEOF
-# SIMET Measurement Agent
+    cat <<- CRONDEOF
+	# SIMET Measurement Agent
 
-MAILTO=""
+	MAILTO=""
 
-# Renew SIMET device authorization tokens and agent-id
-# Renova autorização e identificação da sonda SIMET
-$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
+	# Renew SIMET device authorization tokens and agent-id
+	# Renova autorização e identificação da sonda SIMET
+	$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
 
-# Run the SIMET periodic measurements
-# Executa a medição periódica do SIMET
-$RND2 nicbr-simet if [ -x /opt/simet/bin/simet-ma_periodic.sh ] ; then /opt/simet/bin/simet-ma_periodic.sh >/dev/null 2>&1 || true ; fi
-CRONDEOF
+	# Run the SIMET periodic measurements
+	# Executa a medição periódica do SIMET
+	$RND2 nicbr-simet if [ -x /opt/simet/bin/simet-ma_periodic.sh ] ; then /opt/simet/bin/simet-ma_periodic.sh >/dev/null 2>&1 || true ; fi
+	CRONDEOF
     :
 }
 
@@ -45,7 +45,7 @@ case "$1" in
         adduser --quiet --system --group --no-create-home --home /opt/simet \
                 --gecos "NIC.br SIMET Measurement Agent" nicbr-simet
 	chgrp nicbr-simet /opt/simet/etc/simet
-	chmod 0770 /opt/simet/etc/simet
+	chmod 02770 /opt/simet/etc/simet
 
 	#FIXME: the first time we need to change the contents of the
 	#generated crontab, the [ -e ] test must be replaced
