@@ -33,7 +33,7 @@
 # - sub-scripts
 ################################################################################
 
-_info "Executing $0"
+log_info "Executing $0"
 
 main(){
   local _result="undefined"
@@ -67,7 +67,7 @@ _main_orchestrate(){
   AGENT_ID="undefined"
   AGENT_TOKEN="undefined"
   authentication
-  _debug "Authentication: AGENT_ID=$AGENT_ID AGENT_TOKEN=$AGENT_TOKEN"
+  log_debug "Authentication: AGENT_ID=$AGENT_ID AGENT_TOKEN=$AGENT_TOKEN"
 
   # 2. task service discovery
   local _discovered="false"
@@ -75,7 +75,7 @@ _main_orchestrate(){
   discover_next_peer
   while [ $? -eq 0 ]; do
     local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
-    _info "Discovered measurement peer. Authorization attempt at $_auth_endpoint"
+    log_info "Discovered measurement peer. Authorization attempt at $_auth_endpoint"
     # 3. task authorization: try at successive peers, until first success 
     AUTHORIZATION_TOKEN="undefined"
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
@@ -86,9 +86,9 @@ _main_orchestrate(){
     discover_next_peer
   done
   if [ "$_discovered" = "true" ]; then
-    _info "Peer discovery and authorization success: Selected peer: $_auth_endpoint"
+    log_info "Peer discovery and authorization success: Selected peer: $_auth_endpoint"
   else
-    _error "Peer discovery and authorization failure: Last attempt at peer: $_auth_endpoint"
+    log_error "Peer discovery and authorization failure: Last attempt at peer: $_auth_endpoint"
     exit 1
   fi
 
@@ -99,16 +99,16 @@ _main_orchestrate(){
   # 5. task bw tcp
   _task_tcpbw "4"
   sleep 3
-  _debug "Refresh the authorization token, as each bandwidth measurement session (ipv4, ipv6) requires a unique token."
+  log_debug "Refresh the authorization token, as each bandwidth measurement session (ipv4, ipv6) requires a unique token."
   authorization "$_auth_endpoint" "$AGENT_TOKEN"
   if [ $? -eq 0 ]; then
     _task_tcpbw "6"
   else
-    _info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
+    log_info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
   fi
 
   # 6. task report
-  _info "Start task REPORT"
+  log_info "Start task REPORT"
   export _report_dir="$BASEDIR/report"
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   _sempl "$TEMPLATE_DIR/report.template" "$_report_dir/result.json"
@@ -126,26 +126,26 @@ _main_orchestrate(){
     --verbose \
     "${_endpoint}measure" 2>&1
   ) || {
-    _log "POST $_endpoint failed. See the HTTP Trace in the following log lines."
-    _log "HTTP Trace: ${_resp}"
-    _info "Task REPORT failed"
+    log "POST $_endpoint failed. See the HTTP Trace in the following log lines."
+    log "HTTP Trace: ${_resp}"
+    log_info "Task REPORT failed"
     return 1
   }
-  _info "Published $_report_dir/result.json report to $_endpoint"
-  _info "End task REPORT"
+  log_info "Published $_report_dir/result.json report to $_endpoint"
+  log_info "End task REPORT"
 }
 
 _task_twamp(){
   local _af="$1"
   if [[ "$_af" != "4" && "$_af" != "6" ]]; then
-    _error "Aborting task TWAMP IPvX. Unknown address familiy '$_af'."
+    log_error "Aborting task TWAMP IPvX. Unknown address familiy '$_af'."
     return 1
   fi
   if [[ "$TWAMPC" = "NO" || "$TWAMPC" = "no" || "$TWAMPC" = "No" ]]; then
-    _info "Skipping task TWAMP IPv$_af"
+    log_info "Skipping task TWAMP IPv$_af"
     return 0
   fi
-  _info "Start task TWAMP IPv$_af"
+  log_info "Start task TWAMP IPv$_af"
   local _host=$( discover_service TWAMP HOST )
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
@@ -158,29 +158,29 @@ _task_twamp(){
   export _task_options='[]'
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
-  _debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
+  log_debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
   eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
-  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
-    _error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
+    log_error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
-  _info "End Task TWAMP IPv$_af"
+  log_info "End Task TWAMP IPv$_af"
 }
 
 _task_tcpbw(){
   local _af="$1"
   if [[ "$_af" != "4" && "$_af" != "6" ]]; then
-    _error "Aborting task TCPBW IPvX. Unknown address familiy '$_af'."
+    log_error "Aborting task TCPBW IPvX. Unknown address familiy '$_af'."
     return 1
   fi
   if [[ "$TCPBWC" = "NO" || "$TCPBWC" = "no" || "$TCPBWC" = "No" ]]; then
-    _info "Skipping task TCPBW IPv$_af"
+    log_info "Skipping task TCPBW IPv$_af"
     return 0
   fi
-  _info "Start task TCPBW IPv$_af"
+  log_info "Start task TCPBW IPv$_af"
   local _host=$( discover_service TCPBW HOST )
   local _port=$( discover_service TCPBW PORT )
   local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
@@ -194,16 +194,16 @@ _task_tcpbw(){
   export _task_options='[]'
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
-  _debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
+  log_debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
   eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path}  > $_task_dir/tables/tcpbw.json"
-  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export _task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
-    _error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
+    log_error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
   fi
   _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
-  _info "End Task TCPBW IPv$_af"
+  log_info "End Task TCPBW IPv$_af"
 }
 
 
@@ -231,7 +231,7 @@ _main_setup(){
   local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   # 1. pepare dir structure
   BASEDIR="/tmp/simet-ma/$_time_of_exection"
-  _debug "Files will be collected in $BASEDIR"
+  log_debug "Files will be collected in $BASEDIR"
   mkdir -p "$BASEDIR/report"
 
   # 2. prepare env variables
@@ -254,7 +254,7 @@ _main_cleanup(){
 
 _main_config(){
   . "$1"
-  _info "Loaded config '$1': AGENT_ID_FILE=$AGENT_ID_FILE AGENT_TOKEN_FILE=$AGENT_TOKEN_FILE API_SERVICE_DISCOVERY=$API_SERVICE_DISCOVERY AGENT_LOCK=$AGENT_LOCK TEMPLATE_DIR=$TEMPLATE_DIR LMAP_SCHEDULE=$LMAP_SCHEDULE LMAP_TASK_NAME_PREFIX=$LMAP_TASK_NAME_PREFIX TWAMPC=$TWAMPC TCPBWC=$TCPBWC JSONFILTER=$JSONFILTER"
+  log_info "Loaded config '$1': AGENT_ID_FILE=$AGENT_ID_FILE AGENT_TOKEN_FILE=$AGENT_TOKEN_FILE API_SERVICE_DISCOVERY=$API_SERVICE_DISCOVERY AGENT_LOCK=$AGENT_LOCK TEMPLATE_DIR=$TEMPLATE_DIR LMAP_SCHEDULE=$LMAP_SCHEDULE LMAP_TASK_NAME_PREFIX=$LMAP_TASK_NAME_PREFIX TWAMPC=$TWAMPC TCPBWC=$TCPBWC JSONFILTER=$JSONFILTER"
   local _msg=""
   if [ "$AGENT_ID_FILE" = "" ]; then _msg="$_msg AGENT_ID_FILE"; fi
   if [ "$AGENT_TOKEN_FILE" = "" ]; then _msg="$_msg AGENT_TOKEN_FILE"; fi
@@ -267,7 +267,7 @@ _main_config(){
   if [ "$TCPBWC" = "" ]; then _msg="$_msg TCPBWC"; fi
   if [ "$JSONFILTER" = "" ]; then _msg="$_msg JSONFILTER"; fi
   if [ "$_msg" != "" ]; then
-    _error "Exit due to missing config params: $_msg"
+    log_error "Exit due to missing config params: $_msg"
     exit 1
   fi
 }

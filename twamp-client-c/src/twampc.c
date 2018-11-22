@@ -28,6 +28,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "simet_err.h"
 #include "logger.h"
 
 
@@ -43,7 +44,7 @@ static const char program_copyright[]=
 static void print_version(void)
 {
     fprintf(stdout, "%s %s\n%s\n", PACKAGE_NAME, PACKAGE_VERSION, program_copyright);
-    exit(EXIT_SUCCESS);
+    exit(SEXIT_SUCCESS);
 }
 
 static void print_usage(const char * const p, int mode)
@@ -66,7 +67,7 @@ static void print_usage(const char * const p, int mode)
 		"\t-p\tservice name or numeric port of the TWAMP server\n"
 		"\nserver: hostname or IP address of the TWAMP server\n\n");
     }
-    exit((mode)? EXIT_SUCCESS : EXIT_FAILURE);
+    exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
 
 
@@ -87,7 +88,7 @@ static void fix_fds(const int fd, const int fl)
             print_err("could not attach /dev/null to file descriptor %d: %s",
                       fd, strerror(errno));
             /* if (nfd != -1) close(nfd); - disabled as we're going to exit() now */
-            exit(EXIT_FAILURE);
+            exit(SEXIT_FAILURE);
     }
     if (nfd != fd)
             close(nfd);
@@ -194,8 +195,7 @@ int main(int argc, char **argv)
 
     if (value != 0) {
         print_err("TWAMP-CLIENT ERROR");
-        return 0;
     }
 
-    return 0;
+    return value;
 }

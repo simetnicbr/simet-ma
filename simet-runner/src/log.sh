@@ -3,21 +3,21 @@
 # Source code fraction, for license information refer to the
 # main program source code.
 
-_error(){
+log_error(){
   echo "ERROR: $1"
 }
 
-_info(){
+log_info(){
   echo "INFO: $1"
 }
 
-_debug(){
+log_debug(){
   if [ "$DEBUG" = "true" ]; then
     echo "DEBUG: $1"
   fi
 }
 
-_log(){
-  _info "$1"
+log(){
+  log_info "$1"
 }
 # keep line

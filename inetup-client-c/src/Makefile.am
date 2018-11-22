@@ -15,7 +15,7 @@
 
 bin_PROGRAMS = inetupc
 
-inetupc_SOURCES = ../simet-inetuptime_config.h \
+inetupc_SOURCES = ../simet-inetuptime_config.h simet_err.h \
 		  logger.h netinet-tcp-compat.h \
 		  simet-inetuptime.h simet-inetuptime.c
 
