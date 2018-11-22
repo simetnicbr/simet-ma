@@ -120,7 +120,7 @@ typedef struct twamp_stop {
 /* TEST MESSAGES */
 /*****************/
 
-#define TST_PKT_SIZE 128
+#define TST_PKT_SIZE 128U
 
 typedef struct test_packet {
     uint32_t SeqNumber;

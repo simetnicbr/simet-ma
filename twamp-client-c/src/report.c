@@ -15,8 +15,9 @@
  * for details.
  */
 
+#include "twamp.h"
 #include "report.h"
-
+#include "message.h"
 #include "logger.h"
 
 #include <json-c/json.h>
@@ -37,9 +38,16 @@ static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
         json_object_array_add(j, json_object_new_string(buf));
 }
 
-int twamp_report(TWAMPReport * report)
+int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 {
+    char metric_name[256];
+
     assert(report);
+    assert(param);
+
+    snprintf(metric_name, sizeof(metric_name),
+	    "Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%u-PackageCount%u-PackageSizeBytes%u__Multiple_Raw",
+	    param->packets_interval_ns / 1000, param->packets_count, TST_PKT_SIZE);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 
@@ -54,7 +62,7 @@ int twamp_report(TWAMPReport * report)
     jo1 = json_object_new_object();
     jo2 = json_object_new_array();
     assert(jo && jo1 && jo2);
-    json_object_object_add(jo1, "uri", json_object_new_string("TWAMP_raw_simet_v1"));
+    json_object_object_add(jo1, "uri", json_object_new_string(metric_name));
     json_object_array_add(jo2, json_object_new_string("client"));
     json_object_object_add(jo1, "role", jo2);
     json_object_array_add(jo, jo1);

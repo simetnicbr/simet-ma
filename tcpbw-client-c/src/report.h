@@ -18,6 +18,7 @@
 #ifndef REPORT_H_
 #define REPORT_H_
 
+#include "tcpbwc.h"
 #include "json-c/json.h"
 
 typedef struct tcpbw_download_result
@@ -27,6 +28,6 @@ typedef struct tcpbw_download_result
     unsigned int nstreams;
 } DownResult;
 
-json_object *createReport(json_object *, DownResult *, uint32_t);
+json_object *createReport(json_object *, DownResult *, uint32_t, MeasureContext *);
 
 #endif /* REPORT_H_ */

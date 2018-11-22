@@ -327,7 +327,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     print_msg(MSG_IMPORTANT, "measurement finished");
 
-    twamp_report(report);
+    twamp_report(report, &param);
 
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u",
             t_param.report->result->packets_sent, t_param.report->result->received_packets);

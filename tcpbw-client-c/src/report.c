@@ -42,9 +42,20 @@ static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
  * @jresults MUST use the same column ordering as we do:
  * sequence; bits; streams; interval (ms); direction
  */
-json_object *createReport(json_object *jresults, DownResult *downloadRes, uint32_t counter)
+json_object *createReport(json_object *jresults,
+			  DownResult *downloadRes, uint32_t counter,
+			  MeasureContext *ctx)
 {
+    char metric_name[256];
+
     assert(downloadRes);
+    assert(ctx);
+
+    snprintf(metric_name, sizeof(metric_name),
+	    "Priv_OWBTC_Active_TCP-SustainedBurst-MultipleStreams-"
+	    "TCPOptsUndefined-SamplePeriodMs%u-StreamDurationMs%u000__Multiple_Raw",
+	    ctx->sample_period_ms, ctx->test_duration);
+
     /* FIXME: handle NULL returns as error... */
 
     json_object *jo, *jo1, *jo2; /* used when transfering ownership via _add */
@@ -64,7 +75,7 @@ json_object *createReport(json_object *jresults, DownResult *downloadRes, uint32
     jo1 = json_object_new_object();
     jo2 = json_object_new_array();
     assert(jo && jo1 && jo2);
-    json_object_object_add(jo1, "uri", json_object_new_string("TWThroughput_Active_TCP-Periodic_Multiple_Raw_V1"));
+    json_object_object_add(jo1, "uri", json_object_new_string(metric_name));
     json_object_array_add(jo2, json_object_new_string("client"));
     json_object_object_add(jo1, "role", jo2);
     json_object_array_add(jo, jo1);
