@@ -244,7 +244,6 @@ static int check_curl_error(CURLcode e)
 	case CURLE_PEER_FAILED_VERIFICATION:
 	case CURLE_SSL_CERTPROBLEM:
 	case CURLE_SSL_CIPHER:
-	case CURLE_SSL_CACERT:
 #ifdef CURLE_LOGIN_DENIED
 	case CURLE_LOGIN_DENIED:
 #endif
@@ -256,9 +255,6 @@ static int check_curl_error(CURLcode e)
 #endif
 #ifdef CURLE_SSL_ISSUER_ERROR
 	case CURLE_SSL_ISSUER_ERROR:
-#endif
-#ifdef CURLE_SSL_CRL_BADFILE
-	case CURLE_SSL_CRL_BADFILE:
 #endif
 		return SEXIT_AUTHERR;
 
