@@ -41,7 +41,7 @@ int twamp_report(TWAMPReport * report)
 {
     assert(report);
 
-    json_object *jo, *jo1;  /* Used when we will transfer ownership via *_add */
+    json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 
     /* create objects and build the topology for the result table */
     /* FIXME: abort if the _add() calls return non-zero, etc */
@@ -52,11 +52,14 @@ int twamp_report(TWAMPReport * report)
     /* table1 function object list */
     jo = json_object_new_array();
     jo1 = json_object_new_object();
+    jo2 = json_object_new_array();
+    assert(jo && jo1 && jo2);
     json_object_object_add(jo1, "uri", json_object_new_string("TWAMP_raw_simet_v1"));
-    json_object_object_add(jo1, "role", json_object_new_string("client"));
+    json_object_array_add(jo2, json_object_new_string("client"));
+    json_object_object_add(jo1, "role", jo2);
     json_object_array_add(jo, jo1);
     json_object_object_add(jres_tbl_content, "function", jo);
-    jo = jo1 = NULL;
+    jo = jo1 = jo2 = NULL;
 
     /* table1 columns list */
     jo = json_object_new_array();
