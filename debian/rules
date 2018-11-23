@@ -54,6 +54,10 @@ override_dh_auto_clean:
 override_dh_auto_test:
 	test "$(PKGDEBVER)" = "$(PKGVER)"
 
+# ensure we always get the same behavior from dh_auto_install
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp
+
 override_dh_install:
 	CODENAME=$$( lsb_release -sc ) && DISTRO=$$( lsb_release -si | tr A-Z a-z ) && \
 	  sed -e "s/@codename@/$${CODENAME}/g" -e "s/@distro@/$${DISTRO}/g" \

@@ -1,4 +1,5 @@
 simet-ma/
+tmp/
 files
 *.debhelper
 *.debhelper.log
