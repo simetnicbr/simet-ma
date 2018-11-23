@@ -719,7 +719,7 @@ int tcp_client_run(MeasureContext ctx)
     }
 
     /* FIXME: does not belong here, but on caller */
-    json_object *report_obj = createReport(j_obj_upload, rcv, rcvcounter);
+    json_object *report_obj = createReport(j_obj_upload, rcv, rcvcounter, &ctx);
     if (report_obj) {
 	fprintf(stdout, "%s", json_object_to_json_string(report_obj));
     }

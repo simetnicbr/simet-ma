@@ -47,5 +47,6 @@ typedef struct twamp_test_parameters {
 } TestParameters;
 
 int twamp_run_client(TWAMPParameters param);
+int twamp_report(TWAMPReport*, TWAMPParameters*);
 
 #endif /* TWAMP_H_ */

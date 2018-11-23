@@ -57,6 +57,4 @@ typedef struct report_packet {
     unsigned int rtt_us;
 } ReportPacket;
 
-int twamp_report(TWAMPReport*);
-
 #endif /* REPORT_H_ */
