@@ -46,7 +46,8 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     assert(param);
 
     snprintf(metric_name, sizeof(metric_name),
-	    "Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%u-PackageCount%u-PackageSizeBytes%u__Multiple_Raw",
+	    "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%u-"
+	    "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
 	    param->packets_interval_ns / 1000, param->packets_count, TST_PKT_SIZE);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
