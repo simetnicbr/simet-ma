@@ -52,7 +52,7 @@ json_object *createReport(json_object *jresults,
     assert(ctx);
 
     snprintf(metric_name, sizeof(metric_name),
-	    "Priv_OWBTC_Active_TCP-SustainedBurst-MultipleStreams-"
+	    "urn:ietf:metrics:perf:Priv_OWBTC_Active_TCP-SustainedBurst-MultipleStreams-"
 	    "TCPOptsUndefined-SamplePeriodMs%u-StreamDurationMs%u000__Multiple_Raw",
 	    ctx->sample_period_ms, ctx->test_duration);
 
