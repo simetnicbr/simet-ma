@@ -505,7 +505,6 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
     unsigned int rCounter = 0;
     long elapsed;
     long interval = ctx.sample_period_ms * 1000UL;
-    int i;
     unsigned int maxResults = ((unsigned long)ctx.test_duration * 1000U) / ctx.sample_period_ms + 1;
 
     assert(res && numres);
@@ -531,7 +530,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
 	memcpy(&rset, &masterset, sizeof(fd_set));
 	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
-	    for (i = 0; i < ctx.numstreams; i++) {
+	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &rset)) {
 		    bytes_recv = recv(sockList[i], sockBuffer, sockBufferSz-1, MSG_DONTWAIT);
 		    if (bytes_recv > 0) {
@@ -570,7 +569,6 @@ int tcp_client_run(MeasureContext ctx)
 
     unsigned int rcvcounter;
     DownResult *rcv;
-    int i;
 
     char strbuf[MAX_URL_SIZE];
     struct MemoryStruct chunk = { 0 };
@@ -612,7 +610,7 @@ int tcp_client_run(MeasureContext ctx)
 	ctx.numstreams = MAX_CONCURRENT_SESSIONS;
     print_msg(MSG_NORMAL, "opening up to %u measurement streams", ctx.numstreams);
     FD_ZERO(&sockListFDs);
-    for (i = 0; i < ctx.numstreams; i++) {
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
 					     ctx.sessionid ? ctx.sessionid : ctx.token);
 	if (m_socket != -1) {
@@ -654,7 +652,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     /* shutdown upload direction */
-    for (i = 0; i < ctx.numstreams; i++) {
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	if (sockList[i] != -1 && shutdown(sockList[i], SHUT_WR) == -1) {
 	    if (errno == ENOTCONN) {
 		close(sockList[i]);
@@ -686,7 +684,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     /* shutdown and close sockets */
-    for (i = 0; i < ctx.numstreams; i++) {
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	if (sockList[i] != -1) {
 	    shutdown(sockList[i], SHUT_RDWR);
 	    close(sockList[i]);
