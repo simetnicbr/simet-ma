@@ -25,6 +25,10 @@
 #include <stdio.h>
 #include <assert.h>
 
+struct tcpbw_report_private {
+	int placeholder;
+};
+
 static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
 {
     char buf[32];
@@ -42,7 +46,7 @@ static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
  * @jresults MUST use the same column ordering as we do:
  * sequence; bits; streams; interval (ms); direction
  */
-json_object *createReport(json_object *jresults,
+static json_object *createReport(json_object *jresults,
 			  DownResult *downloadRes, uint32_t counter,
 			  MeasureContext *ctx)
 {
@@ -121,3 +125,43 @@ json_object *createReport(json_object *jresults,
 
     return jtable;
 }
+
+int tcpbw_report(struct tcpbw_report *report,
+                 const char *upload_results_json,
+                 DownResult *downloadRes, uint32_t counter,
+                 MeasureContext *ctx)
+{
+    assert(report && upload_results_json && downloadRes && ctx);
+    json_object *j_obj_upload = json_tokener_parse(upload_results_json);
+    json_object *report_obj = createReport(j_obj_upload, downloadRes, counter, ctx);
+    if (report_obj) {
+        fprintf(stdout, "%s\n", json_object_to_json_string_ext(report_obj,
+                    JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
+    }
+
+    return 0;
+}
+
+/**
+ * tcpbw_report_init() - allocates and initializes a tcpbw_report struct
+ *
+ * Returns NULL on ENOMEM.
+ */
+struct tcpbw_report * tcpbw_report_init(void)
+{
+    /* FIXME: dummy placeholder */
+    return malloc(sizeof(struct tcpbw_report_private));
+}
+
+/**
+ * tcpbw_report_done - deallocates a tcpbw_report struct
+ *
+ * frees all substructures and private data
+ *
+ * Handles NULL structs just fine.
+ */
+void tcpbw_report_done(struct tcpbw_report *r)
+{
+    free(r);
+}
+

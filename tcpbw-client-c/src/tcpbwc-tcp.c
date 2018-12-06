@@ -499,7 +499,6 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 {
     size_t bytes_recv = 0;
     struct timeval tv_cur, tv_start, tv_stop_test, tv_select;
-    char *result = NULL;
     fd_set rset, masterset;
     uint64_t total = 0;
     unsigned int rCounter = 0;
@@ -570,6 +569,8 @@ int tcp_client_run(MeasureContext ctx)
     unsigned int rcvcounter;
     DownResult *rcv;
 
+    struct tcpbw_report *report;
+
     char strbuf[MAX_URL_SIZE];
     struct MemoryStruct chunk = { 0 };
 
@@ -581,6 +582,12 @@ int tcp_client_run(MeasureContext ctx)
     curl = curl_easy_init();
     if (!curl || setup_curl_err_handling(curl)) {
 	print_err("failed to initialize libcurl");
+	return SEXIT_OUTOFRESOURCE;
+    }
+
+    report = tcpbw_report_init();
+    if (!report) {
+	print_err("failed to initialize report structures");
 	return SEXIT_OUTOFRESOURCE;
     }
 
@@ -698,7 +705,7 @@ int tcp_client_run(MeasureContext ctx)
     FD_ZERO(&sockListFDs);
     sockListLastFD = -1;
 
-    json_object *j_obj_upload = NULL;
+    const char *upload_results_json = NULL;
 
     print_msg(MSG_NORMAL, "requesting upload measurement results from measurement peer");
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/get-upload-samples", slist, ctx.timeout_test, ctx.family)))
@@ -713,17 +720,12 @@ int tcp_client_run(MeasureContext ctx)
 	print_warn("failed to get upload measurements from server");
 	/* FIXME: need an empty json of some sort on j_obj_upload? */
     } else {
-	j_obj_upload = json_tokener_parse(chunk.memory);
+	upload_results_json = chunk.memory;
     }
 
     /* FIXME: does not belong here, but on caller */
-    json_object *report_obj = createReport(j_obj_upload, rcv, rcvcounter, &ctx);
-    if (report_obj) {
-	fprintf(stdout, "%s\n", json_object_to_json_string_ext(report_obj,
-					JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
-    }
-
-    rc = SEXIT_SUCCESS;
+    rc = (tcpbw_report(report, upload_results_json, rcv, rcvcounter, &ctx)) ?
+                SEXIT_FAILURE : SEXIT_SUCCESS;
 
     print_msg(MSG_IMPORTANT, "tcp bandwidth measurements finished");
 
@@ -738,6 +740,7 @@ err_exit:
 
     curl_global_cleanup();
     free_curl_err_handling();
+    tcpbw_report_done(report);
 
     return rc;
 }
