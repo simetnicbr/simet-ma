@@ -107,7 +107,10 @@ _main_orchestrate(){
     log_info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
   fi
 
-  # 6. task report
+  # 6. task geolocation
+  _task_geolocation
+
+  # 7. task report
   log_info "Start task REPORT"
   export _report_dir="$BASEDIR/report"
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -133,6 +136,28 @@ _main_orchestrate(){
   }
   log_info "Published $_report_dir/result.json report to $_endpoint"
   log_info "End task REPORT"
+}
+
+_task_geolocation(){
+  log_info "Start task geolocation"
+  export _task_name="$LMAP_TASK_NAME_PREFIXsimet_geolocation"
+  export _task_version="v1"
+  export _task_dir="$BASEDIR/report/geolocation"
+  export _task_action="geolocation_https_bssids"
+  export _task_parameters='{ }'
+  export _task_options='[]'
+  export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  mkdir -p "$_task_dir/tables"
+  geolocate > "$_task_dir/tables/geolocation.json"
+  export _task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  if [ "$_task_status" -ne 0 ]; then
+    log_info "Geolocation attempt failed."
+    rm -rf "$_task_dir"
+  else
+    _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  fi
+  log_info "End task geolocation"
 }
 
 _task_twamp(){
