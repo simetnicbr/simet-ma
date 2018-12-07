@@ -55,3 +55,27 @@
   <libdir>/simet/simet_register_ma-hooks.sh
   <sysconf dir>/simet/simet_register_ma-hooks.sh
 
+
+## Geolocation
+
+  Right now, only the openwrt (SIMETBox) version has any geolocation
+  capabilities, and the related functionality is not hosted or
+  implemented in simet-ma.
+
+  The geolocation API is:
+  simet_geolocation.sh
+     returns in stdout the geolocation information
+     returns in stderr relevant error or progress messages
+     returns in exit status 0 (ok), non-zero (error)
+
+  stdout format:
+     <unix time of measurement, seconds>
+     <latitude> <longitude> <precision in meters>
+
+     Latitude and longitude are in degrees, floating point.
+     Negative is South/West, positive is North/East.
+
+  Caching, query limits, and sideband REST API access to persist agent
+  geolocation and other such sidechannels are not specified, but they do
+  exist.
+
