@@ -34,6 +34,7 @@ struct tcpbw_report {
 
 struct tcpbw_report* tcpbw_report_init(void);
 void tcpbw_report_done(struct tcpbw_report *);
+int report_socket_metrics(struct tcpbw_report *, int sockfd, int proto);
 int tcpbw_report(struct tcpbw_report *, const char *, DownResult *, uint32_t, MeasureContext *);
 
 #endif /* REPORT_H_ */

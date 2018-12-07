@@ -637,6 +637,12 @@ int tcp_client_run(MeasureContext ctx)
     print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
 	      "will use %u measurement streams", streamcount);
 
+    print_msg(MSG_DEBUG, "creating socket information report");
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
+	if (sockList[i] != -1 && report_socket_metrics(report, sockList[i], IPPROTO_TCP))
+	    print_warn("failed to report socket information for stream %u", i);
+    }
+
     /* Create a single buffer with a good size */
     sockBufferSz = new_tcp_buffer(sockList[0], &sockBuffer);
     if (!sockBufferSz) {
