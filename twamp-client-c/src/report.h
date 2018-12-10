@@ -42,6 +42,7 @@ typedef struct twamp_report {
     int family;
 
     TWAMPResult * result;
+    void * privdata;
 } TWAMPReport;
 
 typedef struct report_packet {

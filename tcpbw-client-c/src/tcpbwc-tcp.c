@@ -499,13 +499,11 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 {
     size_t bytes_recv = 0;
     struct timeval tv_cur, tv_start, tv_stop_test, tv_select;
-    char *result = NULL;
     fd_set rset, masterset;
     uint64_t total = 0;
     unsigned int rCounter = 0;
     long elapsed;
     long interval = ctx.sample_period_ms * 1000UL;
-    int i;
     unsigned int maxResults = ((unsigned long)ctx.test_duration * 1000U) / ctx.sample_period_ms + 1;
 
     assert(res && numres);
@@ -531,7 +529,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
 	memcpy(&rset, &masterset, sizeof(fd_set));
 	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
-	    for (i = 0; i < ctx.numstreams; i++) {
+	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &rset)) {
 		    bytes_recv = recv(sockList[i], sockBuffer, sockBufferSz-1, MSG_DONTWAIT);
 		    if (bytes_recv > 0) {
@@ -570,7 +568,8 @@ int tcp_client_run(MeasureContext ctx)
 
     unsigned int rcvcounter;
     DownResult *rcv;
-    int i;
+
+    struct tcpbw_report *report;
 
     char strbuf[MAX_URL_SIZE];
     struct MemoryStruct chunk = { 0 };
@@ -583,6 +582,12 @@ int tcp_client_run(MeasureContext ctx)
     curl = curl_easy_init();
     if (!curl || setup_curl_err_handling(curl)) {
 	print_err("failed to initialize libcurl");
+	return SEXIT_OUTOFRESOURCE;
+    }
+
+    report = tcpbw_report_init();
+    if (!report) {
+	print_err("failed to initialize report structures");
 	return SEXIT_OUTOFRESOURCE;
     }
 
@@ -612,7 +617,7 @@ int tcp_client_run(MeasureContext ctx)
 	ctx.numstreams = MAX_CONCURRENT_SESSIONS;
     print_msg(MSG_NORMAL, "opening up to %u measurement streams", ctx.numstreams);
     FD_ZERO(&sockListFDs);
-    for (i = 0; i < ctx.numstreams; i++) {
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
 					     ctx.sessionid ? ctx.sessionid : ctx.token);
 	if (m_socket != -1) {
@@ -631,6 +636,12 @@ int tcp_client_run(MeasureContext ctx)
     }
     print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
 	      "will use %u measurement streams", streamcount);
+
+    print_msg(MSG_DEBUG, "creating socket information report");
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
+	if (sockList[i] != -1 && report_socket_metrics(report, sockList[i], IPPROTO_TCP))
+	    print_warn("failed to report socket information for stream %u", i);
+    }
 
     /* Create a single buffer with a good size */
     sockBufferSz = new_tcp_buffer(sockList[0], &sockBuffer);
@@ -654,7 +665,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     /* shutdown upload direction */
-    for (i = 0; i < ctx.numstreams; i++) {
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	if (sockList[i] != -1 && shutdown(sockList[i], SHUT_WR) == -1) {
 	    if (errno == ENOTCONN) {
 		close(sockList[i]);
@@ -686,7 +697,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     /* shutdown and close sockets */
-    for (i = 0; i < ctx.numstreams; i++) {
+    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	if (sockList[i] != -1) {
 	    shutdown(sockList[i], SHUT_RDWR);
 	    close(sockList[i]);
@@ -700,7 +711,7 @@ int tcp_client_run(MeasureContext ctx)
     FD_ZERO(&sockListFDs);
     sockListLastFD = -1;
 
-    json_object *j_obj_upload = NULL;
+    const char *upload_results_json = NULL;
 
     print_msg(MSG_NORMAL, "requesting upload measurement results from measurement peer");
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/get-upload-samples", slist, ctx.timeout_test, ctx.family)))
@@ -715,17 +726,12 @@ int tcp_client_run(MeasureContext ctx)
 	print_warn("failed to get upload measurements from server");
 	/* FIXME: need an empty json of some sort on j_obj_upload? */
     } else {
-	j_obj_upload = json_tokener_parse(chunk.memory);
+	upload_results_json = chunk.memory;
     }
 
     /* FIXME: does not belong here, but on caller */
-    json_object *report_obj = createReport(j_obj_upload, rcv, rcvcounter, &ctx);
-    if (report_obj) {
-	fprintf(stdout, "%s\n", json_object_to_json_string_ext(report_obj,
-					JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
-    }
-
-    rc = SEXIT_SUCCESS;
+    rc = (tcpbw_report(report, upload_results_json, rcv, rcvcounter, &ctx)) ?
+                SEXIT_FAILURE : SEXIT_SUCCESS;
 
     print_msg(MSG_IMPORTANT, "tcp bandwidth measurements finished");
 
@@ -740,6 +746,7 @@ err_exit:
 
     curl_global_cleanup();
     free_curl_err_handling();
+    tcpbw_report_done(report);
 
     return rc;
 }

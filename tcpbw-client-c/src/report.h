@@ -19,7 +19,7 @@
 #define REPORT_H_
 
 #include "tcpbwc.h"
-#include "json-c/json.h"
+#include <inttypes.h>
 
 typedef struct tcpbw_download_result
 {
@@ -28,6 +28,13 @@ typedef struct tcpbw_download_result
     unsigned int nstreams;
 } DownResult;
 
-json_object *createReport(json_object *, DownResult *, uint32_t, MeasureContext *);
+struct tcpbw_report {
+    /* all fields private, size unknown */
+};
+
+struct tcpbw_report* tcpbw_report_init(void);
+void tcpbw_report_done(struct tcpbw_report *);
+int report_socket_metrics(struct tcpbw_report *, int sockfd, int proto);
+int tcpbw_report(struct tcpbw_report *, const char *, DownResult *, uint32_t, MeasureContext *);
 
 #endif /* REPORT_H_ */

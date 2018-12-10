@@ -55,13 +55,10 @@ int twamp_run_client(TWAMPParameters param) {
     char * testPort = NULL;
 
     // Create TWAMPReport
-    TWAMPReport * report = malloc(sizeof(TWAMPReport));
+    TWAMPReport * report = twamp_report_init();
     if (!report)
 	return SEXIT_OUTOFRESOURCE;
     report->device_id = param.device_id ? param.device_id : "(unknown)";
-    report->result = malloc(sizeof(TWAMPResult));
-    if (!report->result)
-	return SEXIT_OUTOFRESOURCE;
     report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_count);
     report->family = param.family;
     report->host = param.host;
@@ -294,6 +291,10 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     print_msg(MSG_DEBUG, "fd_test after: %d", fd_test);
+    if (report_socket_metrics(report, fd_test, IPPROTO_UDP))
+	print_warn("failed to add TEST socket information to report, proceeding anyway...");
+    else
+        print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
 
     rc = SEXIT_CTRLPROT_ERR;
 
@@ -367,13 +368,8 @@ MEM_FREE:
 
     free(testPort);
 
-    // free report data
-    if (report) {
-        if (report->result)
-                free(report->result->raw_data);
-        free(report->result);
-        free(report);
-    }
+    twamp_report_done(report);
+    report = NULL;
 
     return rc;
 }

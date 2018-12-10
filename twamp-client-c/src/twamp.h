@@ -48,5 +48,8 @@ typedef struct twamp_test_parameters {
 
 int twamp_run_client(TWAMPParameters param);
 int twamp_report(TWAMPReport*, TWAMPParameters*);
+TWAMPReport * twamp_report_init(void);
+void twamp_report_done(TWAMPReport *);
+int report_socket_metrics(TWAMPReport *, int sockfd, int sock_protocol);
 
 #endif /* TWAMP_H_ */
