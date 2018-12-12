@@ -23,7 +23,6 @@ usetheshell=/bin/bash
 endif
 
 dist_bin_SCRIPTS = simet-ma_run.sh
-dist_simetlib_DATA = src/template/report.template src/template/task.template
 
 EXTRA_DIST = autogen.sh version version.sh
 
@@ -32,13 +31,12 @@ dist-local: version
 version: $(top_srcdir)/version.sh
 	$(top_srcdir)/version.sh > version
 
-
 simetma_sources = src/log.sh \
 		src/task_authentication.sh  \
 		src/task_authorization.sh  \
 		src/task_discover.sh \
 		src/task_geolocation.sh \
-		src/vendor/sempl.sh \
+		src/templates.sh \
 		src/main.sh
 
 simet-ma_run.sh: $(simetma_sources)
@@ -72,7 +70,6 @@ dev: configless
 	cp ./test/agent-id.prod		./dist/agent-id
 	cp ./test/agent.jwt.prod		./dist/agent.jwt
 	cp ./test/services.mock.json		./dist/services.mock.json
-	cp ./src/template/*		./dist/
 
 .PHONY: configless
 configless: clean simet-ma_run.sh

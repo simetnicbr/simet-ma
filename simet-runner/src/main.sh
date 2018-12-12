@@ -28,7 +28,6 @@
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
 #
 # Dependencies:
-# - sempl (src/vendor/sempl; https://github.com/nextrevision/sempl)
 # - curl
 # - sub-scripts
 ################################################################################
@@ -114,7 +113,7 @@ _main_orchestrate(){
   log_info "Start task REPORT"
   export _report_dir="$BASEDIR/report"
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  _sempl "$TEMPLATE_DIR/report.template" "$_report_dir/result.json"
+  report_template > "$_report_dir/result.json"
   local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
   local _report=$( cat "$_report_dir/result.json" )
   _resp=$(curl \
@@ -138,6 +137,11 @@ _main_orchestrate(){
   log_info "End task REPORT"
 }
 
+haspipefail(){
+  set -o | grep -cq pipefail && return 0
+  return 1
+}
+
 _task_geolocation(){
   log_info "Start task geolocation"
   export _task_name="$LMAP_TASK_NAME_PREFIXsimet_geolocation"
@@ -155,7 +159,7 @@ _task_geolocation(){
     log_info "Geolocation attempt failed."
     rm -rf "$_task_dir"
   else
-    _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+    task_template > "$_task_dir/result.json"
   fi
   log_info "End task geolocation"
 }
@@ -184,14 +188,24 @@ _task_twamp(){
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
   log_debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
-  eval "$TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
-  export _task_status="$?"
+  if haspipefail ; then
+    set -o pipefail
+    eval "$TWAMPC -$_af -p $_port $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/twamp.json\"" | tee "$_task_dir/tables/stderr.txt"
+    export _task_status="$?"
+    set +o pipefail
+  else
+    eval "$TWAMPC -$_af -p $_port $_host >\"$_task_dir/tables/twamp.json\"" 2>"$_task_dir/tables/stderr.txt"
+    export _task_status="$?"
+  fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
     log_error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
-    rm -f $_task_dir/tables/*
+    error_template > "$_task_dir/tables/stderr.json"
+    rm -f "$_task_dir/tables/twamp.json"
+  else
+    rm -f "$_task_dir/tables/stderr.txt"
   fi
-  _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  task_template > "$_task_dir/result.json"
   log_info "End Task TWAMP IPv$_af"
 }
 
@@ -220,14 +234,24 @@ _task_tcpbw(){
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
   log_debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
-  eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path}  > $_task_dir/tables/tcpbw.json"
-  export _task_status="$?"
+  if haspipefail ; then
+    set -o pipefail
+    eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
+    export _task_status="$?"
+    set +o pipefail
+  else
+    eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
+    export _task_status="$?"
+  fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
     log_error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
-    rm -f $_task_dir/tables/*
+    error_template > "$_task_dir/tables/stderr.json"
+    rm -f "$_task_dir/tables/tcpbw.json"
+  else
+    rm -f "$_task_dir/tables/stderr.txt"
   fi
-  _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  task_template > "$_task_dir/result.json"
   log_info "End Task TCPBW IPv$_af"
 }
 
