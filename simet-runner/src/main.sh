@@ -28,7 +28,6 @@
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
 #
 # Dependencies:
-# - sempl (src/vendor/sempl; https://github.com/nextrevision/sempl)
 # - curl
 # - sub-scripts
 ################################################################################
@@ -114,7 +113,7 @@ _main_orchestrate(){
   log_info "Start task REPORT"
   export _report_dir="$BASEDIR/report"
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  _sempl "$TEMPLATE_DIR/report.template" "$_report_dir/result.json"
+  report_template > "$_report_dir/result.json"
   local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
   local _report=$( cat "$_report_dir/result.json" )
   _resp=$(curl \
@@ -155,7 +154,7 @@ _task_geolocation(){
     log_info "Geolocation attempt failed."
     rm -rf "$_task_dir"
   else
-    _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+    task_template > "$_task_dir/result.json"
   fi
   log_info "End task geolocation"
 }
@@ -191,7 +190,7 @@ _task_twamp(){
     log_error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
   fi
-  _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  task_template > "$_task_dir/result.json"
   log_info "End Task TWAMP IPv$_af"
 }
 
@@ -227,7 +226,7 @@ _task_tcpbw(){
     log_error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
     rm -f $_task_dir/tables/*
   fi
-  _sempl "$TEMPLATE_DIR/task.template" "$_task_dir/result.json"
+  task_template > "$_task_dir/result.json"
   log_info "End Task TCPBW IPv$_af"
 }
 
