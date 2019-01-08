@@ -682,6 +682,24 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
             print_warn("failed to enable TCP timeouts, measurement error will increase");
         }
 
+        /* Linux TCP Thin-stream optimizations.
+         *
+         * Refer to: https://nnc3.com/mags/LJ_1994-2014/LJ/219/11180.html
+         * Refer to: https://lwn.net/Articles/308919/
+         * Refer to: http://home.ifi.uio.no/paalh/students/AndreasPetlund-phd.pdf
+         * Refer to: https://github.com/torvalds/linux/blob/master/Documentation/networking/tcp-thin.txt
+         */
+#ifdef TCP_THIN_LINEAR_TIMEOUTS
+        if (setsockopt(s->socket, IPPROTO_TCP, TCP_THIN_LINEAR_TIMEOUTS, &int_one, sizeof(int_one))) {
+            print_warn("failed to enable TCP thin-stream linear timeouts, false positives may increase");
+        }
+#endif /* TCP_THIN_LINEAR_TIMEOUTS */
+#ifdef TCP_THIN_DUPACK
+        if (setsockopt(s->socket, IPPROTO_TCP, TCP_THIN_DUPACK, &int_one, sizeof(int_one))) {
+            print_warn("failed to enable TCP thin-stream dupack, false positives may increase");
+        }
+#endif /* TCP_THIN_DUPACK */
+
 #if 0
         /* RFC-1122 TCP keep-alives as a fallback for timeouts.
          *
