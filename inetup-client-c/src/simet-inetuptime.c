@@ -673,9 +673,19 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
         /* RFC-0793/RFC-5482 user timeout.
          *
-         * WARNING: Linux seems to be using twice the value set, but trying to
-         * compensate for this (by giving it half the value we want) is dangerous
-         * unless we do track it down to be sure it has been enshrined as ABI
+         * WARNING: Linux had for a *very* long time an innacurate
+         * implementation of TCP_USER_TIMEOUT, as per comments in merge
+         * commit d1afdc51399c53791ad9affbef67ba3aa206c379 (Merge branch
+         * 'tcp-improve-setsockopt-TCP_USER_TIMEOUT-accuracy').
+         *
+         * "The issue is that in order for the timeout to occur, the
+         * retransmit timer needs to fire again.  If the user timeout check
+         * happens after the 9th retransmit for example, it needs to wait
+         * for the 10th retransmit timer to fire in order to evaluate
+         * whether a timeout has occurred or not.  If the interval is large
+         * enough then the timeout will be very inaccurate."
+         *
+         * Fixed in: Linux v4.19
          */
         const unsigned int ui = (unsigned int)simet_uptime2_tcp_timeout * 1000U;
         if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
