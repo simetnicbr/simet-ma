@@ -379,6 +379,21 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
     return tcpaq_send_nowait(s);
 }
 
+static int uptimeserver_drain(struct simet_inetup_server * const s)
+{
+    if (s && s->socket != -1) {
+        int res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
+        if (res == -1) {
+            int err = errno;
+            if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
+                return 0;
+            protocol_trace(s, "drain: recv() error: %s", strerror(err));
+            return -err;
+        }
+    }
+    return 0;
+}
+
 static int uptimeserver_flush(struct simet_inetup_server * const s)
 {
     if (s && s->out_queue.buffer && s->socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
@@ -464,7 +479,8 @@ static int simet_uptime2_msg_keepalive(struct simet_inetup_server * const s)
 
 static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
 {
-    json_object *jo;
+    json_object *jo = NULL;
+    json_object *jcap = NULL;
     int rc = -ENOMEM;
 
     assert(s);
@@ -472,8 +488,26 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     protocol_trace(s, "sending ma_connect event");
 
     jo = json_object_new_object();
-    if (!jo)
+    jcap = json_object_new_array();
+    if (!jo || !jcap) {
+        free(jo);
+        free(jcap);
         return -ENOMEM;
+    }
+
+    /*
+     * Protocol v1: no capabilities field
+     *    - client->server unidirectional channel
+     *    - server must not send any data to client
+     *
+     * Protocol v2: bidirectional channel
+     *    - capabilities support on CONNECT message
+     *    - client drains return channel (server->client)
+     *    - client ignores unknown messages
+     */
+    /* json_object_array_add(jcap, json_object_new_string("foo")); */
+    json_object_object_add(jo, "capabilities", jcap);
+    jcap = NULL;
 
     if (agent_id)
         json_object_object_add(jo, "agent-id", json_object_new_string(agent_id));
@@ -1092,9 +1126,8 @@ int main(int argc, char **argv) {
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
-                /* FIXME: add POLLIN if a backchannel is added, etc */
                 servers_pollfds[j].fd = -1;
-                servers_pollfds[j].events = POLLRDHUP;
+                servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
                 wait = uptimeserver_connect(s, server_name, server_port);
@@ -1112,15 +1145,18 @@ int main(int argc, char **argv) {
                     simet_uptime2_backoff_reset(s);
                     s->backoff_reset_clock = 0;
                 }
+                uptimeserver_drain(s);
                 wait = uptimeserver_keepalive(s);
                 /* state change messages go here */
                 break;
 
             case SIMET_INETUP_P_C_DISCONNECT:
                 wait = uptimeserver_disconnect(s);
+                uptimeserver_drain(s);
                 break;
             case SIMET_INETUP_P_C_DISCONNECT_WAIT:
                 wait = uptimeserver_disconnectwait(s);
+                uptimeserver_drain(s);
                 break;
 
             case SIMET_INETUP_P_C_SHUTDOWN:
@@ -1158,7 +1194,7 @@ int main(int argc, char **argv) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
                         protocol_info(servers[j], "connection to server lost");
                         simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
-                    } else if (servers_pollfds[j].revents) {
+                    } else if (servers_pollfds[j].revents & ~POLLIN) {
                         protocol_trace(servers[j],
                             "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
                             j, servers_pollfds[j].fd,
