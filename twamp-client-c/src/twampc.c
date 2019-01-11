@@ -134,7 +134,7 @@ int main(int argc, char **argv)
         case 'v':
             if (log_level < 1)
                 log_level = 2;
-            else if (log_level < 3)
+            else if (log_level < MSG_TRACE)
                 log_level++;
             break;
         case 'q':
