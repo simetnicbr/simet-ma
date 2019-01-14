@@ -203,9 +203,9 @@ static void tcpaq_close(struct simet_inetup_server * const s)
         close(s->socket);
         s->socket = -1;
     }
-    s->queue.rd_pos = 0;
-    s->queue.wr_pos = 0;
-    s->queue.wr_pos_reserved = 0;
+    s->out_queue.rd_pos = 0;
+    s->out_queue.wr_pos = 0;
+    s->out_queue.wr_pos_reserved = 0;
 }
 
 static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
@@ -213,21 +213,21 @@ static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
     assert(s);
 
     /* paranoia */
-    if (s->queue.wr_pos >= s->queue.wr_pos_reserved)
-        s->queue.wr_pos_reserved = s->queue.wr_pos;
+    if (s->out_queue.wr_pos >= s->out_queue.wr_pos_reserved)
+        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
 
-    if (s->queue.wr_pos_reserved + size >= s->queue.buffer_size)
+    if (s->out_queue.wr_pos_reserved + size >= s->out_queue.buffer_size)
         return -ENOSPC;
 
-    s->queue.wr_pos_reserved += size;
+    s->out_queue.wr_pos_reserved += size;
     return 0;
 }
 
 static void tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
 {
     assert(s);
-    if (s->queue.wr_pos_reserved > s->queue.wr_pos + size)
-        s->queue.wr_pos_reserved -= size;
+    if (s->out_queue.wr_pos_reserved > s->out_queue.wr_pos + size)
+        s->out_queue.wr_pos_reserved -= size;
 }
 
 /**
@@ -239,43 +239,43 @@ static void tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
  */
 static int tcpaq_queue(struct simet_inetup_server * const s, void *data, size_t size, int reserved)
 {
-    assert(s && s->queue.buffer);
+    assert(s && s->out_queue.buffer);
 
     if (!size)
         return 0;
     if (!reserved && tcpaq_reserve(s, size))
         return -ENOSPC;
-    if (s->queue.wr_pos + size >= s->queue.buffer_size)
+    if (s->out_queue.wr_pos + size >= s->out_queue.buffer_size)
         return -ENOSPC; /* defang the bug */
 
-    memcpy(&s->queue.buffer[s->queue.wr_pos], data, size);
-    s->queue.wr_pos += size;
+    memcpy(&s->out_queue.buffer[s->out_queue.wr_pos], data, size);
+    s->out_queue.wr_pos += size;
 
-    if (s->queue.wr_pos > s->queue.wr_pos_reserved) {
+    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved) {
         print_warn("internal error: stream %u went past reservation, coping with it", s->connection_id);
-        s->queue.wr_pos_reserved = s->queue.wr_pos;
+        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
     }
 
     return 0;
 }
 
-static int tcpaq_is_queue_empty(struct simet_inetup_server * const s)
+static int tcpaq_is_out_queue_empty(struct simet_inetup_server * const s)
 {
-    /* do it in a fail-save manner against queue accounting bugs */
-    return (s->queue.rd_pos >= s->queue.wr_pos || s->queue.rd_pos >= s->queue.buffer_size);
+    /* do it in a fail-safe manner against queue accounting bugs */
+    return (s->out_queue.rd_pos >= s->out_queue.wr_pos || s->out_queue.rd_pos >= s->out_queue.buffer_size);
 }
 
 static void xx_tcpaq_compact(struct simet_inetup_server * const s)
 {
     /* FIXME: also compact partially transmitted using a watermark */
-    if (s->queue.rd_pos >= s->queue.wr_pos) {
-        if (s->queue.wr_pos_reserved > s->queue.rd_pos) {
-            s->queue.wr_pos_reserved -= s->queue.rd_pos;
+    if (s->out_queue.rd_pos >= s->out_queue.wr_pos) {
+        if (s->out_queue.wr_pos_reserved > s->out_queue.rd_pos) {
+            s->out_queue.wr_pos_reserved -= s->out_queue.rd_pos;
         } else {
-            s->queue.wr_pos_reserved = 0;
+            s->out_queue.wr_pos_reserved = 0;
         }
-        s->queue.wr_pos = 0;
-        s->queue.rd_pos = 0;
+        s->out_queue.wr_pos = 0;
+        s->out_queue.rd_pos = 0;
     }
 }
 
@@ -284,19 +284,19 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     size_t  send_sz;
     ssize_t sent;
 
-    assert(s && s->queue.buffer);
+    assert(s && s->out_queue.buffer);
 
     if (s->socket == -1)
         return -ENOTCONN;
-    if (s->queue.wr_pos == 0)
+    if (s->out_queue.wr_pos == 0)
         return 0;
-    if (tcpaq_is_queue_empty(s)) {
+    if (tcpaq_is_out_queue_empty(s)) {
         xx_tcpaq_compact(s);
         return 0;
     }
 
-    send_sz = s->queue.wr_pos - s->queue.rd_pos;
-    sent = send(s->socket, &s->queue.buffer[s->queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
+    send_sz = s->out_queue.wr_pos - s->out_queue.rd_pos;
+    sent = send(s->socket, &s->out_queue.buffer[s->out_queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (sent < 0) {
         int err = errno;
         if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
@@ -304,7 +304,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
     }
-    s->queue.rd_pos += sent;
+    s->out_queue.rd_pos += sent;
 
 #if 0
     /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
@@ -313,7 +313,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     const int zero = 0;
     const int one = 1;
     /* Ask kernel to flush buffer every time our local queue is empty */
-    if (s->queue.wr_pos <= s->queue.rd_pos) {
+    if (s->out_queue.wr_pos <= s->out_queue.rd_pos) {
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
     }
@@ -365,7 +365,7 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
 
 static int uptimeserver_flush(struct simet_inetup_server * const s)
 {
-    if (s && s->queue.buffer && s->socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
+    if (s && s->out_queue.buffer && s->socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
         return tcpaq_send_nowait(s);
 
     return 0;
@@ -828,7 +828,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
         s->disconnect_clock = reltime(); /* should not happen */
 
     int rc = timer_check(s->disconnect_clock, SIMET_DISCONNECT_WAIT_TIMEOUT);
-    if (!rc || tcpaq_is_queue_empty(s)) {
+    if (!rc || tcpaq_is_out_queue_empty(s)) {
         /* tcpaq queue is empty, or we are out of time */
         tcpaq_close(s);
         s->socket = -1;
@@ -860,12 +860,12 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
     s->state = SIMET_INETUP_P_C_INIT;
     s->ai_family = ai_family;
     s->connection_id = next_connection_id;
-    s->queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
-    if (!s->queue.buffer) {
+    s->out_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
+    if (!s->out_queue.buffer) {
         free(s);
         return -ENOMEM;
     }
-    s->queue.buffer_size = SIMET_INETUP_QUEUESIZE;
+    s->out_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
 
     next_connection_id++;
 
