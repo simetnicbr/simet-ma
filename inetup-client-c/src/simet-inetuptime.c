@@ -82,6 +82,9 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 /* time we wait to flush queue to kernel before we drop it during disconnect */
 #define SIMET_DISCONNECT_WAIT_TIMEOUT 5
 
+/* maximum payload size of a Uptime2 message */
+#define SIMET_UPTIME2_MAXDATASIZE (SIMET_INETUP_QUEUESIZE - sizeof(struct simet_inetup_msghdr))
+
 /*
  * helpers
  */
@@ -193,6 +196,11 @@ static void init_signals(void)
  * 3. attempt to send() to kernel buffer immediately and return even if nothing or
  *    partial send.  Whatever is left will get sent async by calls to
  *    tcpaq_send_nowait() -- which we call in the program main loop.
+ *
+ * 1. zero-copy discard of received data available
+ * 2. only read from socket buffer when ready to consume something
+ * 3. do nothing if the entire object is not available yet
+ *    (objects are limited to the queue buffer size)
  */
 
 static void tcpaq_close(struct simet_inetup_server * const s)
@@ -204,8 +212,9 @@ static void tcpaq_close(struct simet_inetup_server * const s)
         s->socket = -1;
     }
     s->out_queue.rd_pos = 0;
-    s->out_queue.wr_pos = 0;
-    s->out_queue.wr_pos_reserved = 0;
+    s->out_queue.wr_pos = s->out_queue.wr_pos_reserved = 0;
+    s->in_queue.rd_pos = 0;
+    s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
 }
 
 static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
@@ -352,16 +361,210 @@ static int tcpaq_send_timeout(struct simet_inetup_server * const s, time_t timeo
 }
 #endif
 
+/* you'd better remember about wr_pos_reserved..., so xx_ */
+static int xx_tcpaq_is_in_queue_empty(struct simet_inetup_server * const s)
+{
+    /* do it in a fail-safe manner against queue accounting bugs */
+    return (s->in_queue.rd_pos >= s->in_queue.wr_pos || s->in_queue.rd_pos >= s->in_queue.buffer_size);
+}
+
+/* discards all pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
+static int tcpaq_drain(struct simet_inetup_server * const s)
+{
+    size_t remaining = 0;
+    int res = 0;
+
+    assert(s);
+
+    if (s->in_queue.rd_pos < s->in_queue.wr_pos)
+        remaining = s->in_queue.wr_pos - s->in_queue.rd_pos;
+    s->in_queue.rd_pos = s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
+
+    if (s->socket != -1) {
+        do {
+            res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
+        } while (res == -1 && errno == EINTR);
+        if (res == -1) {
+            int err = errno;
+            if (err == EAGAIN || err == EWOULDBLOCK)
+                return 0;
+            protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
+            return -err;
+        }
+    }
+    return (remaining > 0 || res > 0);
+}
+
+/* discards object, <0 error; 0 : still need to receive more data; NZ: discarded */
+static int tcpaq_discard(struct simet_inetup_server * const s, size_t object_size)
+{
+    assert(s);
+
+    object_size += s->in_queue.wr_pos_reserved;
+    s->in_queue.wr_pos_reserved = 0;
+
+    /* discard from unread buffer */
+    size_t unread_bufsz = 0;
+    if (s->in_queue.wr_pos > s->in_queue.rd_pos)
+        unread_bufsz = s->in_queue.wr_pos - s->in_queue.rd_pos;
+    if (unread_bufsz >= object_size) {
+        s->in_queue.rd_pos += object_size;
+        if (xx_tcpaq_is_in_queue_empty(s))
+            s->in_queue.rd_pos = s->in_queue.wr_pos = 0; /* compress */
+        return 1;
+    }
+
+    /* discard buffer */
+    s->in_queue.rd_pos = s->in_queue.wr_pos = 0;
+    s->in_queue.wr_pos_reserved = object_size - unread_bufsz;
+
+    /* try to discard wr_pos_reserved bytes from socket buffer */
+    if (s->socket != -1) {
+        int res;
+
+        do {
+            res = recv(s->socket, NULL, s->in_queue.wr_pos_reserved,
+                       MSG_DONTWAIT | MSG_TRUNC);
+        } while (res == -1 && errno == EINTR);
+        if (res == -1) {
+            int err = errno;
+            if (err == EAGAIN || err == EWOULDBLOCK)
+                return 0;
+            protocol_trace(s, "tcpaq_discard: recv() error: %s", strerror(err));
+            return -err;
+        }
+        s->in_queue.wr_pos_reserved -= res; /* recv() ensures 0 < res <= wr_pos_reserved */
+    }
+
+    return (s->in_queue.wr_pos_reserved == 0);
+}
+
+/* < 0: error, 0: need to receive more data; > 0: object ready for tcpaq_receive() */
+static int tcpaq_request_receive_nowait(struct simet_inetup_server * const s, size_t object_size)
+{
+    int res;
+
+    assert(s && s->in_queue.buffer);
+
+    /* skip any cruft we are still discarding */
+    res = tcpaq_discard(s, 0);
+    if (res <= 0)
+        return res;
+
+    /* note: tcpaq_discard() > 0 ensures s->in_queue.wr_pos_reserved = 0 */
+
+    if (object_size > SIMET_INETUP_QUEUESIZE)
+        return -EFAULT; /* we can't do it */
+
+    size_t unread_bufsz = 0;
+    if (s->in_queue.wr_pos > s->in_queue.rd_pos)
+        unread_bufsz = s->in_queue.wr_pos - s->in_queue.rd_pos;
+
+    if (unread_bufsz >= object_size)
+        return 1; /* we have enough buffered data */
+
+    object_size -= unread_bufsz;
+    if (s->in_queue.wr_pos + object_size > SIMET_INETUP_QUEUESIZE) {
+        /* compress buffer */
+        memmove(s->in_queue.buffer, s->in_queue.buffer + s->in_queue.rd_pos, unread_bufsz);
+        s->in_queue.wr_pos = unread_bufsz;
+        s->in_queue.rd_pos = 0;
+    }
+
+    /* paranoia, must not happen */
+    if (s->in_queue.wr_pos + object_size > SIMET_INETUP_QUEUESIZE)
+        return -EFAULT;
+
+    do {
+        res = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos, object_size, MSG_DONTWAIT);
+    } while (res == -1 && errno == EINTR);
+    if (res == -1) {
+        int err = errno;
+        if (err == EAGAIN || err == EWOULDBLOCK)
+            return 0;
+        protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
+        return -err;
+    }
+    s->in_queue.wr_pos += res; /* recv() ensures 0 <= res <= wr_pos */
+    object_size -= res;  /* recv() ensures 0 <= res <= wr_pos */
+
+    return (object_size == 0);
+}
+
+/**
+ * tcpaq_receive_nowait() - receive an exactly-sized object
+ *
+ * Size is limited to SIMET_INETUP_QUEUESIZE.  Does not wait,
+ * returns 0 if there is not enough received buffer yet.  If
+ * buf is NULL, discards the data.
+ *
+ * Returns:
+ *   < 0: -errno
+ *   0  : not enough data buffered
+ *   NZ : requested object is in *buf
+ */
+static int tcpaq_receive_nowait(struct simet_inetup_server * const s, size_t object_size, void *buf) __attribute__((__unused__));
+static int tcpaq_receive_nowait(struct simet_inetup_server * const s, size_t object_size, void *buf)
+{
+    if (!buf)
+        return tcpaq_discard(s, object_size);
+
+    int res = tcpaq_request_receive_nowait(s, object_size);
+    if (res <= 0)
+        return res;
+
+    memcpy(buf, s->in_queue.buffer + s->in_queue.rd_pos, object_size);
+    s->in_queue.rd_pos += object_size;
+
+    if (xx_tcpaq_is_in_queue_empty(s))
+        s->in_queue.wr_pos = s->in_queue.rd_pos = 0;
+
+    return 1;
+}
+
+/**
+ * tcpaq_peek_nowait() - receve in-queue and peek at an object
+ *
+ * Size is limited to SIMET_INETUP_QUEUESIZE.  Does not wait,
+ * returns 0 if there is not enough received buffer yet.  If
+ * pbuf is not NULL, it will be set to either NULL or to the
+ * (const char *) internal buffer (do NOT modify or free()).
+ *
+ * Does not advance the read pointer, so a tcpaq_receive()
+ * will get the same data, use tcpaq_receive with a NULL buffer
+ * (or tcpaq_discard() directly) to "skip" the peeked object.
+ *
+ * Returns:
+ *   < 0: -errno
+ *   0  : not enough data buffered
+ *   NZ : pointer to requested object is in *buf,
+ *        do not modify the contents!  valid until the
+ *        next call to tcpaq_* on the same "server"
+ */
+static int tcpaq_peek_nowait(struct simet_inetup_server * const s, size_t object_size, const char **pbuf)
+{
+    int res = tcpaq_request_receive_nowait(s, object_size);
+    if (pbuf)
+        *pbuf = (res > 0) ? s->in_queue.buffer + s->in_queue.rd_pos : NULL;
+    return res;
+}
+
 /*
  * SIMET2 Uptime2 protocol helpers
  */
+
 static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
                                const uint16_t msgtype, const uint32_t msgsize,
                                const char * const msgdata)
 {
     struct simet_inetup_msghdr hdr;
-    size_t reserve_sz = msgsize + sizeof(hdr);
 
+    if (msgsize > SIMET_UPTIME2_MAXDATASIZE) {
+        protocol_info(s, "internal error: tried to send too large a message, discarded it instead");
+        return 0; /* or abort the program, which would be worse */
+    }
+
+    size_t reserve_sz = msgsize + sizeof(hdr);
     if (tcpaq_reserve(s, reserve_sz))
         return -EAGAIN; /* can't send right now */
 
@@ -381,17 +584,70 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
 
 static int uptimeserver_drain(struct simet_inetup_server * const s)
 {
-    if (s && s->socket != -1) {
-        int res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
-        if (res == -1) {
-            int err = errno;
-            if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
-                return 0;
-            protocol_trace(s, "drain: recv() error: %s", strerror(err));
-            return -err;
+    int res = tcpaq_drain(s);
+    return res;
+}
+
+#define SIMET_INETUP_MSGHANDLER_EOL 0xffffffff
+
+/* 0: did nothing; < 0 : error */
+static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
+                const struct simet_inetup_msghandlers *handlers)
+{
+    struct simet_inetup_msghdr hdr;
+    const char *data = NULL;
+    int res;
+
+    /* we do some dances to reduce buffer copying, and to avoid give backs */
+    res = tcpaq_peek_nowait(s, sizeof(hdr), &data);
+    if (res <= 0 || !data)
+        return res;
+    hdr.message_type = ntohs(((struct simet_inetup_msghdr *)data)->message_type);
+    hdr.message_size = ntohl(((struct simet_inetup_msghdr *)data)->message_size);
+
+    /* messages larger than 64KiB are illegal and must cause a connection drop */
+    if (hdr.message_size > 65535) {
+        protocol_info(s, "recvmsg: message too large (%u bytes), sync might have been lost",
+                (unsigned int) hdr.message_size);
+        return -EFAULT;
+    }
+
+    /* either tcpaq_discard the whole thing, or tcpaq_peek hdr and data */
+    int processed = 0;
+    if (handlers && hdr.message_size <= SIMET_UPTIME2_MAXDATASIZE) {
+        while (handlers->type != hdr.message_type && !(handlers->type & 0xffff0000U))
+            handlers++;
+        if (handlers->type == hdr.message_type) {
+            if (handlers->handler) {
+                /* single-threaded, so we can peek to avoid an extra copy... */
+                res = tcpaq_peek_nowait(s, hdr.message_size + sizeof(hdr), &data);
+                if (res > 0 && data)
+                    res = (* handlers->handler)(s, &hdr, data + sizeof(hdr));
+                if (tcpaq_discard(s, hdr.message_size + sizeof(hdr)) <= 0)
+                    protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
+            } else {
+                /* silent discard the whole thing */
+                res = tcpaq_discard(s, hdr.message_size + sizeof(hdr));
+            }
+            if (res < 0) {
+                protocol_trace(s, "error processing message type 0x%04x, size %" PRIu32 ": %s",
+                        (unsigned int) hdr.message_type, hdr.message_size,
+                        strerror(-res));
+                return res;
+            }
+            processed = 1;
         }
     }
-    return 0;
+    if (!processed) {
+        /* unexpected discard */
+        res = tcpaq_discard(s, hdr.message_size + sizeof(hdr));
+        if (res < 0)
+            return res;
+        protocol_trace(s, "%s message with type 0x%04x and size %" PRIu32,
+                       (res) ? "discarded" : "will discard",
+                       (unsigned int) hdr.message_type, hdr.message_size);
+    }
+    return res;
 }
 
 static int uptimeserver_flush(struct simet_inetup_server * const s)
@@ -453,6 +709,16 @@ err_exit:
 
     return rc;
 }
+
+/*
+ * SIMET2 Uptime2 client message processing
+ */
+
+/* State: MAINLOOP */
+const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
+    { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE, .handler = NULL },
+    { .type = SIMET_INETUP_MSGHANDLER_EOL }
+};
 
 /*
  * SIMET2 Uptime2 general messages
@@ -902,6 +1168,7 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
     assert(sp);
     assert(ai_family == AF_INET || ai_family == AF_INET6);
 
+    /* this zero-fills the allocated data area */
     s = calloc(1, sizeof(struct simet_inetup_server));
     if (!s)
         return -ENOMEM;
@@ -911,11 +1178,15 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
     s->ai_family = ai_family;
     s->connection_id = next_connection_id;
     s->out_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
-    if (!s->out_queue.buffer) {
+    s->in_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
+    if (!s->out_queue.buffer || !s->in_queue.buffer) {
+        free(s->out_queue.buffer);
+        free(s->in_queue.buffer);
         free(s);
         return -ENOMEM;
     }
     s->out_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
+    s->in_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
 
     next_connection_id++;
 
@@ -1145,9 +1416,12 @@ int main(int argc, char **argv) {
                     simet_uptime2_backoff_reset(s);
                     s->backoff_reset_clock = 0;
                 }
-                uptimeserver_drain(s);
-                wait = uptimeserver_keepalive(s);
+
+                /* process return channel messages */
+                while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
                 /* state change messages go here */
+                wait = uptimeserver_keepalive(s);
                 break;
 
             case SIMET_INETUP_P_C_DISCONNECT:

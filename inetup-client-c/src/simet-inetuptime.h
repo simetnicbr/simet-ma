@@ -58,6 +58,7 @@ struct simet_tcpqueue {
 };
 
 struct simet_inetup_server {
+    struct simet_tcpqueue in_queue;
     struct simet_tcpqueue out_queue;
 
     int ai_family;
@@ -79,6 +80,15 @@ struct simet_inetup_server {
     sa_family_t local_family;
     const char *local_name;
     const char *local_port;
+};
+
+/* message handler, returns 0 if not handled, < 0 error, 1 if handled */
+typedef int (* simet_inetup_msghandler)(struct simet_inetup_server * const s,
+                                        const struct simet_inetup_msghdr * const hdr,
+                                        const void * const data);
+struct simet_inetup_msghandlers {
+    uint32_t type;                      /* > 0xffff means EOL */
+    simet_inetup_msghandler handler;    /* NULL means (possibly zero-copy) discard of payload */
 };
 
 #endif /* SIMET_INETUPTIME_H */
