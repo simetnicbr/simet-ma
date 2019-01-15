@@ -24,10 +24,19 @@
 #include <time.h>
 #include <sys/socket.h>
 
+/* SIMET2 Uptime2 defaults and limits */
+#define SIMET_UPTIME2_DEFAULT_TIMEOUT    60    /* seconds */
+#define SIMET_UPTIME2_SHORTEST_TIMEOUT   15    /* seconds, lower limit on acceptable timeouts */
+#define SIMET_UPTIME2_LONGEST_TIMEOUT    86400 /* seconds, upper limit on acceptable timeouts */
+#define SIMET_UPTIME2_DEFAULT_KEEPALIVE  30    /* at least one keepalive per default timeout */
+#define SIMET_UPTIME2_LONGEST_KEEPALIVE  (SIMET_UPTIME2_LONGEST_TIMEOUT / 2)
+#define SIMET_UPTIME2_SHORTEST_KEEPALIVE (SIMET_UPTIME2_SHORTEST_TIMEOUT / 2)
+
 /* SIMET2 Uptime2 protocol constants */
 #define SIMET_INETUP_P_MSGTYPE_CONNECT    0x0000U
 #define SIMET_INETUP_P_MSGTYPE_KEEPALIVE  0x0001U
 #define SIMET_INETUP_P_MSGTYPE_EVENTS     0x0002U
+#define SIMET_INETUP_P_MSGTYPE_MACONFIG   0x0003U
 
 enum simet_inetup_protocol_state {
     SIMET_INETUP_P_C_INIT = 0,		/* Initial setup, go to connect */
@@ -81,6 +90,11 @@ struct simet_inetup_server {
     sa_family_t local_family;
     const char *local_name;
     const char *local_port;
+
+    /* server-configurable parameters */
+    unsigned int client_timeout; /* client times out the server, seconds */
+    unsigned int server_timeout; /* server times out the client, seconds */
+    int remote_keepalives_enabled;    /* capability server-keepalives */
 };
 
 /* message handler, returns 0 if not handled, < 0 error, 1 if handled */

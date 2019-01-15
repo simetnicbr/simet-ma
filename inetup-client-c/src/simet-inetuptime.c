@@ -63,10 +63,11 @@ static const char *boot_id = NULL;
 static const char *agent_mac = NULL;
 static const char *task_name = NULL;
 
-static unsigned int simet_uptime2_keepalive_interval = 30; /* seconds */
-static unsigned int simet_uptime2_tcp_timeout = 60; /* seconds, for data to be ACKed as well as connect() */
+static unsigned int simet_uptime2_tcp_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
 
 static time_t client_start_timestamp;
+
+static const int simet_uptime2_request_remotekeepalive = 1;
 
 static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
 static volatile int got_reload_signal = 0;  /* SIGHUP */
@@ -74,10 +75,6 @@ static volatile int got_reload_signal = 0;  /* SIGHUP */
 #define BACKOFF_LEVEL_MAX 8
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
     { 1, 10, 10, 30, 30, 60, 60, 300 };
-
-/* events that can tolerate it, will oportunistically fire if called within
- * TIMERFUZZ seconds interval before they are scheduled to fire */
-#define SIMET_INETUP_TIMERFUZZ 5
 
 /* time we wait to flush queue to kernel before we drop it during disconnect */
 #define SIMET_DISCONNECT_WAIT_TIMEOUT 5
@@ -88,6 +85,30 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 /*
  * helpers
  */
+
+static time_t timeout_to_keepalive(const time_t timeout) __attribute__((__pure__));
+static time_t timeout_to_keepalive(const time_t timeout)
+{
+    time_t i = timeout / 2;
+    if (i < SIMET_UPTIME2_SHORTEST_KEEPALIVE)
+        i = SIMET_UPTIME2_SHORTEST_KEEPALIVE;
+    else if (i > SIMET_UPTIME2_LONGEST_KEEPALIVE)
+        i = SIMET_UPTIME2_LONGEST_KEEPALIVE;
+    return i;
+}
+
+/*
+ * events that can tolerate it, will oportunistically fire
+ * if called up to timefuzz seconds before they are scheduled
+ */
+static time_t timeout_to_timefuzz(const time_t timeout) __attribute__((__pure__));
+static time_t timeout_to_timefuzz(const time_t timeout)
+{
+    if (!timeout)
+        return 0;
+    time_t i = timeout / 20;
+    return (i > 0) ? i : 1;
+}
 
 static time_t reltime(void)
 {
@@ -553,6 +574,71 @@ static int tcpaq_peek_nowait(struct simet_inetup_server * const s, size_t object
  * SIMET2 Uptime2 protocol helpers
  */
 
+static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
+{
+    /* The use of SO_SNDTIMEO for blocking connect() timeout is not
+     * mandated by POSIX and it is implemented only in [non-ancient]
+     * Linux */
+    const struct timeval so_timeout = {
+        .tv_sec = s->client_timeout,
+        .tv_usec = 0,
+    };
+    if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
+        setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
+        protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
+    }
+
+    /*
+     * RFC-0793/RFC-5482 user timeout.
+     *
+     * WARNING: Linux had for a *very* long time an innacurate
+     * implementation of TCP_USER_TIMEOUT, as per comments in merge
+     * commit d1afdc51399c53791ad9affbef67ba3aa206c379 (Merge branch
+     * 'tcp-improve-setsockopt-TCP_USER_TIMEOUT-accuracy').
+     *
+     * "The issue is that in order for the timeout to occur, the
+     * retransmit timer needs to fire again.  If the user timeout check
+     * happens after the 9th retransmit for example, it needs to wait
+     * for the 10th retransmit timer to fire in order to evaluate
+     * whether a timeout has occurred or not.  If the interval is large
+     * enough then the timeout will be very inaccurate."
+     *
+     * Fixed in: Linux v4.19
+     */
+    const unsigned int ui = (unsigned int)s->client_timeout * 1000U;
+    if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
+        print_warn("failed to enable TCP timeouts, measurement error will increase");
+    }
+
+#if 0
+    /* RFC-1122 TCP keep-alives as a fallback for timeouts.
+     *
+     * Cheap bug defense against application-layer keepalive messages not being sent, but otherwise
+     * useless as the kernel resets the TCP Keep-Alive timers on socket send().
+     *
+     * Linux seems to do the expected with this one, and timeout at
+     * KEEPIDLE + KEEPINTVL * KEEPCNT.
+     *
+     * Note: we don't account for KEEPIDLE in the code below
+     */
+    const int tcp_keepcnt = 3;
+    int tcp_keepintvl = simet_uptime2_tcp_timeout / tcp_keepcnt;
+    if (tcp_keepintvl < 5)
+        tcp_keepintvl = 5;
+    int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
+    if (tcp_keepidle < 5)
+        tcp_keepidle = 5;
+    if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
+        setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
+        setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
+        setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
+        print_warn("failed to enable TCP Keep-Alives, measurement error might increase");
+    } else {
+        protocol_trace(s, "RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+    }
+#endif
+}
+
 static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
                                const uint16_t msgtype, const uint32_t msgsize,
                                const char * const msgdata)
@@ -729,9 +815,125 @@ err_exit:
  * SIMET2 Uptime2 client message processing
  */
 
+static int xx_maconfig_getuint(struct simet_inetup_server * const s,
+                        struct json_object * const jconf,
+                        const char * const param_name,
+                        unsigned int *param,
+                        const unsigned int low, const unsigned int high)
+{
+    struct json_object *jo;
+
+    if (json_object_object_get_ex(jconf, param_name, &jo)) {
+        if (json_object_is_type(jo, json_type_int)) {
+            errno = 0;
+            int64_t val = json_object_get_int64(jo);
+            if (errno == 0 && val >= low && val <= high) {
+                if (*param != val) {
+                    *param = val;
+                    protocol_info(s, "ma_config: set %s to %u", param_name, *param);
+                }
+                return 1;
+            }
+        }
+        protocol_info(s, "ma_config: invalid %s: %s",
+                      param_name, json_object_to_json_string(jo));
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+/*
+ * MA_CONFIG message:
+ *
+ * { "config": {
+ *   "capabilities-enabled": [ "..." ]
+ *   "client-timeout": 60
+ *   "server-timeout": 60
+ *    } }
+ *
+ * all fields optional.  fields completely override previous settings.
+ * implementation detail: we ignore trailing crap to avoid json-c internals
+ */
+static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
+                    const struct simet_inetup_msghdr * const hdr,
+                    const void * const data)
+{
+    struct json_tokener *jtok;
+    struct json_object *jroot = NULL;
+    struct json_object *jconf, *jo;
+    int res = 2;
+
+    if (hdr->message_size < 2) {
+        protocol_trace(s, "ma_config: ignoring small message");
+        return 1;
+    }
+
+    protocol_trace(s, "ma_config: processing message: %.*s",
+            (int) hdr->message_size, (const char *)data);
+
+    jtok = json_tokener_new();
+    if (!jtok)
+        return -ENOMEM;
+
+    jroot = json_tokener_parse_ex(jtok, data, hdr->message_size); /* 2 <= message_size <= 8192 verified */
+    if (!json_object_object_get_ex(jroot, "config", &jconf))
+        goto err_exit;
+    if (!json_object_is_type(jconf, json_type_object))
+        goto err_exit;
+
+    if (json_object_object_get_ex(jconf, "capabilities-enabled", &jo)) {
+        int al;
+
+        /* check syntax before we reset any capabilities */
+        if (!json_object_is_type(jo, json_type_array))
+            goto err_exit;
+        al = json_object_array_length(jo);
+        while (--al >= 0) {
+            if (!json_object_is_type(json_object_array_get_idx(jo, al), json_type_string))
+                goto err_exit;
+        }
+
+        /* reset all capabilities */
+        s->remote_keepalives_enabled = 0;
+
+        /* set any capabilities we know about, warn of others */
+        al = json_object_array_length(jo);
+        while (--al >= 0) {
+            const char *cap = json_object_get_string(json_object_array_get_idx(jo, al));
+            if (!strcasecmp("server-keepalive", cap)) {
+                /* this one we should enable even if we did not request it */
+                s->remote_keepalives_enabled = 1;
+            /* else if (!strcasecmp("other key", cap)) ... */
+            } else {
+                protocol_trace(s, "ma_config: ignoring capability %s", cap ? cap : "(empty)");
+            }
+        }
+    }
+
+    if (xx_maconfig_getuint(s, jconf, "client-timeout-seconds", &s->client_timeout, 0, 86400) > 0)
+        xx_set_tcp_timeouts(s);
+    xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
+
+    res = 1;
+
+err_exit:
+    if (jroot)
+        json_object_put(jo);
+    if (json_tokener_get_error(jtok) != json_tokener_success) {
+        protocol_info(s, "ma_config: ignoring invalid message: %s",
+                      json_tokener_error_desc(json_tokener_get_error(jtok)));
+    } else if (res > 1) {
+        protocol_info(s, "ma_config: received malformed message");
+    }
+    json_tokener_free(jtok);
+    return res;
+}
+
 /* State: MAINLOOP */
 const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
     { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE, .handler = NULL },
+    { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,  .handler = &simet_uptime2_msghdl_maconfig },
     { .type = SIMET_INETUP_MSGHANDLER_EOL }
 };
 
@@ -785,8 +987,11 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - capabilities support on CONNECT message
      *    - client drains return channel (server->client)
      *    - client ignores unknown messages
+     *    - client accepts MA_CONFIG message from server
      */
-    /* json_object_array_add(jcap, json_object_new_string("foo")); */
+    if (simet_uptime2_request_remotekeepalive) {
+        json_object_array_add(jcap, json_object_new_string("server-keepalive"));
+    }
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -906,8 +1111,11 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
 {
     assert(s);
 
-    time_t waittime_left = timer_check(s->keepalive_clock, simet_uptime2_keepalive_interval);
-    if (waittime_left > SIMET_INETUP_TIMERFUZZ)
+    time_t interval = (s->server_timeout) ?
+                            timeout_to_keepalive(s->server_timeout) :
+                            INT_MAX;
+    time_t waittime_left = timer_check(s->keepalive_clock, interval);
+    if (waittime_left > timeout_to_timefuzz(s->server_timeout))
         return waittime_left;
 
     if (simet_uptime2_msg_keepalive(s)) {
@@ -916,7 +1124,7 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
     }
 
     simet_uptime2_keepalive_update(s);
-    return (int) simet_uptime2_keepalive_interval;
+    return (int) interval;
 }
 
 /* returns 0 if we should timeout the remote */
@@ -924,10 +1132,10 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
 {
     assert(s);
 
-    if (!s->remote_keepalive_clock)
+    if (!s->remote_keepalive_clock || !s->remote_keepalives_enabled)
         return 1; /* we are not depending on remote keepalives */
 
-    time_t waittime_left = timer_check(s->remote_keepalive_clock, simet_uptime2_tcp_timeout);
+    time_t waittime_left = timer_check(s->remote_keepalive_clock, s->client_timeout);
     return (waittime_left > 0);
 }
 
@@ -980,6 +1188,11 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
     protocol_info(s, "attempting connection to %s, port %s", server_name, server_port);
 
+    /* per-server configuration data defaults */
+    s->server_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
+    s->client_timeout = simet_uptime2_tcp_timeout;
+    s->remote_keepalives_enabled = 0;
+
     memset(&ai, 0, sizeof(ai));
     ai.ai_flags = AI_ADDRCONFIG;
     ai.ai_socktype = SOCK_STREAM;
@@ -996,44 +1209,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         if (s->socket == -1)
             continue;
 
-        /* FIXME: do this using select()/poll(), but we have to make it
-         * indepondent and async so that we can return to caller to process
-         * other concurrent connect()s to other server streams in the
-         * meantime.  And that must happen in the middle of the
-         * getaddrinfo() loop */
-
-        /* The use of SO_SNDTIMEO for blocking connect() timeout is not
-         * mandated by POSIX and it is implemented only in [non-ancient]
-         * Linux */
-        const struct timeval so_timeout = {
-            .tv_sec = simet_uptime2_tcp_timeout,
-            .tv_usec = 0,
-        };
-        if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
-            setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
-            protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
-        }
-
-        /* RFC-0793/RFC-5482 user timeout.
-         *
-         * WARNING: Linux had for a *very* long time an innacurate
-         * implementation of TCP_USER_TIMEOUT, as per comments in merge
-         * commit d1afdc51399c53791ad9affbef67ba3aa206c379 (Merge branch
-         * 'tcp-improve-setsockopt-TCP_USER_TIMEOUT-accuracy').
-         *
-         * "The issue is that in order for the timeout to occur, the
-         * retransmit timer needs to fire again.  If the user timeout check
-         * happens after the 9th retransmit for example, it needs to wait
-         * for the 10th retransmit timer to fire in order to evaluate
-         * whether a timeout has occurred or not.  If the interval is large
-         * enough then the timeout will be very inaccurate."
-         *
-         * Fixed in: Linux v4.19
-         */
-        const unsigned int ui = (unsigned int)simet_uptime2_tcp_timeout * 1000U;
-        if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
-            print_warn("failed to enable TCP timeouts, measurement error will increase");
-        }
+        xx_set_tcp_timeouts(s);
 
         /* Linux TCP Thin-stream optimizations.
          *
@@ -1053,34 +1229,11 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         }
 #endif /* TCP_THIN_DUPACK */
 
-#if 0
-        /* RFC-1122 TCP keep-alives as a fallback for timeouts.
-         *
-         * Cheap bug defense against application-layer keepalive messages not being sent, but otherwise
-         * useless as the kernel resets the TCP Keep-Alive timers on socket send().
-         *
-         * Linux seems to do the expected with this one, and timeout at
-         * KEEPIDLE + KEEPINTVL * KEEPCNT.
-         *
-         * Note: we don't account for KEEPIDLE in the code below
-         */
-        const int tcp_keepcnt = 3;
-        int tcp_keepintvl = simet_uptime2_tcp_timeout / tcp_keepcnt;
-        if (tcp_keepintvl < 5)
-            tcp_keepintvl = 5;
-        int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
-        if (tcp_keepidle < 5)
-            tcp_keepidle = 5;
-        if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
-            setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
-            setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
-            setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
-            print_warn("failed to enable TCP Keep-Alives, measurement error might increase");
-        } else {
-            protocol_trace(s, "RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
-        }
-#endif
-
+        /* FIXME: do this using select()/poll(), but we have to make it
+         * indepondent and async so that we can return to caller to process
+         * other concurrent connect()s to other server streams in the
+         * meantime.  And that must happen in the middle of the
+         * getaddrinfo() loop */
         if (connect(s->socket, airp->ai_addr, airp->ai_addrlen) != -1)
             break;
         close(s->socket);
@@ -1259,7 +1412,7 @@ static void print_usage(const char * const p, int mode)
             "\t-V\tprint program version and copyright, and exit\n"
             "\t-v\tverbose mode (repeat for increased verbosity)\n"
             "\t-q\tquiet mode (repeat for errors-only)\n"
-            "\t-t\tprotocol timeout in seconds\n"
+            "\t-t\tinitial tcp protocol timeout in seconds\n"
             "\t-d\tmeasurement agent id\n"
             "\t-m\tmeasurement agent hardcoded id\n"
             "\t-M\tmeasurement task name\n"
@@ -1345,13 +1498,12 @@ int main(int argc, char **argv) {
             break;
         case 't':
             intarg = atoi(optarg);
-            if (intarg >= 15 && intarg <= 86400)
+            if (intarg >= SIMET_UPTIME2_SHORTEST_TIMEOUT &&
+                    intarg <= SIMET_UPTIME2_LONGEST_TIMEOUT) {
                 simet_uptime2_tcp_timeout = (unsigned int)intarg;
-
-            if (simet_uptime2_keepalive_interval >= simet_uptime2_tcp_timeout)
-                simet_uptime2_keepalive_interval = simet_uptime2_tcp_timeout / 2;
-            if (simet_uptime2_keepalive_interval > 30)
-                simet_uptime2_keepalive_interval = 30;
+            } else {
+                print_usage(progname, 1);
+            }
             break;
         case 'd':
             agent_id = optarg;
@@ -1389,9 +1541,8 @@ int main(int argc, char **argv) {
     init_signals();
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
-    print_msg(MSG_DEBUG, "timeout=%us, keepalive=%us, server=\"%s\", port=%s",
-              simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
-              server_name, server_port);
+    print_msg(MSG_DEBUG, "initial timeout=%us, server=\"%s\", port=%s",
+              simet_uptime2_tcp_timeout, server_name, server_port);
 
     /* init */
     /* this can be easily converted to use up-to-# servers per ai_family, etc */
@@ -1439,7 +1590,7 @@ int main(int argc, char **argv) {
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (s->backoff_reset_clock &&
-                        timer_check(s->backoff_reset_clock, simet_uptime2_tcp_timeout * 2) == 0) {
+                        timer_check(s->backoff_reset_clock, s->server_timeout * 2) == 0) {
                     protocol_trace(s, "assuming server is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
                     s->backoff_reset_clock = 0;
