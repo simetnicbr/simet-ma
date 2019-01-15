@@ -582,9 +582,21 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
     return tcpaq_send_nowait(s);
 }
 
+/* update remote keepalive timer, we can do that every time we hear from remote */
+static void simet_uptime2_remotekeepalive_update(struct simet_inetup_server * const s)
+{
+    s->remote_keepalive_clock = reltime();
+}
+
 static int uptimeserver_drain(struct simet_inetup_server * const s)
 {
     int res = tcpaq_drain(s);
+    if (res > 0) {
+            /* we did discard something, so remote is alive */
+            protocol_trace(s, "drain: remote watchdog updated");
+            simet_uptime2_remotekeepalive_update(s);
+            return 0;
+    }
     return res;
 }
 
@@ -611,6 +623,9 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
                 (unsigned int) hdr.message_size);
         return -EFAULT;
     }
+
+    protocol_trace(s, "recvmsg: remote watchdog updated");
+    simet_uptime2_remotekeepalive_update(s);
 
     /* either tcpaq_discard the whole thing, or tcpaq_peek hdr and data */
     int processed = 0;
@@ -902,6 +917,18 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
 
     simet_uptime2_keepalive_update(s);
     return simet_uptime2_keepalive_interval;
+}
+
+/* returns 0 if we should timeout the remote */
+static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
+{
+    assert(s);
+
+    if (!s->remote_keepalive_clock)
+        return 1; /* we are not depending on remote keepalives */
+
+    time_t waittime_left = timer_check(s->remote_keepalive_clock, simet_uptime2_tcp_timeout);
+    return (waittime_left > 0);
 }
 
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
@@ -1405,6 +1432,7 @@ int main(int argc, char **argv) {
                 servers_pollfds[j].fd = s->socket;
                 break;
             case SIMET_INETUP_P_C_REFRESH:
+                s->remote_keepalive_clock = 0;
                 wait = uptimeserver_refresh(s);
                 if (!s->backoff_reset_clock)
                     s->backoff_reset_clock = reltime();
@@ -1419,6 +1447,14 @@ int main(int argc, char **argv) {
 
                 /* process return channel messages */
                 while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
+                if (!uptimeserver_remotetimeout(s)) {
+                    /* remote keepalive timed out */
+                    protocol_trace(s, "remote keepalive timed out");
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
 
                 /* state change messages go here */
                 wait = uptimeserver_keepalive(s);

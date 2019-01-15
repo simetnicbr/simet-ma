@@ -66,6 +66,7 @@ struct simet_inetup_server {
 
     enum simet_inetup_protocol_state state;
     time_t keepalive_clock;
+    time_t remote_keepalive_clock;
     time_t disconnect_clock;
     unsigned int backoff_level;
     time_t backoff_clock;
