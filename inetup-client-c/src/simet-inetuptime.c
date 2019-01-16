@@ -63,8 +63,8 @@ static const char *boot_id = NULL;
 static const char *agent_mac = NULL;
 static const char *task_name = NULL;
 
-static int simet_uptime2_keepalive_interval = 30; /* seconds */
-static int simet_uptime2_tcp_timeout = 60; /* seconds, for data to be ACKed as well as connect() */
+static unsigned int simet_uptime2_keepalive_interval = 30; /* seconds */
+static unsigned int simet_uptime2_tcp_timeout = 60; /* seconds, for data to be ACKed as well as connect() */
 
 static time_t client_start_timestamp;
 
@@ -916,7 +916,7 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
     }
 
     simet_uptime2_keepalive_update(s);
-    return simet_uptime2_keepalive_interval;
+    return (int) simet_uptime2_keepalive_interval;
 }
 
 /* returns 0 if we should timeout the remote */
@@ -1345,8 +1345,8 @@ int main(int argc, char **argv) {
             break;
         case 't':
             intarg = atoi(optarg);
-            if (intarg >= 15)
-                simet_uptime2_tcp_timeout = intarg;
+            if (intarg >= 15 && intarg <= 86400)
+                simet_uptime2_tcp_timeout = (unsigned int)intarg;
 
             if (simet_uptime2_keepalive_interval >= simet_uptime2_tcp_timeout)
                 simet_uptime2_keepalive_interval = simet_uptime2_tcp_timeout / 2;
@@ -1389,7 +1389,7 @@ int main(int argc, char **argv) {
     init_signals();
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
-    print_msg(MSG_DEBUG, "timeout=%ds, keepalive=%ds, server=\"%s\", port=%s",
+    print_msg(MSG_DEBUG, "timeout=%us, keepalive=%us, server=\"%s\", port=%s",
               simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
               server_name, server_port);
 
