@@ -405,7 +405,7 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
-        protocol_trace(s, "ma_event message: %s", jsonstr);
+        /* protocol_trace(s, "ma_event message: %s", jsonstr); */
         rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_EVENTS, strlen(jsonstr), jsonstr);
         if (!rc)
             simet_uptime2_keepalive_update(s);
