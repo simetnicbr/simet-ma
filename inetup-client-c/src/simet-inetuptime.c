@@ -1211,6 +1211,9 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
         xx_set_tcp_timeouts(s);
 
+        /* Defang OOB/urgent data, we might need it to implement resync messages */
+        setsockopt(s->socket, IPPROTO_TCP, SO_OOBINLINE, &int_one, sizeof(int_one));
+
         /* Linux TCP Thin-stream optimizations.
          *
          * Refer to: https://nnc3.com/mags/LJ_1994-2014/LJ/219/11180.html
