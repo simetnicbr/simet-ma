@@ -213,7 +213,7 @@ static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
     assert(s);
 
     /* paranoia */
-    if (s->out_queue.wr_pos >= s->out_queue.wr_pos_reserved)
+    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved)
         s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
 
     if (s->out_queue.wr_pos_reserved + size >= s->out_queue.buffer_size)
@@ -223,11 +223,24 @@ static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
     return 0;
 }
 
-static void tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
+/* can unreserve *and* also unqueue unsent data */
+static int tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
 {
     assert(s);
-    if (s->out_queue.wr_pos_reserved > s->out_queue.wr_pos + size)
+
+    /* paranoia */
+    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved)
+        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
+
+    if (s->out_queue.rd_pos + size <= s->out_queue.wr_pos_reserved) {
         s->out_queue.wr_pos_reserved -= size;
+        if (s->out_queue.wr_pos_reserved > s->out_queue.wr_pos)
+            s->out_queue.wr_pos = s->out_queue.wr_pos_reserved; /* discard unsent */
+    } else {
+        return -EINVAL;
+    }
+
+    return 0;
 }
 
 /**
@@ -352,11 +365,14 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
     if (tcpaq_reserve(s, reserve_sz))
         return -EAGAIN; /* can't send right now */
 
+    memset(&hdr, 0, sizeof(hdr));
     hdr.message_type = htons(msgtype);
     hdr.message_size = htonl(msgsize);
 
     if (tcpaq_queue(s, &hdr, sizeof(hdr), 1) || tcpaq_queue(s, (void *)msgdata, msgsize, 1)) {
-        tcpaq_unreserve(s, reserve_sz);
+        /* should not happen, but if it does, try to recover */
+        if (tcpaq_unreserve(s, reserve_sz))
+            return -EINVAL; /* internal error?! */
         return -EAGAIN;
     }
 
