@@ -1077,6 +1077,7 @@ static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
 static void simet_uptime2_backoff_reset(struct simet_inetup_server * const s)
 {
     s->backoff_level = 0;
+    s->backoff_reset_clock = 0;
 }
 
 /*
@@ -1587,16 +1588,14 @@ int main(int argc, char **argv) {
                 break;
             case SIMET_INETUP_P_C_REFRESH:
                 s->remote_keepalive_clock = 0;
+                s->backoff_reset_clock = reltime();
                 wait = uptimeserver_refresh(s);
-                if (!s->backoff_reset_clock)
-                    s->backoff_reset_clock = reltime();
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (s->backoff_reset_clock &&
                         timer_check(s->backoff_reset_clock, s->server_timeout * 2) == 0) {
                     protocol_trace(s, "assuming server is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
-                    s->backoff_reset_clock = 0;
                 }
 
                 /* process return channel messages */
