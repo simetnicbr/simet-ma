@@ -84,6 +84,7 @@ struct simet_inetup_server {
     unsigned int connection_id;
 
     /* post connect() metadata */
+    time_t connect_timestamp;
     sa_family_t peer_family;
     const char *peer_name;
     const char *peer_port;

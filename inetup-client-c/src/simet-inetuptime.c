@@ -1025,7 +1025,8 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (task_name)
         json_object_object_add(jo, "task-name", json_object_new_string(task_name));
     json_object_object_add(jo, "task-version", json_object_new_string(PACKAGE_VERSION));
-    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(reltime()));
+    if (s->connect_timestamp)
+        json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
 
     const char *jsonstr = json_object_to_json_string(jo);
     if (jsonstr) {
@@ -1189,6 +1190,8 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
     protocol_info(s, "attempting connection to %s, port %s", server_name, server_port);
 
+    s->connect_timestamp = 0;
+
     /* per-server configuration data defaults */
     s->server_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
     s->client_timeout = simet_uptime2_tcp_timeout;
@@ -1277,6 +1280,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         print_warn("failed to get local metadata, coping with it");
 
     /* done... */
+    s->connect_timestamp = reltime();
     protocol_info(s, "connected: local %s:[%s]:%s, remote %s:[%s]:%s",
             str_ip46(s->local_family), s->local_name, s->local_port,
             str_ip46(s->peer_family), s->peer_name, s->peer_port);
