@@ -63,10 +63,11 @@ static const char *boot_id = NULL;
 static const char *agent_mac = NULL;
 static const char *task_name = NULL;
 
-static int simet_uptime2_keepalive_interval = 30; /* seconds */
-static int simet_uptime2_tcp_timeout = 60; /* seconds, for data to be ACKed as well as connect() */
+static unsigned int simet_uptime2_tcp_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
 
 static time_t client_start_timestamp;
+
+static const int simet_uptime2_request_remotekeepalive = 1;
 
 static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
 static volatile int got_reload_signal = 0;  /* SIGHUP */
@@ -75,16 +76,39 @@ static volatile int got_reload_signal = 0;  /* SIGHUP */
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
     { 1, 10, 10, 30, 30, 60, 60, 300 };
 
-/* events that can tolerate it, will oportunistically fire if called within
- * TIMERFUZZ seconds interval before they are scheduled to fire */
-#define SIMET_INETUP_TIMERFUZZ 5
-
 /* time we wait to flush queue to kernel before we drop it during disconnect */
 #define SIMET_DISCONNECT_WAIT_TIMEOUT 5
+
+/* maximum payload size of a Uptime2 message */
+#define SIMET_UPTIME2_MAXDATASIZE (SIMET_INETUP_QUEUESIZE - sizeof(struct simet_inetup_msghdr))
 
 /*
  * helpers
  */
+
+static time_t timeout_to_keepalive(const time_t timeout) __attribute__((__pure__));
+static time_t timeout_to_keepalive(const time_t timeout)
+{
+    time_t i = timeout / 2;
+    if (i < SIMET_UPTIME2_SHORTEST_KEEPALIVE)
+        i = SIMET_UPTIME2_SHORTEST_KEEPALIVE;
+    else if (i > SIMET_UPTIME2_LONGEST_KEEPALIVE)
+        i = SIMET_UPTIME2_LONGEST_KEEPALIVE;
+    return i;
+}
+
+/*
+ * events that can tolerate it, will oportunistically fire
+ * if called up to timefuzz seconds before they are scheduled
+ */
+static time_t timeout_to_timefuzz(const time_t timeout) __attribute__((__pure__));
+static time_t timeout_to_timefuzz(const time_t timeout)
+{
+    if (!timeout)
+        return 0;
+    time_t i = timeout / 20;
+    return (i > 0) ? i : 1;
+}
 
 static time_t reltime(void)
 {
@@ -127,9 +151,13 @@ static const char *str_ip46(int ai_family)
     do { \
         if (log_level >= MSG_TRACE) { \
             fflush(stdout); \
-            fprintf(stderr, "%s: trace: %s(%u)@%lds: " format "\n", progname, \
+            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
+                    (long int)reltime() - client_start_timestamp, \
                     str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
-                    (long int)reltime() - client_start_timestamp, ## arg); \
+                    (protocol_stream->connect_timestamp) ? \
+                        (long int)reltime() - protocol_stream->connect_timestamp : \
+                        0, \
+                    ## arg); \
         } \
     } while (0)
 
@@ -137,9 +165,13 @@ static const char *str_ip46(int ai_family)
     do { \
         if (log_level >= MSG_NORMAL) { \
             fflush(stdout); \
-            fprintf(stderr, "%s: trace: %s(%u)@%lds: " format "\n", progname, \
+            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
+                    (long int)reltime() - client_start_timestamp, \
                     str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
-                    (long int)reltime() - client_start_timestamp, ## arg); \
+                    (protocol_stream->connect_timestamp) ? \
+                        (long int)reltime() - protocol_stream->connect_timestamp : \
+                        0, \
+                    ## arg); \
         } \
     } while (0)
 
@@ -193,6 +225,11 @@ static void init_signals(void)
  * 3. attempt to send() to kernel buffer immediately and return even if nothing or
  *    partial send.  Whatever is left will get sent async by calls to
  *    tcpaq_send_nowait() -- which we call in the program main loop.
+ *
+ * 1. zero-copy discard of received data available
+ * 2. only read from socket buffer when ready to consume something
+ * 3. do nothing if the entire object is not available yet
+ *    (objects are limited to the queue buffer size)
  */
 
 static void tcpaq_close(struct simet_inetup_server * const s)
@@ -203,9 +240,10 @@ static void tcpaq_close(struct simet_inetup_server * const s)
         close(s->socket);
         s->socket = -1;
     }
-    s->queue.rd_pos = 0;
-    s->queue.wr_pos = 0;
-    s->queue.wr_pos_reserved = 0;
+    s->out_queue.rd_pos = 0;
+    s->out_queue.wr_pos = s->out_queue.wr_pos_reserved = 0;
+    s->in_queue.rd_pos = 0;
+    s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
 }
 
 static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
@@ -213,21 +251,34 @@ static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
     assert(s);
 
     /* paranoia */
-    if (s->queue.wr_pos >= s->queue.wr_pos_reserved)
-        s->queue.wr_pos_reserved = s->queue.wr_pos;
+    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved)
+        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
 
-    if (s->queue.wr_pos_reserved + size >= s->queue.buffer_size)
+    if (s->out_queue.wr_pos_reserved + size >= s->out_queue.buffer_size)
         return -ENOSPC;
 
-    s->queue.wr_pos_reserved += size;
+    s->out_queue.wr_pos_reserved += size;
     return 0;
 }
 
-static void tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
+/* can unreserve *and* also unqueue unsent data */
+static int tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
 {
     assert(s);
-    if (s->queue.wr_pos_reserved > s->queue.wr_pos + size)
-        s->queue.wr_pos_reserved -= size;
+
+    /* paranoia */
+    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved)
+        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
+
+    if (s->out_queue.rd_pos + size <= s->out_queue.wr_pos_reserved) {
+        s->out_queue.wr_pos_reserved -= size;
+        if (s->out_queue.wr_pos_reserved > s->out_queue.wr_pos)
+            s->out_queue.wr_pos = s->out_queue.wr_pos_reserved; /* discard unsent */
+    } else {
+        return -EINVAL;
+    }
+
+    return 0;
 }
 
 /**
@@ -239,43 +290,43 @@ static void tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
  */
 static int tcpaq_queue(struct simet_inetup_server * const s, void *data, size_t size, int reserved)
 {
-    assert(s && s->queue.buffer);
+    assert(s && s->out_queue.buffer);
 
     if (!size)
         return 0;
     if (!reserved && tcpaq_reserve(s, size))
         return -ENOSPC;
-    if (s->queue.wr_pos + size >= s->queue.buffer_size)
+    if (s->out_queue.wr_pos + size >= s->out_queue.buffer_size)
         return -ENOSPC; /* defang the bug */
 
-    memcpy(&s->queue.buffer[s->queue.wr_pos], data, size);
-    s->queue.wr_pos += size;
+    memcpy(&s->out_queue.buffer[s->out_queue.wr_pos], data, size);
+    s->out_queue.wr_pos += size;
 
-    if (s->queue.wr_pos > s->queue.wr_pos_reserved) {
+    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved) {
         print_warn("internal error: stream %u went past reservation, coping with it", s->connection_id);
-        s->queue.wr_pos_reserved = s->queue.wr_pos;
+        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
     }
 
     return 0;
 }
 
-static int tcpaq_is_queue_empty(struct simet_inetup_server * const s)
+static int tcpaq_is_out_queue_empty(struct simet_inetup_server * const s)
 {
-    /* do it in a fail-save manner against queue accounting bugs */
-    return (s->queue.rd_pos >= s->queue.wr_pos || s->queue.rd_pos >= s->queue.buffer_size);
+    /* do it in a fail-safe manner against queue accounting bugs */
+    return (s->out_queue.rd_pos >= s->out_queue.wr_pos || s->out_queue.rd_pos >= s->out_queue.buffer_size);
 }
 
 static void xx_tcpaq_compact(struct simet_inetup_server * const s)
 {
     /* FIXME: also compact partially transmitted using a watermark */
-    if (s->queue.rd_pos >= s->queue.wr_pos) {
-        if (s->queue.wr_pos_reserved > s->queue.rd_pos) {
-            s->queue.wr_pos_reserved -= s->queue.rd_pos;
+    if (s->out_queue.rd_pos >= s->out_queue.wr_pos) {
+        if (s->out_queue.wr_pos_reserved > s->out_queue.rd_pos) {
+            s->out_queue.wr_pos_reserved -= s->out_queue.rd_pos;
         } else {
-            s->queue.wr_pos_reserved = 0;
+            s->out_queue.wr_pos_reserved = 0;
         }
-        s->queue.wr_pos = 0;
-        s->queue.rd_pos = 0;
+        s->out_queue.wr_pos = 0;
+        s->out_queue.rd_pos = 0;
     }
 }
 
@@ -284,19 +335,19 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     size_t  send_sz;
     ssize_t sent;
 
-    assert(s && s->queue.buffer);
+    assert(s && s->out_queue.buffer);
 
     if (s->socket == -1)
         return -ENOTCONN;
-    if (s->queue.wr_pos == 0)
+    if (s->out_queue.wr_pos == 0)
         return 0;
-    if (tcpaq_is_queue_empty(s)) {
+    if (tcpaq_is_out_queue_empty(s)) {
         xx_tcpaq_compact(s);
         return 0;
     }
 
-    send_sz = s->queue.wr_pos - s->queue.rd_pos;
-    sent = send(s->socket, &s->queue.buffer[s->queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
+    send_sz = s->out_queue.wr_pos - s->out_queue.rd_pos;
+    sent = send(s->socket, &s->out_queue.buffer[s->out_queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (sent < 0) {
         int err = errno;
         if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
@@ -304,7 +355,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
     }
-    s->queue.rd_pos += sent;
+    s->out_queue.rd_pos += sent;
 
 #if 0
     /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
@@ -313,7 +364,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     const int zero = 0;
     const int one = 1;
     /* Ask kernel to flush buffer every time our local queue is empty */
-    if (s->queue.wr_pos <= s->queue.rd_pos) {
+    if (s->out_queue.wr_pos <= s->out_queue.rd_pos) {
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
         setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
     }
@@ -339,33 +390,378 @@ static int tcpaq_send_timeout(struct simet_inetup_server * const s, time_t timeo
 }
 #endif
 
+/* you'd better remember about wr_pos_reserved..., so xx_ */
+static int xx_tcpaq_is_in_queue_empty(struct simet_inetup_server * const s)
+{
+    /* do it in a fail-safe manner against queue accounting bugs */
+    return (s->in_queue.rd_pos >= s->in_queue.wr_pos || s->in_queue.rd_pos >= s->in_queue.buffer_size);
+}
+
+/* discards all pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
+static int tcpaq_drain(struct simet_inetup_server * const s)
+{
+    size_t remaining = 0;
+    int res = 0;
+
+    assert(s);
+
+    if (s->in_queue.rd_pos < s->in_queue.wr_pos)
+        remaining = s->in_queue.wr_pos - s->in_queue.rd_pos;
+    s->in_queue.rd_pos = s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
+
+    if (s->socket != -1) {
+        do {
+            res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
+        } while (res == -1 && errno == EINTR);
+        if (res == -1) {
+            int err = errno;
+            if (err == EAGAIN || err == EWOULDBLOCK)
+                return 0;
+            protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
+            return -err;
+        }
+    }
+    return (remaining > 0 || res > 0);
+}
+
+/* discards object, <0 error; 0 : still need to receive more data; NZ: discarded */
+static int tcpaq_discard(struct simet_inetup_server * const s, size_t object_size)
+{
+    assert(s);
+
+    object_size += s->in_queue.wr_pos_reserved;
+    s->in_queue.wr_pos_reserved = 0;
+
+    /* discard from unread buffer */
+    size_t unread_bufsz = 0;
+    if (s->in_queue.wr_pos > s->in_queue.rd_pos)
+        unread_bufsz = s->in_queue.wr_pos - s->in_queue.rd_pos;
+    if (unread_bufsz >= object_size) {
+        s->in_queue.rd_pos += object_size;
+        if (xx_tcpaq_is_in_queue_empty(s))
+            s->in_queue.rd_pos = s->in_queue.wr_pos = 0; /* compress */
+        return 1;
+    }
+
+    /* discard buffer */
+    s->in_queue.rd_pos = s->in_queue.wr_pos = 0;
+    s->in_queue.wr_pos_reserved = object_size - unread_bufsz;
+
+    /* try to discard wr_pos_reserved bytes from socket buffer */
+    if (s->socket != -1) {
+        int res;
+
+        do {
+            res = recv(s->socket, NULL, s->in_queue.wr_pos_reserved,
+                       MSG_DONTWAIT | MSG_TRUNC);
+        } while (res == -1 && errno == EINTR);
+        if (res == -1) {
+            int err = errno;
+            if (err == EAGAIN || err == EWOULDBLOCK)
+                return 0;
+            protocol_trace(s, "tcpaq_discard: recv() error: %s", strerror(err));
+            return -err;
+        }
+        s->in_queue.wr_pos_reserved -= res; /* recv() ensures 0 < res <= wr_pos_reserved */
+    }
+
+    return (s->in_queue.wr_pos_reserved == 0);
+}
+
+/* < 0: error, 0: need to receive more data; > 0: object ready for tcpaq_receive() */
+static int tcpaq_request_receive_nowait(struct simet_inetup_server * const s, size_t object_size)
+{
+    int res;
+
+    assert(s && s->in_queue.buffer);
+
+    /* skip any cruft we are still discarding */
+    res = tcpaq_discard(s, 0);
+    if (res <= 0)
+        return res;
+
+    /* note: tcpaq_discard() > 0 ensures s->in_queue.wr_pos_reserved = 0 */
+
+    if (object_size > SIMET_INETUP_QUEUESIZE)
+        return -EFAULT; /* we can't do it */
+
+    size_t unread_bufsz = 0;
+    if (s->in_queue.wr_pos > s->in_queue.rd_pos)
+        unread_bufsz = s->in_queue.wr_pos - s->in_queue.rd_pos;
+
+    if (unread_bufsz >= object_size)
+        return 1; /* we have enough buffered data */
+
+    object_size -= unread_bufsz;
+    if (s->in_queue.wr_pos + object_size > SIMET_INETUP_QUEUESIZE) {
+        /* compress buffer */
+        memmove(s->in_queue.buffer, s->in_queue.buffer + s->in_queue.rd_pos, unread_bufsz);
+        s->in_queue.wr_pos = unread_bufsz;
+        s->in_queue.rd_pos = 0;
+    }
+
+    /* paranoia, must not happen */
+    if (s->in_queue.wr_pos + object_size > SIMET_INETUP_QUEUESIZE)
+        return -EFAULT;
+
+    do {
+        res = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos, object_size, MSG_DONTWAIT);
+    } while (res == -1 && errno == EINTR);
+    if (res == -1) {
+        int err = errno;
+        if (err == EAGAIN || err == EWOULDBLOCK)
+            return 0;
+        protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
+        return -err;
+    }
+    s->in_queue.wr_pos += res; /* recv() ensures 0 <= res <= wr_pos */
+    object_size -= res;  /* recv() ensures 0 <= res <= wr_pos */
+
+    return (object_size == 0);
+}
+
+/**
+ * tcpaq_receive_nowait() - receive an exactly-sized object
+ *
+ * Size is limited to SIMET_INETUP_QUEUESIZE.  Does not wait,
+ * returns 0 if there is not enough received buffer yet.  If
+ * buf is NULL, discards the data.
+ *
+ * Returns:
+ *   < 0: -errno
+ *   0  : not enough data buffered
+ *   NZ : requested object is in *buf
+ */
+static int tcpaq_receive_nowait(struct simet_inetup_server * const s, size_t object_size, void *buf) __attribute__((__unused__));
+static int tcpaq_receive_nowait(struct simet_inetup_server * const s, size_t object_size, void *buf)
+{
+    if (!buf)
+        return tcpaq_discard(s, object_size);
+
+    int res = tcpaq_request_receive_nowait(s, object_size);
+    if (res <= 0)
+        return res;
+
+    memcpy(buf, s->in_queue.buffer + s->in_queue.rd_pos, object_size);
+    s->in_queue.rd_pos += object_size;
+
+    if (xx_tcpaq_is_in_queue_empty(s))
+        s->in_queue.wr_pos = s->in_queue.rd_pos = 0;
+
+    return 1;
+}
+
+/**
+ * tcpaq_peek_nowait() - receve in-queue and peek at an object
+ *
+ * Size is limited to SIMET_INETUP_QUEUESIZE.  Does not wait,
+ * returns 0 if there is not enough received buffer yet.  If
+ * pbuf is not NULL, it will be set to either NULL or to the
+ * (const char *) internal buffer (do NOT modify or free()).
+ *
+ * Does not advance the read pointer, so a tcpaq_receive()
+ * will get the same data, use tcpaq_receive with a NULL buffer
+ * (or tcpaq_discard() directly) to "skip" the peeked object.
+ *
+ * Returns:
+ *   < 0: -errno
+ *   0  : not enough data buffered
+ *   NZ : pointer to requested object is in *buf,
+ *        do not modify the contents!  valid until the
+ *        next call to tcpaq_* on the same "server"
+ */
+static int tcpaq_peek_nowait(struct simet_inetup_server * const s, size_t object_size, const char **pbuf)
+{
+    int res = tcpaq_request_receive_nowait(s, object_size);
+    if (pbuf)
+        *pbuf = (res > 0) ? s->in_queue.buffer + s->in_queue.rd_pos : NULL;
+    return res;
+}
+
 /*
  * SIMET2 Uptime2 protocol helpers
  */
+
+static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
+{
+    /* The use of SO_SNDTIMEO for blocking connect() timeout is not
+     * mandated by POSIX and it is implemented only in [non-ancient]
+     * Linux */
+    const struct timeval so_timeout = {
+        .tv_sec = s->client_timeout,
+        .tv_usec = 0,
+    };
+    if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
+        setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
+        protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
+    }
+
+    /*
+     * RFC-0793/RFC-5482 user timeout.
+     *
+     * WARNING: Linux had for a *very* long time an innacurate
+     * implementation of TCP_USER_TIMEOUT, as per comments in merge
+     * commit d1afdc51399c53791ad9affbef67ba3aa206c379 (Merge branch
+     * 'tcp-improve-setsockopt-TCP_USER_TIMEOUT-accuracy').
+     *
+     * "The issue is that in order for the timeout to occur, the
+     * retransmit timer needs to fire again.  If the user timeout check
+     * happens after the 9th retransmit for example, it needs to wait
+     * for the 10th retransmit timer to fire in order to evaluate
+     * whether a timeout has occurred or not.  If the interval is large
+     * enough then the timeout will be very inaccurate."
+     *
+     * Fixed in: Linux v4.19
+     */
+    const unsigned int ui = (unsigned int)s->client_timeout * 1000U;
+    if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
+        print_warn("failed to enable TCP timeouts, measurement error will increase");
+    }
+
+#if 0
+    /* RFC-1122 TCP keep-alives as a fallback for timeouts.
+     *
+     * Cheap bug defense against application-layer keepalive messages not being sent, but otherwise
+     * useless as the kernel resets the TCP Keep-Alive timers on socket send().
+     *
+     * Linux seems to do the expected with this one, and timeout at
+     * KEEPIDLE + KEEPINTVL * KEEPCNT.
+     *
+     * Note: we don't account for KEEPIDLE in the code below
+     */
+    const int tcp_keepcnt = 3;
+    int tcp_keepintvl = simet_uptime2_tcp_timeout / tcp_keepcnt;
+    if (tcp_keepintvl < 5)
+        tcp_keepintvl = 5;
+    int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
+    if (tcp_keepidle < 5)
+        tcp_keepidle = 5;
+    if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
+        setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
+        setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
+        setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
+        print_warn("failed to enable TCP Keep-Alives, measurement error might increase");
+    } else {
+        protocol_trace(s, "RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+    }
+#endif
+}
+
 static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
                                const uint16_t msgtype, const uint32_t msgsize,
                                const char * const msgdata)
 {
     struct simet_inetup_msghdr hdr;
-    size_t reserve_sz = msgsize + sizeof(hdr);
 
+    if (msgsize > SIMET_UPTIME2_MAXDATASIZE) {
+        protocol_info(s, "internal error: tried to send too large a message, discarded it instead");
+        return 0; /* or abort the program, which would be worse */
+    }
+
+    size_t reserve_sz = msgsize + sizeof(hdr);
     if (tcpaq_reserve(s, reserve_sz))
         return -EAGAIN; /* can't send right now */
 
+    memset(&hdr, 0, sizeof(hdr));
     hdr.message_type = htons(msgtype);
     hdr.message_size = htonl(msgsize);
 
     if (tcpaq_queue(s, &hdr, sizeof(hdr), 1) || tcpaq_queue(s, (void *)msgdata, msgsize, 1)) {
-        tcpaq_unreserve(s, reserve_sz);
+        /* should not happen, but if it does, try to recover */
+        if (tcpaq_unreserve(s, reserve_sz))
+            return -EINVAL; /* internal error?! */
         return -EAGAIN;
     }
 
     return tcpaq_send_nowait(s);
 }
 
+/* update remote keepalive timer, we can do that every time we hear from remote */
+static void simet_uptime2_remotekeepalive_update(struct simet_inetup_server * const s)
+{
+    s->remote_keepalive_clock = reltime();
+}
+
+static int uptimeserver_drain(struct simet_inetup_server * const s)
+{
+    int res = tcpaq_drain(s);
+    if (res > 0) {
+            /* we did discard something, so remote is alive */
+            protocol_trace(s, "drain: remote watchdog updated");
+            simet_uptime2_remotekeepalive_update(s);
+            return 0;
+    }
+    return res;
+}
+
+#define SIMET_INETUP_MSGHANDLER_EOL 0xffffffff
+
+/* 0: did nothing; < 0 : error */
+static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
+                const struct simet_inetup_msghandlers *handlers)
+{
+    struct simet_inetup_msghdr hdr;
+    const char *data = NULL;
+    int res;
+
+    /* we do some dances to reduce buffer copying, and to avoid give backs */
+    res = tcpaq_peek_nowait(s, sizeof(hdr), &data);
+    if (res <= 0 || !data)
+        return res;
+    hdr.message_type = ntohs(((struct simet_inetup_msghdr *)data)->message_type);
+    hdr.message_size = ntohl(((struct simet_inetup_msghdr *)data)->message_size);
+
+    /* messages larger than 64KiB are illegal and must cause a connection drop */
+    if (hdr.message_size > 65535) {
+        protocol_info(s, "recvmsg: message too large (%u bytes), sync might have been lost",
+                (unsigned int) hdr.message_size);
+        return -EFAULT;
+    }
+
+    protocol_trace(s, "recvmsg: remote watchdog updated");
+    simet_uptime2_remotekeepalive_update(s);
+
+    /* either tcpaq_discard the whole thing, or tcpaq_peek hdr and data */
+    int processed = 0;
+    if (handlers && hdr.message_size <= SIMET_UPTIME2_MAXDATASIZE) {
+        while (handlers->type != hdr.message_type && !(handlers->type & 0xffff0000U))
+            handlers++;
+        if (handlers->type == hdr.message_type) {
+            if (handlers->handler) {
+                /* single-threaded, so we can peek to avoid an extra copy... */
+                res = tcpaq_peek_nowait(s, hdr.message_size + sizeof(hdr), &data);
+                if (res > 0 && data)
+                    res = (* handlers->handler)(s, &hdr, data + sizeof(hdr));
+                if (tcpaq_discard(s, hdr.message_size + sizeof(hdr)) <= 0)
+                    protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
+            } else {
+                /* silent discard the whole thing */
+                res = tcpaq_discard(s, hdr.message_size + sizeof(hdr));
+            }
+            if (res < 0) {
+                protocol_trace(s, "error processing message type 0x%04x, size %" PRIu32 ": %s",
+                        (unsigned int) hdr.message_type, hdr.message_size,
+                        strerror(-res));
+                return res;
+            }
+            processed = 1;
+        }
+    }
+    if (!processed) {
+        /* unexpected discard */
+        res = tcpaq_discard(s, hdr.message_size + sizeof(hdr));
+        if (res < 0)
+            return res;
+        protocol_trace(s, "%s message with type 0x%04x and size %" PRIu32,
+                       (res) ? "discarded" : "will discard",
+                       (unsigned int) hdr.message_type, hdr.message_size);
+    }
+    return res;
+}
+
 static int uptimeserver_flush(struct simet_inetup_server * const s)
 {
-    if (s && s->queue.buffer && s->socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
+    if (s && s->out_queue.buffer && s->socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
         return tcpaq_send_nowait(s);
 
     return 0;
@@ -424,6 +820,132 @@ err_exit:
 }
 
 /*
+ * SIMET2 Uptime2 client message processing
+ */
+
+static int xx_maconfig_getuint(struct simet_inetup_server * const s,
+                        struct json_object * const jconf,
+                        const char * const param_name,
+                        unsigned int *param,
+                        const unsigned int low, const unsigned int high)
+{
+    struct json_object *jo;
+
+    if (json_object_object_get_ex(jconf, param_name, &jo)) {
+        if (json_object_is_type(jo, json_type_int)) {
+            errno = 0;
+            int64_t val = json_object_get_int64(jo);
+            if (errno == 0 && val >= low && val <= high) {
+                if (*param != val) {
+                    *param = val;
+                    protocol_info(s, "ma_config: set %s to %u", param_name, *param);
+                }
+                return 1;
+            }
+        }
+        protocol_info(s, "ma_config: invalid %s: %s",
+                      param_name, json_object_to_json_string(jo));
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+/*
+ * MA_CONFIG message:
+ *
+ * { "config": {
+ *   "capabilities-enabled": [ "..." ]
+ *   "client-timeout": 60
+ *   "server-timeout": 60
+ *    } }
+ *
+ * all fields optional.  fields completely override previous settings.
+ * implementation detail: we ignore trailing crap to avoid json-c internals
+ */
+static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
+                    const struct simet_inetup_msghdr * const hdr,
+                    const void * const data)
+{
+    struct json_tokener *jtok;
+    struct json_object *jroot = NULL;
+    struct json_object *jconf, *jo;
+    int res = 2;
+
+    if (hdr->message_size < 2) {
+        protocol_trace(s, "ma_config: ignoring small message");
+        return 1;
+    }
+
+    protocol_trace(s, "ma_config: processing message: %.*s",
+            (int) hdr->message_size, (const char *)data);
+
+    jtok = json_tokener_new();
+    if (!jtok)
+        return -ENOMEM;
+
+    jroot = json_tokener_parse_ex(jtok, data, hdr->message_size); /* 2 <= message_size <= 8192 verified */
+    if (!json_object_object_get_ex(jroot, "config", &jconf))
+        goto err_exit;
+    if (!json_object_is_type(jconf, json_type_object))
+        goto err_exit;
+
+    if (json_object_object_get_ex(jconf, "capabilities-enabled", &jo)) {
+        int al;
+
+        /* check syntax before we reset any capabilities */
+        if (!json_object_is_type(jo, json_type_array))
+            goto err_exit;
+        al = json_object_array_length(jo);
+        while (--al >= 0) {
+            if (!json_object_is_type(json_object_array_get_idx(jo, al), json_type_string))
+                goto err_exit;
+        }
+
+        /* reset all capabilities */
+        s->remote_keepalives_enabled = 0;
+
+        /* set any capabilities we know about, warn of others */
+        al = json_object_array_length(jo);
+        while (--al >= 0) {
+            const char *cap = json_object_get_string(json_object_array_get_idx(jo, al));
+            if (!strcasecmp("server-keepalive", cap)) {
+                /* this one we should enable even if we did not request it */
+                s->remote_keepalives_enabled = 1;
+            /* else if (!strcasecmp("other key", cap)) ... */
+            } else {
+                protocol_trace(s, "ma_config: ignoring capability %s", cap ? cap : "(empty)");
+            }
+        }
+    }
+
+    if (xx_maconfig_getuint(s, jconf, "client-timeout-seconds", &s->client_timeout, 0, 86400) > 0)
+        xx_set_tcp_timeouts(s);
+    xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
+
+    res = 1;
+
+err_exit:
+    if (jroot)
+        json_object_put(jo);
+    if (json_tokener_get_error(jtok) != json_tokener_success) {
+        protocol_info(s, "ma_config: ignoring invalid message: %s",
+                      json_tokener_error_desc(json_tokener_get_error(jtok)));
+    } else if (res > 1) {
+        protocol_info(s, "ma_config: received malformed message");
+    }
+    json_tokener_free(jtok);
+    return res;
+}
+
+/* State: MAINLOOP */
+const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
+    { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE, .handler = NULL },
+    { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,  .handler = &simet_uptime2_msghdl_maconfig },
+    { .type = SIMET_INETUP_MSGHANDLER_EOL }
+};
+
+/*
  * SIMET2 Uptime2 general messages
  *
  * Returns: 0 or -errno
@@ -448,7 +970,8 @@ static int simet_uptime2_msg_keepalive(struct simet_inetup_server * const s)
 
 static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
 {
-    json_object *jo;
+    json_object *jo = NULL;
+    json_object *jcap = NULL;
     int rc = -ENOMEM;
 
     assert(s);
@@ -456,8 +979,29 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     protocol_trace(s, "sending ma_connect event");
 
     jo = json_object_new_object();
-    if (!jo)
+    jcap = json_object_new_array();
+    if (!jo || !jcap) {
+        free(jo);
+        free(jcap);
         return -ENOMEM;
+    }
+
+    /*
+     * Protocol v1: no capabilities field
+     *    - client->server unidirectional channel
+     *    - server must not send any data to client
+     *
+     * Protocol v2: bidirectional channel
+     *    - capabilities support on CONNECT message
+     *    - client drains return channel (server->client)
+     *    - client ignores unknown messages
+     *    - client accepts MA_CONFIG message from server
+     */
+    if (simet_uptime2_request_remotekeepalive) {
+        json_object_array_add(jcap, json_object_new_string("server-keepalive"));
+    }
+    json_object_object_add(jo, "capabilities", jcap);
+    jcap = NULL;
 
     if (agent_id)
         json_object_object_add(jo, "agent-id", json_object_new_string(agent_id));
@@ -489,7 +1033,8 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (task_name)
         json_object_object_add(jo, "task-name", json_object_new_string(task_name));
     json_object_object_add(jo, "task-version", json_object_new_string(PACKAGE_VERSION));
-    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(reltime()));
+    if (s->connect_timestamp)
+        json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
 
     const char *jsonstr = json_object_to_json_string(jo);
     if (jsonstr) {
@@ -541,6 +1086,7 @@ static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
 static void simet_uptime2_backoff_reset(struct simet_inetup_server * const s)
 {
     s->backoff_level = 0;
+    s->backoff_reset_clock = 0;
 }
 
 /*
@@ -575,8 +1121,11 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
 {
     assert(s);
 
-    time_t waittime_left = timer_check(s->keepalive_clock, simet_uptime2_keepalive_interval);
-    if (waittime_left > SIMET_INETUP_TIMERFUZZ)
+    time_t interval = (s->server_timeout) ?
+                            timeout_to_keepalive(s->server_timeout) :
+                            INT_MAX;
+    time_t waittime_left = timer_check(s->keepalive_clock, interval);
+    if (waittime_left > timeout_to_timefuzz(s->server_timeout))
         return waittime_left;
 
     if (simet_uptime2_msg_keepalive(s)) {
@@ -585,7 +1134,19 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
     }
 
     simet_uptime2_keepalive_update(s);
-    return simet_uptime2_keepalive_interval;
+    return (int) interval;
+}
+
+/* returns 0 if we should timeout the remote */
+static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
+{
+    assert(s);
+
+    if (!s->remote_keepalive_clock || !s->remote_keepalives_enabled)
+        return 1; /* we are not depending on remote keepalives */
+
+    time_t waittime_left = timer_check(s->remote_keepalive_clock, s->client_timeout);
+    return (waittime_left > 0);
 }
 
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
@@ -637,6 +1198,13 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
     protocol_info(s, "attempting connection to %s, port %s", server_name, server_port);
 
+    s->connect_timestamp = 0;
+
+    /* per-server configuration data defaults */
+    s->server_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
+    s->client_timeout = simet_uptime2_tcp_timeout;
+    s->remote_keepalives_enabled = 0;
+
     memset(&ai, 0, sizeof(ai));
     ai.ai_flags = AI_ADDRCONFIG;
     ai.ai_socktype = SOCK_STREAM;
@@ -653,34 +1221,10 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         if (s->socket == -1)
             continue;
 
-        /* FIXME: do this using select()/poll(), but we have to make it
-         * indepondent and async so that we can return to caller to process
-         * other concurrent connect()s to other server streams in the
-         * meantime.  And that must happen in the middle of the
-         * getaddrinfo() loop */
+        xx_set_tcp_timeouts(s);
 
-        /* The use of SO_SNDTIMEO for blocking connect() timeout is not
-         * mandated by POSIX and it is implemented only in [non-ancient]
-         * Linux */
-        const struct timeval so_timeout = {
-            .tv_sec = simet_uptime2_tcp_timeout,
-            .tv_usec = 0,
-        };
-        if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
-            setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
-            protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
-        }
-
-        /* RFC-0793/RFC-5482 user timeout.
-         *
-         * WARNING: Linux seems to be using twice the value set, but trying to
-         * compensate for this (by giving it half the value we want) is dangerous
-         * unless we do track it down to be sure it has been enshrined as ABI
-         */
-        const unsigned int ui = (unsigned int)simet_uptime2_tcp_timeout * 1000U;
-        if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
-            print_warn("failed to enable TCP timeouts, measurement error will increase");
-        }
+        /* Defang OOB/urgent data, we might need it to implement resync messages */
+        setsockopt(s->socket, IPPROTO_TCP, SO_OOBINLINE, &int_one, sizeof(int_one));
 
         /* Linux TCP Thin-stream optimizations.
          *
@@ -700,34 +1244,11 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         }
 #endif /* TCP_THIN_DUPACK */
 
-#if 0
-        /* RFC-1122 TCP keep-alives as a fallback for timeouts.
-         *
-         * Cheap bug defense against application-layer keepalive messages not being sent, but otherwise
-         * useless as the kernel resets the TCP Keep-Alive timers on socket send().
-         *
-         * Linux seems to do the expected with this one, and timeout at
-         * KEEPIDLE + KEEPINTVL * KEEPCNT.
-         *
-         * Note: we don't account for KEEPIDLE in the code below
-         */
-        const int tcp_keepcnt = 3;
-        int tcp_keepintvl = simet_uptime2_tcp_timeout / tcp_keepcnt;
-        if (tcp_keepintvl < 5)
-            tcp_keepintvl = 5;
-        int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
-        if (tcp_keepidle < 5)
-            tcp_keepidle = 5;
-        if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
-            setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
-            setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
-            setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
-            print_warn("failed to enable TCP Keep-Alives, measurement error might increase");
-        } else {
-            protocol_trace(s, "RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
-        }
-#endif
-
+        /* FIXME: do this using select()/poll(), but we have to make it
+         * indepondent and async so that we can return to caller to process
+         * other concurrent connect()s to other server streams in the
+         * meantime.  And that must happen in the middle of the
+         * getaddrinfo() loop */
         if (connect(s->socket, airp->ai_addr, airp->ai_addrlen) != -1)
             break;
         close(s->socket);
@@ -767,6 +1288,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         print_warn("failed to get local metadata, coping with it");
 
     /* done... */
+    s->connect_timestamp = reltime();
     protocol_info(s, "connected: local %s:[%s]:%s, remote %s:[%s]:%s",
             str_ip46(s->local_family), s->local_name, s->local_port,
             str_ip46(s->peer_family), s->peer_name, s->peer_port);
@@ -818,7 +1340,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
         s->disconnect_clock = reltime(); /* should not happen */
 
     int rc = timer_check(s->disconnect_clock, SIMET_DISCONNECT_WAIT_TIMEOUT);
-    if (!rc || tcpaq_is_queue_empty(s)) {
+    if (!rc || tcpaq_is_out_queue_empty(s)) {
         /* tcpaq queue is empty, or we are out of time */
         tcpaq_close(s);
         s->socket = -1;
@@ -842,6 +1364,7 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
     assert(sp);
     assert(ai_family == AF_INET || ai_family == AF_INET6);
 
+    /* this zero-fills the allocated data area */
     s = calloc(1, sizeof(struct simet_inetup_server));
     if (!s)
         return -ENOMEM;
@@ -850,12 +1373,16 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
     s->state = SIMET_INETUP_P_C_INIT;
     s->ai_family = ai_family;
     s->connection_id = next_connection_id;
-    s->queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
-    if (!s->queue.buffer) {
+    s->out_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
+    s->in_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
+    if (!s->out_queue.buffer || !s->in_queue.buffer) {
+        free(s->out_queue.buffer);
+        free(s->in_queue.buffer);
         free(s);
         return -ENOMEM;
     }
-    s->queue.buffer_size = SIMET_INETUP_QUEUESIZE;
+    s->out_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
+    s->in_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
 
     next_connection_id++;
 
@@ -901,7 +1428,7 @@ static void print_usage(const char * const p, int mode)
             "\t-V\tprint program version and copyright, and exit\n"
             "\t-v\tverbose mode (repeat for increased verbosity)\n"
             "\t-q\tquiet mode (repeat for errors-only)\n"
-            "\t-t\tprotocol timeout in seconds\n"
+            "\t-t\tinitial tcp protocol timeout in seconds\n"
             "\t-d\tmeasurement agent id\n"
             "\t-m\tmeasurement agent hardcoded id\n"
             "\t-M\tmeasurement task name\n"
@@ -987,13 +1514,12 @@ int main(int argc, char **argv) {
             break;
         case 't':
             intarg = atoi(optarg);
-            if (intarg >= 15)
-                simet_uptime2_tcp_timeout = intarg;
-
-            if (simet_uptime2_keepalive_interval >= simet_uptime2_tcp_timeout)
-                simet_uptime2_keepalive_interval = simet_uptime2_tcp_timeout / 2;
-            if (simet_uptime2_keepalive_interval > 30)
-                simet_uptime2_keepalive_interval = 30;
+            if (intarg >= SIMET_UPTIME2_SHORTEST_TIMEOUT &&
+                    intarg <= SIMET_UPTIME2_LONGEST_TIMEOUT) {
+                simet_uptime2_tcp_timeout = (unsigned int)intarg;
+            } else {
+                print_usage(progname, 1);
+            }
             break;
         case 'd':
             agent_id = optarg;
@@ -1031,9 +1557,8 @@ int main(int argc, char **argv) {
     init_signals();
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
-    print_msg(MSG_DEBUG, "timeout=%ds, keepalive=%ds, server=\"%s\", port=%s",
-              simet_uptime2_tcp_timeout, simet_uptime2_keepalive_interval,
-              server_name, server_port);
+    print_msg(MSG_DEBUG, "initial timeout=%us, server=\"%s\", port=%s",
+              simet_uptime2_tcp_timeout, server_name, server_port);
 
     /* init */
     /* this can be easily converted to use up-to-# servers per ai_family, etc */
@@ -1066,35 +1591,47 @@ int main(int argc, char **argv) {
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
-                /* FIXME: add POLLIN if a backchannel is added, etc */
                 servers_pollfds[j].fd = -1;
-                servers_pollfds[j].events = POLLRDHUP;
+                servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
                 wait = uptimeserver_connect(s, server_name, server_port);
                 servers_pollfds[j].fd = s->socket;
                 break;
             case SIMET_INETUP_P_C_REFRESH:
+                s->remote_keepalive_clock = 0;
+                s->backoff_reset_clock = reltime();
                 wait = uptimeserver_refresh(s);
-                if (!s->backoff_reset_clock)
-                    s->backoff_reset_clock = reltime();
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (s->backoff_reset_clock &&
-                        timer_check(s->backoff_reset_clock, simet_uptime2_tcp_timeout * 2) == 0) {
+                        timer_check(s->backoff_reset_clock, s->server_timeout * 2) == 0) {
                     protocol_trace(s, "assuming server is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
-                    s->backoff_reset_clock = 0;
                 }
-                wait = uptimeserver_keepalive(s);
+
+                /* process return channel messages */
+                while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
+                if (!uptimeserver_remotetimeout(s)) {
+                    /* remote keepalive timed out */
+                    protocol_trace(s, "remote keepalive timed out");
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
                 /* state change messages go here */
+                wait = uptimeserver_keepalive(s);
                 break;
 
             case SIMET_INETUP_P_C_DISCONNECT:
                 wait = uptimeserver_disconnect(s);
+                uptimeserver_drain(s);
                 break;
             case SIMET_INETUP_P_C_DISCONNECT_WAIT:
                 wait = uptimeserver_disconnectwait(s);
+                uptimeserver_drain(s);
                 break;
 
             case SIMET_INETUP_P_C_SHUTDOWN:
@@ -1132,7 +1669,7 @@ int main(int argc, char **argv) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
                         protocol_info(servers[j], "connection to server lost");
                         simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
-                    } else if (servers_pollfds[j].revents) {
+                    } else if (servers_pollfds[j].revents & ~POLLIN) {
                         protocol_trace(servers[j],
                             "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
                             j, servers_pollfds[j].fd,
