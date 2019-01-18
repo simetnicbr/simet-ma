@@ -151,9 +151,13 @@ static const char *str_ip46(int ai_family)
     do { \
         if (log_level >= MSG_TRACE) { \
             fflush(stdout); \
-            fprintf(stderr, "%s: trace: %s(%u)@%lds: " format "\n", progname, \
+            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
+                    (long int)reltime() - client_start_timestamp, \
                     str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
-                    (long int)reltime() - client_start_timestamp, ## arg); \
+                    (protocol_stream->connect_timestamp) ? \
+                        (long int)reltime() - protocol_stream->connect_timestamp : \
+                        0, \
+                    ## arg); \
         } \
     } while (0)
 
@@ -161,9 +165,13 @@ static const char *str_ip46(int ai_family)
     do { \
         if (log_level >= MSG_NORMAL) { \
             fflush(stdout); \
-            fprintf(stderr, "%s: trace: %s(%u)@%lds: " format "\n", progname, \
+            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
+                    (long int)reltime() - client_start_timestamp, \
                     str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
-                    (long int)reltime() - client_start_timestamp, ## arg); \
+                    (protocol_stream->connect_timestamp) ? \
+                        (long int)reltime() - protocol_stream->connect_timestamp : \
+                        0, \
+                    ## arg); \
         } \
     } while (0)
 
