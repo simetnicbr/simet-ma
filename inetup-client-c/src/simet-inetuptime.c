@@ -86,6 +86,8 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
  * helpers
  */
 
+static void simet_uptime2_reconnect(struct simet_inetup_server * const s);
+
 static time_t timeout_to_keepalive(const time_t timeout) __attribute__((__pure__));
 static time_t timeout_to_keepalive(const time_t timeout)
 {
@@ -951,10 +953,86 @@ err_exit:
     return res;
 }
 
+/*
+ * EVENTS message:
+ *
+ * { "events": [ { "name": "<event>", "timestamp-seconds": <event timestamp> }, ... ] }
+ *
+ */
+static int simet_uptime2_msghdl_serverevents(struct simet_inetup_server * const s,
+                    const struct simet_inetup_msghdr * const hdr,
+                    const void * const data)
+{
+    struct json_tokener *jtok;
+    struct json_object *jroot = NULL;
+    struct json_object *jevents, *jev, *jo, *jt;
+    int res = 2;
+    int al, i;
+
+    if (hdr->message_size < 13) {
+        protocol_trace(s, "events: ignoring small message");
+        return 1;
+    }
+
+    protocol_trace(s, "events: processing message: %.*s",
+            (int) hdr->message_size, (const char *)data);
+
+    jtok = json_tokener_new();
+    if (!jtok)
+        return -ENOMEM;
+
+    jroot = json_tokener_parse_ex(jtok, data, hdr->message_size); /* 13 <= message_size <= 8192 verified */
+    if (!json_object_object_get_ex(jroot, "events", &jevents))
+        goto err_exit;
+    if (!json_object_is_type(jevents, json_type_array))
+        goto err_exit;
+    al = json_object_array_length(jevents);
+    for (i = 0; i < al; i++) {
+        jev = json_object_array_get_idx(jevents, i);
+        if (!json_object_is_type(jev, json_type_object) ||
+            !json_object_object_get_ex(jev, "name", &jo) ||
+            !json_object_object_get_ex(jev, "timestamp-seconds", &jt) ||
+            !json_object_is_type(jo, json_type_string) ||
+            !json_object_is_type(jt, json_type_int))
+            goto err_exit;
+
+        const char *event_name = json_object_get_string(jo);
+        if (!event_name)
+            goto err_exit;
+        protocol_trace(s, "events: received server event \"%s\"", event_name);
+
+        /* handle events */
+        if (!strcmp(event_name, "mp_disconnect")) {
+            /* server told us to disconnect, and not reconnect back for a while */
+            protocol_info(s, "server closing connection... trying to change servers");
+            s->peer_noconnect_ttl = SIMET_UPTIME2_DISCONNECT_BACKOFF;
+            simet_uptime2_reconnect(s);
+            /* no further event processing after this */
+            /* FIXME: queue a "we got a server disconnect event" event for next connection */
+            break;
+        } /* else if (!strcmp(... */
+    }
+
+    res = 1;
+
+err_exit:
+    if (json_tokener_get_error(jtok) != json_tokener_success) {
+        protocol_info(s, "events: ignoring invalid message: %s",
+                      json_tokener_error_desc(json_tokener_get_error(jtok)));
+    } else if (res > 1) {
+        protocol_info(s, "events: received malformed message");
+    }
+    json_tokener_free(jtok);
+    if (jroot)
+        json_object_put(jroot);
+    return res;
+}
+
 /* State: MAINLOOP */
 const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
     { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE, .handler = NULL },
     { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,  .handler = &simet_uptime2_msghdl_maconfig },
+    { .type = SIMET_INETUP_P_MSGTYPE_EVENTS,    .handler = &simet_uptime2_msghdl_serverevents },
     { .type = SIMET_INETUP_MSGHANDLER_EOL }
 };
 
@@ -1738,6 +1816,7 @@ int main(int argc, char **argv) {
             got_reload_signal = 0;
             for (j = 0; j < servers_count; j++)
                 simet_uptime2_reconnect(servers[j]);
+            /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
         }
     } while (1);
 
