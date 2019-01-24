@@ -1188,6 +1188,21 @@ static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
     return 0;
 }
 
+/* ensure it is compatible with xx_nameinfo()! */
+static int xx_cmpnameinfo(const struct addrinfo * const ai,
+                          const sa_family_t family, const char *hostname)
+{
+    char namebuf[256];
+
+    if (!hostname || !ai || ai->ai_family != family || !ai->ai_addr || !ai->ai_addrlen)
+        return 0;
+    if (getnameinfo(ai->ai_addr, ai->ai_addrlen, namebuf, sizeof(namebuf),
+                    NULL, 0, NI_NUMERICHOST | NI_NUMERICSERV))
+        return 0; /* fail safe */
+
+    return (strncmp(namebuf, hostname, sizeof(namebuf)) == 0);
+}
+
 static int uptimeserver_connect(struct simet_inetup_server * const s,
                        const char * const server_name, const char * const server_port)
 {
@@ -1236,6 +1251,12 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         return backoff;
     }
     for (airp = air; airp != NULL; airp = airp->ai_next) {
+        /* avoid fast reconnect to same peer */
+        if (s->peer_noconnect_ttl && xx_cmpnameinfo(airp, s->ai_family, s->peer_name)) {
+            protocol_trace(s, "skipping peer %s on this attempt", s->peer_name);
+            continue;
+        }
+
         s->socket = socket(airp->ai_family, airp->ai_socktype | SOCK_CLOEXEC, airp->ai_protocol);
         if (s->socket == -1)
             continue;
@@ -1282,6 +1303,8 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     s->backoff_clock = reltime();
 
     if (s->socket == -1) {
+        if (s->peer_noconnect_ttl)
+            s->peer_noconnect_ttl--;
         protocol_trace(s, "could not connect, will retry in %d seconds", backoff);
         return backoff;
     }
@@ -1298,6 +1321,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     if (getpeername(s->socket, (struct sockaddr *)&sa, &sa_len) || 
         xx_nameinfo(&sa, sa_len, &s->peer_family, &s->peer_name, &s->peer_port))
         print_warn("failed to get peer metadata, coping with it");
+    s->peer_noconnect_ttl = 0;
 
     sa_len = sizeof(struct sockaddr_storage);
     sa.ss_family = AF_UNSPEC;

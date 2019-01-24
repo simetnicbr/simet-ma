@@ -31,6 +31,7 @@
 #define SIMET_UPTIME2_DEFAULT_KEEPALIVE  30    /* at least one keepalive per default timeout */
 #define SIMET_UPTIME2_LONGEST_KEEPALIVE  (SIMET_UPTIME2_LONGEST_TIMEOUT / 2)
 #define SIMET_UPTIME2_SHORTEST_KEEPALIVE (SIMET_UPTIME2_SHORTEST_TIMEOUT / 2)
+#define SIMET_UPTIME2_DISCONNECT_BACKOFF 1    /* connection tries before can reconnect to same peer */
 
 /* SIMET2 Uptime2 protocol constants */
 #define SIMET_INETUP_P_MSGTYPE_CONNECT    0x0000U
@@ -91,6 +92,7 @@ struct simet_inetup_server {
     sa_family_t local_family;
     const char *local_name;
     const char *local_port;
+    unsigned int peer_noconnect_ttl;
 
     /* server-configurable parameters */
     unsigned int client_timeout; /* client times out the server, seconds */
