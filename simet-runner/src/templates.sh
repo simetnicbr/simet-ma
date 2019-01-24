@@ -86,7 +86,7 @@ error_template(){
   "end": "$_task_end",
   "status": $_task_status,
   "table": [
-    { "function": [ { "uri": "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_stderr-output__Multiple_Raw" } ],
+    { "function": [ { "uri": "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_LineOutputStderr__Multiple_Raw" } ],
       "column": [ "stderr_line" ],
       "value": [
 EOF1ERRORTEMPLATE

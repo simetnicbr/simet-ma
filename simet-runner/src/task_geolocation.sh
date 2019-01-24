@@ -29,7 +29,7 @@ geolocate() {
   GEO_ACC=$(echo "$GEO" | sed -n -e '2 {s/^ *[^ ]\+ \+[^ ]\+ *// ; p}')
   cat << EOFGEOLOCATE
 {
-  "function": [ { "uri": "urn:ietf:metrics:perf:Priv_SPMonitor_Active_SIMET-GeolocationAPI-WatchPosition__Multiple_Raw" } ],
+  "function": [ { "uri": "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_IEEE80211-BSSID-GoogleGeolocationAPI__Multiple_Singleton" } ],
   "column":   [ "timestamp", "latitude", "longitude", "accuracy" ],
   "row": [ { "value": [ "$GEO_UTIME", "$GEO_LAT", "$GEO_LNG", "$GEO_ACC" ] } ]
 }
