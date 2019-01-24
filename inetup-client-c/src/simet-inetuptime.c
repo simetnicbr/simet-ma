@@ -926,8 +926,6 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
     res = 1;
 
 err_exit:
-    if (jroot)
-        json_object_put(jo);
     if (json_tokener_get_error(jtok) != json_tokener_success) {
         protocol_info(s, "ma_config: ignoring invalid message: %s",
                       json_tokener_error_desc(json_tokener_get_error(jtok)));
@@ -935,6 +933,8 @@ err_exit:
         protocol_info(s, "ma_config: received malformed message");
     }
     json_tokener_free(jtok);
+    if (jroot)
+        json_object_put(jroot);
     return res;
 }
 
