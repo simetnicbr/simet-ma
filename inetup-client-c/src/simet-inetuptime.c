@@ -136,6 +136,7 @@ static time_t timer_check(const time_t timestamp, const time_t rel_timeout)
     return (rel_timeout > now_rel)? rel_timeout - now_rel : 0;
 }
 
+/* For simet2 inetup protocol purposes */
 static const char *str_ip46(int ai_family)
 {
     switch (ai_family) {
@@ -147,13 +148,25 @@ static const char *str_ip46(int ai_family)
     return "ip";
 }
 
+/* For user display purposes */
+static const char *str_ipv46(int ai_family)
+{
+    switch (ai_family) {
+        case AF_INET:
+            return "IPv4";
+        case AF_INET6:
+            return "IPv6";
+    }
+    return "IP";
+}
+
 #define protocol_trace(protocol_stream, format, arg...) \
     do { \
         if (log_level >= MSG_TRACE) { \
             fflush(stdout); \
             fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
                     (long int)reltime() - client_start_timestamp, \
-                    str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
+                    str_ipv46(protocol_stream->ai_family), protocol_stream->connection_id, \
                     (protocol_stream->connect_timestamp) ? \
                         (long int)reltime() - protocol_stream->connect_timestamp : \
                         0, \
@@ -167,7 +180,7 @@ static const char *str_ip46(int ai_family)
             fflush(stdout); \
             fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
                     (long int)reltime() - client_start_timestamp, \
-                    str_ip46(protocol_stream->ai_family), protocol_stream->connection_id, \
+                    str_ipv46(protocol_stream->ai_family), protocol_stream->connection_id, \
                     (protocol_stream->connect_timestamp) ? \
                         (long int)reltime() - protocol_stream->connect_timestamp : \
                         0, \
@@ -843,7 +856,7 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
                 return 1;
             }
         }
-        protocol_info(s, "ma_config: invalid %s: %s",
+        protocol_trace(s, "ma_config: invalid %s: %s",
                       param_name, json_object_to_json_string(jo));
         return -EINVAL;
     }
@@ -927,10 +940,10 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
 
 err_exit:
     if (json_tokener_get_error(jtok) != json_tokener_success) {
-        protocol_info(s, "ma_config: ignoring invalid message: %s",
+        protocol_trace(s, "ma_config: ignoring invalid message: %s",
                       json_tokener_error_desc(json_tokener_get_error(jtok)));
     } else if (res > 1) {
-        protocol_info(s, "ma_config: received malformed message");
+        protocol_trace(s, "ma_config: received malformed message");
     }
     json_tokener_free(jtok);
     if (jroot)
@@ -1196,7 +1209,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         s->backoff_level++;
     backoff = (int) backoff_times[s->backoff_level];
 
-    protocol_info(s, "attempting connection to %s, port %s", server_name, server_port);
+    protocol_trace(s, "attempting connection to %s, port %s", server_name, server_port);
 
     s->connect_timestamp = 0;
 
@@ -1289,9 +1302,11 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
     /* done... */
     s->connect_timestamp = reltime();
-    protocol_info(s, "connected: local %s:[%s]:%s, remote %s:[%s]:%s",
-            str_ip46(s->local_family), s->local_name, s->local_port,
-            str_ip46(s->peer_family), s->peer_name, s->peer_port);
+    protocol_info(s, "connect: connected over %s to measurement peer %s, port %s",
+            str_ipv46(s->local_family), server_name, server_port);
+    protocol_info(s, "connect: local %s address [%s]:%s, remote %s address [%s]:%s",
+            str_ipv46(s->local_family), s->local_name, s->local_port,
+            str_ipv46(s->peer_family), s->peer_name, s->peer_port);
 
     s->state = SIMET_INETUP_P_C_REFRESH;
     return 0;
@@ -1586,7 +1601,7 @@ int main(int argc, char **argv) {
 
 #if 0
             print_msg(MSG_DEBUG, "%s(%u): main loop, currently at state %u",
-                    str_ip46(s->ai_family), s->connection_id, s->state);
+                    str_ipv46(s->ai_family), s->connection_id, s->state);
 #endif
 
             switch (s->state) {
@@ -1606,7 +1621,7 @@ int main(int argc, char **argv) {
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (s->backoff_reset_clock &&
                         timer_check(s->backoff_reset_clock, s->server_timeout * 2) == 0) {
-                    protocol_trace(s, "assuming server is willing to provide service, backoff timer reset");
+                    protocol_trace(s, "assuming measurement peer is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
                 }
 
@@ -1667,7 +1682,7 @@ int main(int argc, char **argv) {
             if (poll_res > 0) {
                 for (j = 0; j < servers_count; j++) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
-                        protocol_info(servers[j], "connection to server lost");
+                        protocol_info(servers[j], "connection to measurement peer lost");
                         simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
                     } else if (servers_pollfds[j].revents & ~POLLIN) {
                         protocol_trace(servers[j],
