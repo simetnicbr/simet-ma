@@ -1108,6 +1108,10 @@ static void simet_uptime2_backoff_reset(struct simet_inetup_server * const s)
  * returns: N < 0 : errors (-errno)
  *          N = 0 : OK, run next state ASAP
  *          N > 0 : OK, no need to run again for N seconds
+ *
+ * Do not close the socket without checking first if the
+ * state-machine expects it, otherwise it will poll() on
+ * a closed socket.
  */
 static int uptimeserver_refresh(struct simet_inetup_server * const s)
 {
@@ -1187,7 +1191,7 @@ static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
 static int uptimeserver_connect(struct simet_inetup_server * const s,
                        const char * const server_name, const char * const server_port)
 {
-    struct addrinfo *air, *airp;
+    struct addrinfo *air = NULL, *airp;
     struct addrinfo ai;
     int backoff;
     int r;
@@ -1199,6 +1203,8 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
 
     if (s->state == SIMET_INETUP_P_C_RECONNECT && s->socket != -1)
         tcpaq_close(s);
+
+    assert(s->socket == -1);
 
     /* Backoff timer */
     time_t waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
@@ -1268,18 +1274,17 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         s->socket = -1;
     }
 
+    freeaddrinfo(air);
+    air = airp = NULL;
+
     /* FIXME: backoff_clock update required because we are doing blocking connects(),
      * so several seconds will have elapsed already */
     s->backoff_clock = reltime();
 
-    if (!airp) {
+    if (s->socket == -1) {
         protocol_trace(s, "could not connect, will retry in %d seconds", backoff);
         return backoff;
     }
-
-    freeaddrinfo(air);
-
-    s->state = SIMET_INETUP_P_C_RECONNECT; /* if we abort, ensure we will cleanup */
 
     /* Disable Naggle, we don't need it (but we can tolerate it) */
     setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
@@ -1316,6 +1321,7 @@ static int uptimeserver_disconnect(struct simet_inetup_server *s)
 {
     int rc = 0;
 
+    /* warning: state INIT might not have run! */
     if (s->socket == -1) {
         /* not connected */
         s->state = SIMET_INETUP_P_C_SHUTDOWN;
@@ -1606,6 +1612,7 @@ int main(int argc, char **argv) {
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
+                assert(s->socket == -1 && s->out_queue.buffer && s->in_queue.buffer);
                 servers_pollfds[j].fd = -1;
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
@@ -1650,6 +1657,7 @@ int main(int argc, char **argv) {
                 break;
 
             case SIMET_INETUP_P_C_SHUTDOWN:
+                /* warning: state INIT might not have run! */
                 num_shutdown++;
                 servers_pollfds[j].fd = -1;
                 wait = INT_MAX;
@@ -1682,8 +1690,12 @@ int main(int argc, char **argv) {
             if (poll_res > 0) {
                 for (j = 0; j < servers_count; j++) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
-                        protocol_info(servers[j], "connection to measurement peer lost");
-                        simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
+                        if (servers[j]->state != SIMET_INETUP_P_C_RECONNECT) {
+                            /* ugly, but less ugly than having reconnect close the socket immediately */
+                            protocol_info(servers[j], "connection to measurement peer lost");
+                            simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
+                        }
+                        servers_pollfds[j].fd = -1;
                     } else if (servers_pollfds[j].revents & ~POLLIN) {
                         protocol_trace(servers[j],
                             "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
