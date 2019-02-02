@@ -57,7 +57,7 @@ int twamp_run_client(TWAMPParameters param) {
     // Create TWAMPReport
     TWAMPReport * report = twamp_report_init();
     if (!report)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
     report->device_id = param.device_id ? param.device_id : "(unknown)";
     report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_count);
     report->family = param.family;
@@ -70,28 +70,28 @@ int twamp_run_client(TWAMPParameters param) {
     ServerGreeting *srvGreetings = malloc(SERVER_GREETINGS_SIZE);
     SetupResponse *stpResponse = malloc(SETUP_RESPONSE_SIZE);
     if (!srvGreetings || !stpResponse)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
     memset(stpResponse, 0 , SETUP_RESPONSE_SIZE);
     ServerStart *srvStart = malloc(SERVER_START_SIZE);
     if (!srvStart)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
     
     RequestSession *rqtSession = malloc(REQUEST_SESSION_SIZE);
     if (!rqtSession)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
     memset(rqtSession, 0 , REQUEST_SESSION_SIZE);
     AcceptSession *actSession = malloc(ACCEPT_SESSION_SIZE);
     StartSessions *strSession = malloc(START_SESSIONS_SIZE);
     if (!actSession || !strSession)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
     memset(strSession, 0 , START_SESSIONS_SIZE);
     StartAck *strAck = malloc(START_ACK_SIZE);
     if (!strAck)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
 
     StopSessions *stpSessions = malloc(sizeof(StopSessions));
     if (!stpSessions)
-	return SEXIT_OUTOFRESOURCE;
+    return SEXIT_OUTOFRESOURCE;
     memset(stpSessions, 0 , sizeof(StopSessions));
 
     int rc;
@@ -179,11 +179,11 @@ int twamp_run_client(TWAMPParameters param) {
     // REQUEST SESSION
     socklen_t addr_len = sizeof(local_addr_control);
     memset(&local_addr_control, 0, addr_len);
-	if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, (socklen_t *) &addr_len) < 0){
+    if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, (socklen_t *) &addr_len) < 0){
         print_err("getsockname problem");
         rc = SEXIT_INTERNALERR;
         goto CONTROL_CLOSE;
-	}
+    }
 
     char str[INET6_ADDRSTRLEN];
     if (get_ip_str(&local_addr_control, str, INET6_ADDRSTRLEN) == NULL) {
@@ -199,14 +199,14 @@ int twamp_run_client(TWAMPParameters param) {
     fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, 2000);
     if (fd_test < 0) {
         print_err("usock_inet_timeout problem");
-	rc = SEXIT_MP_REFUSED;
+    rc = SEXIT_MP_REFUSED;
         goto CONTROL_CLOSE;
     }
 
     fd_ready = usock_wait_ready(fd_test, 5000);
     if (fd_ready != 0) {
         print_err("usock_wait_ready problem");
-	rc = SEXIT_MP_TIMEOUT;
+    rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
     }
 
@@ -216,7 +216,7 @@ int twamp_run_client(TWAMPParameters param) {
     uint16_t sender_port = 862;
     addr_len = sizeof(local_addr_measure);
     memset(&local_addr_measure, 0, addr_len);
-	if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0) {
+    if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0) {
         print_msg(MSG_DEBUG, "getsockname problem");
         rc = SEXIT_INTERNALERR;
         goto TEST_CLOSE;
@@ -268,8 +268,8 @@ int twamp_run_client(TWAMPParameters param) {
 
     testPort = malloc(sizeof(char) * 6);
     if (!testPort) {
-	rc = SEXIT_OUTOFRESOURCE;
-	goto TEST_CLOSE;
+    rc = SEXIT_OUTOFRESOURCE;
+    goto TEST_CLOSE;
     }
     snprintf(testPort, 6, "%u", receiver_port);
 
@@ -292,7 +292,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     print_msg(MSG_DEBUG, "fd_test after: %d", fd_test);
     if (report_socket_metrics(report, fd_test, IPPROTO_UDP))
-	print_warn("failed to add TEST socket information to report, proceeding anyway...");
+    print_warn("failed to add TEST socket information to report, proceeding anyway...");
     else
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
 
@@ -376,11 +376,11 @@ MEM_FREE:
 
 static int convert_family(int family) {
     if (family == 4)
-		return USOCK_IPV4ONLY;
-	else if (family == 6)
-		return USOCK_IPV6ONLY;
-	else
-		return 0;
+        return USOCK_IPV4ONLY;
+    else if (family == 6)
+        return USOCK_IPV6ONLY;
+    else
+        return 0;
 }
 
 static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
@@ -433,25 +433,25 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
 // twamp_callback_thread receive the reflected packets and return the result array
 static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
-	int bytes_recv = 0;
+    int bytes_recv = 0;
     uint pkg_count = 0;
 
-	struct timeval tv_cur, tv_stop, tv_recv;
+    struct timeval tv_cur, tv_stop, tv_recv;
     UnauthReflectedPacket *reflectedPacket = malloc(sizeof(UnauthReflectedPacket));
     memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket));
 
     // Get the current time and set the timeout value in tv_stop
-	gettimeofday(&tv_cur, NULL);
-	tv_stop.tv_usec = tv_cur.tv_usec;
-	tv_stop.tv_sec = tv_cur.tv_sec + (long)t_param->param.timeout_test;
+    gettimeofday(&tv_cur, NULL);
+    tv_stop.tv_usec = tv_cur.tv_usec;
+    tv_stop.tv_sec = tv_cur.tv_sec + (long)t_param->param.timeout_test;
 
-	while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_count)) {
+    while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_count)) {
         // Read message
-		bytes_recv = receive_reflected_packet(t_param->test_socket, 10, reflectedPacket);
+        bytes_recv = receive_reflected_packet(t_param->test_socket, 10, reflectedPacket);
 
         gettimeofday(&tv_recv, NULL);
 
-		if (bytes_recv != sizeof(UnauthReflectedPacket)) {
+        if (bytes_recv != sizeof(UnauthReflectedPacket)) {
             // Somthing is wrong
             print_warn("unexpected message size. bytes_recv(%d) != sizeof(UnauthReflectedPacket)", bytes_recv);
         } else {
@@ -459,29 +459,29 @@ static void *twamp_callback_thread(void *p) {
             t_param->report->result->raw_data[pkg_count].time = timeval_to_timestamp(&tv_recv);
             memcpy(&(t_param->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
             pkg_count++;
-		}
+        }
 
-		gettimeofday(&tv_cur, NULL);
-	}
+        gettimeofday(&tv_cur, NULL);
+    }
 
     // Store total received packets
     t_param->report->result->received_packets = pkg_count;
 
     free(reflectedPacket);
 
-	return NULL;
+    return NULL;
 }
 
 static int twamp_test(TestParameters test_param) {
     struct timeval tv_cur, tv_stop;
     uint counter = 0;
     int send_resp = 0;
-	
+    
     UnauthPacket *packet = malloc(sizeof(UnauthPacket));
     memset(packet, 0 , sizeof(UnauthPacket));
 
     pthread_t receiver_thread;
-	pthread_create(&receiver_thread, NULL, twamp_callback_thread, &test_param);
+    pthread_create(&receiver_thread, NULL, twamp_callback_thread, &test_param);
 
     // Sending test packets
     gettimeofday(&tv_cur, NULL);
@@ -596,3 +596,5 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
 
     return -1;
 }
+
+/* vim: set et ts=4 sw=4 : */

@@ -36,10 +36,10 @@ int log_level = 2;
 const char* progname = PACKAGE_NAME;
 
 static const char program_copyright[]=
-	"Copyright (c) 2018 NIC.br\n\n"
-	"This is free software; see the source for copying conditions.\n"
-	"There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR\n"
-	"A PARTICULAR PURPOSE.\n";
+    "Copyright (c) 2018 NIC.br\n\n"
+    "This is free software; see the source for copying conditions.\n"
+    "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR\n"
+    "A PARTICULAR PURPOSE.\n";
 
 static void print_version(void)
 {
@@ -50,22 +50,22 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-p <service port>] [-t <timeout>] "
-	    "[-c <packet count>] [-i <interpacket interval>] [-d <device id>] "
-	    "<server>\n", p);
+        "[-c <packet count>] [-i <interpacket interval>] [-d <device id>] "
+        "<server>\n", p);
     if (mode) {
-	fprintf(stderr, "\n"
-		"\t-h\tprint usage help and exit\n"
-		"\t-V\tprint program version and copyright, and exit\n"
-		"\t-v\tverbose mode (repeat for increased verbosity)\n"
-		"\t-q\tquiet mode (repeat for errors-only)\n"
-		"\t-4\tuse IPv4, instead of system default\n"
-		"\t-6\tuse IPv6, instead of system default\n"
-		"\t-t\tconnection timeout in seconds\n"
-		"\t-c\tnumber of packets to transmit per session\n"
-		"\t-i\ttime in nanoseconds between each packet (lower bound)\n"
-		"\t-d\tdevice identification string to send to the TWAMP server\n"
-		"\t-p\tservice name or numeric port of the TWAMP server\n"
-		"\nserver: hostname or IP address of the TWAMP server\n\n");
+        fprintf(stderr, "\n"
+            "\t-h\tprint usage help and exit\n"
+            "\t-V\tprint program version and copyright, and exit\n"
+            "\t-v\tverbose mode (repeat for increased verbosity)\n"
+            "\t-q\tquiet mode (repeat for errors-only)\n"
+            "\t-4\tuse IPv4, instead of system default\n"
+            "\t-6\tuse IPv6, instead of system default\n"
+            "\t-t\tconnection timeout in seconds\n"
+            "\t-c\tnumber of packets to transmit per session\n"
+            "\t-i\ttime in nanoseconds between each packet (lower bound)\n"
+            "\t-d\tdevice identification string to send to the TWAMP server\n"
+            "\t-p\tservice name or numeric port of the TWAMP server\n"
+            "\nserver: hostname or IP address of the TWAMP server\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
@@ -143,40 +143,40 @@ int main(int argc, char **argv)
             else
                 log_level = 0;
             break;
-	case '4':
-	    family = 4;
-	    break;
-	case '6':
-	    family = 6;
-	    break;
-	case 'p':
-	    port = optarg;
-	    break;
-	case 't':
-	    timeout_test = atoi(optarg);
-	    break;
-	case 'c':
-	    packet_count = atoi(optarg);
-	    break;
-	case 'i':
-	    packet_interval_ns = atoi(optarg);
-	    break;
-	case 'd':
-	    device_id = optarg;
-	    break;
-	case 'h':
-	    print_usage(argv[0], 1);
-	    /* fall-through */ /* silence bogus warning */
-	case 'V':
-	    print_version();
-	    /* fall-through */ /* silence bogus warning */
-	default:
-	    print_usage(argv[0], 0);
+    case '4':
+        family = 4;
+        break;
+    case '6':
+        family = 6;
+        break;
+    case 'p':
+        port = optarg;
+        break;
+    case 't':
+        timeout_test = atoi(optarg);
+        break;
+    case 'c':
+        packet_count = atoi(optarg);
+        break;
+    case 'i':
+        packet_interval_ns = atoi(optarg);
+        break;
+    case 'd':
+        device_id = optarg;
+        break;
+    case 'h':
+        print_usage(argv[0], 1);
+        /* fall-through */ /* silence bogus warning */
+    case 'V':
+        print_version();
+        /* fall-through */ /* silence bogus warning */
+    default:
+        print_usage(argv[0], 0);
         }
     }
 
     if (optind >= argc || argc - optind != 1)
-	print_usage(argv[0], 0);
+    print_usage(argv[0], 0);
 
     host = argv[optind];
 
@@ -199,3 +199,5 @@ int main(int argc, char **argv)
 
     return value;
 }
+
+/* vim: set et ts=4 sw=4 : */
