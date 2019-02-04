@@ -231,9 +231,11 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     report_private = (struct twamp_report_private *)report->privdata;
 
     snprintf(metric_name, sizeof(metric_name),
-        "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%ld-"
+        "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
+        "LossThresholdUs%ld-IntervalDurationUs%ld-"
         "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
-        param->packets_interval_us / 1000, param->packets_count, TST_PKT_SIZE);
+        param->packets_timeout_us, param->packets_interval_us,
+        param->packets_count, TST_PKT_SIZE);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 

@@ -122,8 +122,8 @@ int main(int argc, char **argv)
     char *port = "862";
     int family = 0;
     int connect_timeout = 15;
-    int packet_count = 50;
-    long packet_interval_us = 100000;
+    int packet_count = 200;
+    long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
 
     progname = argv[0];
@@ -191,7 +191,7 @@ int main(int argc, char **argv)
     param.port = port;
     param.family = family;
     param.connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout;
-    param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 100) ? 100 : packet_count);
+    param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count);
     param.packets_interval_us = packet_interval_us;
     param.packets_timeout_us = packet_timeout_us;
 
