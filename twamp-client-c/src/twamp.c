@@ -330,8 +330,9 @@ int twamp_run_client(TWAMPParameters param) {
 
     twamp_report(report, &param);
 
-    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u",
-            t_param.report->result->packets_sent, t_param.report->result->received_packets);
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+            t_param.report->result->packets_sent, t_param.report->result->packets_received,
+            t_param.report->result->packets_dropped_timeout);
 
     rc = SEXIT_SUCCESS;
 
@@ -470,7 +471,7 @@ static void *twamp_callback_thread(void *p) {
     }
 
     // Store total received packets
-    t_param->report->result->received_packets = pkg_count;
+    t_param->report->result->packets_received = pkg_count;
 
     free(reflectedPacket);
 

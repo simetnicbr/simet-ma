@@ -269,7 +269,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     /* each member of the tbl_rows below be a single "value: ["cell", "cell"]" array object? */
     json_object * jarray_res_tbl_rows = json_object_new_array();
 
-    for (unsigned int it = 0; it < report->result->received_packets; it++) {
+    for (unsigned int it = 0; it < report->result->packets_received; it++) {
         ReportPacket pkg;
 
         struct timeval tv_sender = timestamp_to_timeval(&(report->result->raw_data[it].data.SenderTime));
@@ -299,6 +299,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
         /* drop packets above the per-packet rtt from report */
         if (pkg.rtt_us > param->packets_timeout_us) {
+            report->result->packets_dropped_timeout++;
             continue;
         }
 
