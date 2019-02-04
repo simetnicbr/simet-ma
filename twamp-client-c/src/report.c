@@ -32,10 +32,10 @@
 
 #define TWAMP_R_NUMCOLS 8
 const char * const twamp_report_col_names[TWAMP_R_NUMCOLS] = {
-	"senderSeqNum", "reflectorSeqNum", "receiverSeqNum",
-	"senderTimeUs", "reflectorRecvTimeUs",
-	"reflectorSendTimeUs", "receiverTimeUs",
-	"rttUs"
+    "senderSeqNum", "reflectorSeqNum", "receiverSeqNum",
+    "senderTimeUs", "reflectorRecvTimeUs",
+    "reflectorSendTimeUs", "receiverTimeUs",
+    "rttUs"
 };
 
 enum {
@@ -64,9 +64,9 @@ struct twamp_report_private {
 
 static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
 {
-	char buf[32];
-	snprintf(buf, sizeof(buf), "%" PRIu64, v);
-        json_object_array_add(j, json_object_new_string(buf));
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%" PRIu64, v);
+    json_object_array_add(j, json_object_new_string(buf));
 }
 
 static const char *str_ip46(int ai_family)
@@ -88,9 +88,9 @@ static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
     char namebuf[256], portbuf[32];
     assert(hostname && hostport);
 
-    if (sa->ss_family == AF_UNSPEC || getnameinfo((struct sockaddr *)sa, sl,
-                                            namebuf, sizeof(namebuf), portbuf, sizeof(portbuf),
-					    NI_NUMERICHOST | NI_NUMERICSERV)) {
+    if (sa->ss_family == AF_UNSPEC
+            || getnameinfo((struct sockaddr *)sa, sl, namebuf, sizeof(namebuf),
+                            portbuf, sizeof(portbuf), NI_NUMERICHOST | NI_NUMERICSERV)) {
         if (sa_f)
             *sa_f = AF_UNSPEC;
         if (family)
@@ -119,21 +119,21 @@ static json_object* xx_report_socket_metric(int sockfd, int proto)
     json_object *jres_tbl_content = NULL;
 
     if (sockfd == -1 || (proto != IPPROTO_TCP && proto != IPPROTO_UDP))
-	return NULL;
+        return NULL;
 
     ss_len = sizeof(ss_local);
     memset(&ss_local, 0, ss_len);
     if (getsockname(sockfd, (struct sockaddr*) &ss_local, &ss_len))
-	return NULL;
+        return NULL;
     ss_len = sizeof(ss_remote);
     memset(&ss_remote, 0, ss_len);
     if (getpeername(sockfd, (struct sockaddr*) &ss_remote, &ss_len))
-	return NULL;
+        return NULL;
 
     memset(t_row, 0, sizeof(t_row));
     snprintf(metric_name, sizeof(metric_name),
-	    "urn:ietf:metrics:perf:Priv_MPMonitor_Active_%s-ConnectionEndpoints__Multiple_Raw",
-	    (proto == IPPROTO_TCP) ? "TCP" : "UDP" );
+             "urn:ietf:metrics:perf:Priv_MPMonitor_Active_%s-ConnectionEndpoints__Multiple_Raw",
+             (proto == IPPROTO_TCP) ? "TCP" : "UDP" );
 
     t_row[socket_tbl_col_observer] = strdup("ma"); /* measurement-agent */
     if (xx_nameinfo(&ss_local, sizeof(ss_local), NULL,
@@ -152,7 +152,7 @@ static json_object* xx_report_socket_metric(int sockfd, int proto)
     /* TABLE CONTENT */
     jres_tbl_content = json_object_new_object();  /* shall contain function, column, row arrays */
     if (!jres_tbl_content)
-	goto err_exit;
+        goto err_exit;
 
     /* table function object list */
     jo = json_object_new_array();
@@ -231,9 +231,9 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     report_private = (struct twamp_report_private *)report->privdata;
 
     snprintf(metric_name, sizeof(metric_name),
-	    "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%u-"
-	    "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
-	    param->packets_interval_ns / 1000, param->packets_count, TST_PKT_SIZE);
+        "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%u-"
+        "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
+        param->packets_interval_ns / 1000, param->packets_count, TST_PKT_SIZE);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 
@@ -355,7 +355,7 @@ TWAMPReport * twamp_report_init(void)
     
     tr = malloc(sizeof(TWAMPResult));
     if (!tr)
-	goto err_exit;
+        goto err_exit;
     memset(tr, 0, sizeof(TWAMPResult));
 
     rp = malloc(sizeof(struct twamp_report_private));
@@ -365,7 +365,7 @@ TWAMPReport * twamp_report_init(void)
 
     r = malloc(sizeof(TWAMPReport));
     if (!r)
-	goto err_exit;
+        goto err_exit;
     memset(r, 0, sizeof(TWAMPReport));
 
     r->result = tr;
@@ -391,17 +391,18 @@ void twamp_report_done(TWAMPReport *r)
 {
     struct twamp_report_private *p;
     if (r) {
-	p = (struct twamp_report_private *)(r->privdata);
-	if (p) {
-	    if (p->root)
-		json_object_put(p->root);
-	    free(p);
+        p = (struct twamp_report_private *)(r->privdata);
+        if (p) {
+            if (p->root)
+                json_object_put(p->root);
+            free(p);
+            }
+        if (r->result) {
+            free(r->result->raw_data);
+            free(r->result);
         }
-	if (r->result) {
-	    free(r->result->raw_data);
-	    free(r->result);
-	}
-	free(r);
+        free(r);
     }
 }
 
+/* vim: set et ts=4 sw=4 : */
