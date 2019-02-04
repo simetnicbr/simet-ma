@@ -35,9 +35,10 @@ typedef struct twamp_parameters {
     char *host;
     char *port;
     int family;
-    int timeout_test;
+    int connect_timeout;
     unsigned int packets_count;
-    unsigned int packets_interval_ns;
+    long int packets_interval_us;
+    long int packets_timeout_us;
 } TWAMPParameters;
 
 typedef struct twamp_test_parameters {

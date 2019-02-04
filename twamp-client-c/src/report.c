@@ -231,9 +231,11 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     report_private = (struct twamp_report_private *)report->privdata;
 
     snprintf(metric_name, sizeof(metric_name),
-        "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-IntervalDurationMs%u-"
+        "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
+        "LossThresholdUs%ld-IntervalDurationUs%ld-"
         "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
-        param->packets_interval_ns / 1000, param->packets_count, TST_PKT_SIZE);
+        param->packets_timeout_us, param->packets_interval_us,
+        param->packets_count, TST_PKT_SIZE);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 
@@ -267,7 +269,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     /* each member of the tbl_rows below be a single "value: ["cell", "cell"]" array object? */
     json_object * jarray_res_tbl_rows = json_object_new_array();
 
-    for (unsigned int it = 0; it < report->result->received_packets; it++) {
+    for (unsigned int it = 0; it < report->result->packets_received; it++) {
         ReportPacket pkg;
 
         struct timeval tv_sender = timestamp_to_timeval(&(report->result->raw_data[it].data.SenderTime));
@@ -294,6 +296,12 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
         pkg.receiverTime_us = returnTime;
 
         pkg.rtt_us = returnTime - sendTime - processTime;
+
+        /* drop packets above the per-packet rtt from report */
+        if (pkg.rtt_us > param->packets_timeout_us) {
+            report->result->packets_dropped_timeout++;
+            continue;
+        }
 
         /* this row (object), will be inserted into the row array later, it is a list of cells */
         json_object * jcurrow = json_object_new_array();

@@ -43,7 +43,7 @@ static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxle
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
-static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket);
+static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket);
 static void *twamp_callback_thread(void *param);
 
 static int twamp_test(TestParameters);
@@ -330,8 +330,9 @@ int twamp_run_client(TWAMPParameters param) {
 
     twamp_report(report, &param);
 
-    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u",
-            t_param.report->result->packets_sent, t_param.report->result->received_packets);
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+            t_param.report->result->packets_sent, t_param.report->result->packets_received,
+            t_param.report->result->packets_dropped_timeout);
 
     rc = SEXIT_SUCCESS;
 
@@ -434,20 +435,25 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
 static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
     int bytes_recv = 0;
-    uint pkg_count = 0;
+    unsigned int pkg_count = 0;
 
-    struct timeval tv_cur, tv_stop, tv_recv;
+    struct timeval tv_cur, tv_stop, tv_recv, to;
+
     UnauthReflectedPacket *reflectedPacket = malloc(sizeof(UnauthReflectedPacket));
-    memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket));
+    memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket)); /* FIXME */
 
-    // Get the current time and set the timeout value in tv_stop
+    /* we wait for (number of packets * inter-packet interval) + per-packet timeout */
+    long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
+			  + t_param->param.packets_timeout_us;
+    to.tv_sec = tt_us / 1000000;
+    to.tv_usec = tt_us - (to.tv_sec * 1000000);
+
     gettimeofday(&tv_cur, NULL);
-    tv_stop.tv_usec = tv_cur.tv_usec;
-    tv_stop.tv_sec = tv_cur.tv_sec + (long)t_param->param.timeout_test;
+    timeradd(&tv_cur, &to, &tv_stop);
 
     while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_count)) {
         // Read message
-        bytes_recv = receive_reflected_packet(t_param->test_socket, 10, reflectedPacket);
+        bytes_recv = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket);
 
         gettimeofday(&tv_recv, NULL);
 
@@ -465,7 +471,7 @@ static void *twamp_callback_thread(void *p) {
     }
 
     // Store total received packets
-    t_param->report->result->received_packets = pkg_count;
+    t_param->report->result->packets_received = pkg_count;
 
     free(reflectedPacket);
 
@@ -473,10 +479,10 @@ static void *twamp_callback_thread(void *p) {
 }
 
 static int twamp_test(TestParameters test_param) {
-    struct timeval tv_cur, tv_stop;
+    struct timeval tv_cur;
     uint counter = 0;
     int send_resp = 0;
-    
+
     UnauthPacket *packet = malloc(sizeof(UnauthPacket));
     memset(packet, 0 , sizeof(UnauthPacket));
 
@@ -485,10 +491,7 @@ static int twamp_test(TestParameters test_param) {
 
     // Sending test packets
     gettimeofday(&tv_cur, NULL);
-    tv_stop.tv_sec = tv_cur.tv_sec + (long)test_param.param.timeout_test;
-    tv_stop.tv_usec = tv_cur.tv_usec;
-
-    while(timercmp(&tv_cur, &tv_stop, <) && (counter < test_param.param.packets_count)) {
+    while (counter < test_param.param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter++);
     
@@ -497,15 +500,17 @@ static int twamp_test(TestParameters test_param) {
         encode_be_timestamp(&ts);
         packet->Time = ts;
 
+        /* TODO: send directly */
         send_resp = message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket));
         if (send_resp == -1) {
             print_warn("message_send returned -1");
             counter--;
         }
-        usleep(test_param.param.packets_interval_ns);
+        usleep(test_param.param.packets_interval_us);
         gettimeofday(&tv_cur, NULL);
     }
 
+    /* we expect to wait here on pthread_join */
     if (pthread_join(receiver_thread, NULL) == 0) {
         print_msg(MSG_DEBUG, "[THREAD] twamp_callback_thread ended OK!");
     } else {
@@ -520,12 +525,13 @@ static int twamp_test(TestParameters test_param) {
     return 0;
 }
 
-static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPacket* reflectedPacket) {
+static int receive_reflected_packet(int socket, struct timeval *timeout,
+	UnauthReflectedPacket *reflectedPacket) {
     int recv_size = 0, recv_total = 0;
     uint8_t message[MAX_SIZE_MESSAGE];
     int fd_ready = 0;
     fd_set rset, rset_master;
-    struct timeval tv_timeo, tv_cur;
+    struct timeval tv_cur;
 
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
@@ -534,10 +540,8 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
         memset(&message, 0, MAX_SIZE_MESSAGE);
         memcpy(&rset, &rset_master, sizeof(rset_master));
 
-        tv_timeo.tv_sec = 5;
-        tv_timeo.tv_usec = 0;
-
-        fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
+	/* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
+        fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
@@ -591,8 +595,7 @@ static int receive_reflected_packet(int socket, int timeout, UnauthReflectedPack
                 print_warn("socket not in rset");
             }
         }
-
-    } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
+    } while ((timeout->tv_sec > 0) && (timeout->tv_usec > 0));
 
     return -1;
 }

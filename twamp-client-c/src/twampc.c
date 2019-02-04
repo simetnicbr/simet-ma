@@ -50,7 +50,7 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-p <service port>] [-t <timeout>] "
-        "[-c <packet count>] [-i <interpacket interval>] [-d <device id>] "
+        "[-c <packet count>] [-i <interpacket interval>] [-T <packet discard timeout>] [-d <device id>] "
         "<server>\n", p);
     if (mode) {
         fprintf(stderr, "\n"
@@ -62,7 +62,8 @@ static void print_usage(const char * const p, int mode)
             "\t-6\tuse IPv6, instead of system default\n"
             "\t-t\tconnection timeout in seconds\n"
             "\t-c\tnumber of packets to transmit per session\n"
-            "\t-i\ttime in nanoseconds between each packet (lower bound)\n"
+            "\t-i\ttime in microseconds between each packet (lower bound)\n"
+            "\t-T\ttime in microseconds before an unreceived packet is considered lost\n"
             "\t-d\tdevice identification string to send to the TWAMP server\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\nserver: hostname or IP address of the TWAMP server\n\n");
@@ -120,16 +121,17 @@ int main(int argc, char **argv)
     char *host = NULL;
     char *port = "862";
     int family = 0;
-    int timeout_test = 15;
-    int packet_count = 50;
-    int packet_interval_ns = 100000;
+    int connect_timeout = 15;
+    int packet_count = 200;
+    long packet_interval_us = 30000;
+    long packet_timeout_us = 10000000;
 
     progname = argv[0];
     sanitize_std_fds();
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVp:t:c:i:d:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVp:t:c:T:i:d:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -153,14 +155,17 @@ int main(int argc, char **argv)
         port = optarg;
         break;
     case 't':
-        timeout_test = atoi(optarg);
+        connect_timeout = atoi(optarg);
         break;
     case 'c':
         packet_count = atoi(optarg);
         break;
     case 'i':
-        packet_interval_ns = atoi(optarg);
+        packet_interval_us = atol(optarg);
         break;
+    case 'T':
+	packet_timeout_us = atol(optarg);
+	break;
     case 'd':
         device_id = optarg;
         break;
@@ -185,9 +190,10 @@ int main(int argc, char **argv)
     param.host = host;
     param.port = port;
     param.family = family;
-    param.timeout_test = (timeout_test <= 0 || timeout_test > 30) ? 30 : timeout_test;
-    param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 100) ? 100 : packet_count);
-    param.packets_interval_ns = (unsigned int)(packet_interval_ns);
+    param.connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout;
+    param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count);
+    param.packets_interval_us = packet_interval_us;
+    param.packets_timeout_us = packet_timeout_us;
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
