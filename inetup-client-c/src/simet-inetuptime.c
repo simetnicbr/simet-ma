@@ -1127,6 +1127,11 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     }
     json_object_object_add(jo, "engine-name", json_object_new_string(SIMET_ENGINE_NAME));
     json_object_object_add(jo, "engine-version", json_object_new_string(PACKAGE_VERSION));
+#ifdef IS_SIMETBOX_BUILD
+    json_object_object_add(jo, "agent-family", json_object_new_string("embedded"));
+#else
+    json_object_object_add(jo, "agent-family", json_object_new_string("system_service"));
+#endif
     if (s->connect_timestamp)
         json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
 
