@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 # debian/rules for simet-ma
-# Copyright (c) 2018 NIC.br
+# Copyright (c) 2018,2019 NIC.br
 # Published and distributed under the same license as the main work
 
 # Target: Debhelper v9, since we need to be compatible with Ubuntu 16.04 LTS

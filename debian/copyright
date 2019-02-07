@@ -2,13 +2,13 @@ Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: simet-ma
 Upstream-Contact: medicoes@simet.nic.br
 Source: http://simet.nic.br/projetos/
-Copyright: Copyright (c) 2017-2018 NIC.br
+Copyright: Copyright (c) 2017-2019 NIC.br
   Copyright (c) 2008-2017 Maarten Bosmans, Steven Barth, Felix Fietkau, Jo-Philipp Wich, Guido U. Draheim and others
 License: NICbr-GPL-3.0+
 Comment: Requires renaming of modified derived works; OpenSSL and LibreSSL exceptions; trademark protection; liability protection
 
 Files: *
-Copyright: Copyright (c) 2017-2018 NIC.br
+Copyright: Copyright (c) 2017-2019 NIC.br
   Copyright (c) 2008-2017 Maarten Bosmans, Steven Barth, Felix Fietkau, Jo-Philipp Wich, Guido U. Draheim and others
 License: NICbr-GPL-3.0+
 

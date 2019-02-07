@@ -1,6 +1,6 @@
 /*
  * SIMET2 MA Internet Availability Measurement (inetup) client
- * Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>
+ * Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1519,7 +1519,7 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
  */
 
 static const char program_copyright[]=
-    "Copyright (c) 2018 NIC.br\n\n"
+    "Copyright (c) 2018,2019 NIC.br\n\n"
     "This is free software; see the source for copying conditions.\n"
     "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR\n"
     "A PARTICULAR PURPOSE.\n";
