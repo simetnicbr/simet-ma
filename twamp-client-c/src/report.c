@@ -39,7 +39,8 @@ const char * const twamp_report_col_names[TWAMP_R_NUMCOLS] = {
 };
 
 enum {
-    socket_tbl_col_observer = 0,
+    socket_tbl_col_connid = 0,
+    socket_tbl_col_observer,
     socket_tbl_col_local_af,
     socket_tbl_col_local_addr,
     socket_tbl_col_local_port,
@@ -49,6 +50,7 @@ enum {
     SOCK_TBL_COL_MAX
 };
 const char * const socket_report_col_names[SOCK_TBL_COL_MAX] = {
+    [socket_tbl_col_connid] = "connection-id",
     [socket_tbl_col_observer] = "observer",
     [socket_tbl_col_local_af] = "local-address-family",
     [socket_tbl_col_local_addr] = "local-address",
@@ -130,11 +132,12 @@ static json_object* xx_report_socket_metric(int sockfd, int proto)
     if (getpeername(sockfd, (struct sockaddr*) &ss_remote, &ss_len))
         return NULL;
 
-    memset(t_row, 0, sizeof(t_row));
     snprintf(metric_name, sizeof(metric_name),
              "urn:ietf:metrics:perf:Priv_MPMonitor_Active_%s-ConnectionEndpoints__Multiple_Raw",
              (proto == IPPROTO_TCP) ? "TCP" : "UDP" );
 
+    memset(t_row, 0, sizeof(t_row));
+    t_row[socket_tbl_col_connid] = strdup("0");
     t_row[socket_tbl_col_observer] = strdup("ma"); /* measurement-agent */
     if (xx_nameinfo(&ss_local, sizeof(ss_local), NULL,
                 &t_row[socket_tbl_col_local_af],
