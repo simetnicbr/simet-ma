@@ -1,6 +1,6 @@
 #!/bin/sh
 # SIMET Measurement Agent - run the measurements
-# Copyright (c) 2018 NIC.br
+# Copyright (c) 2018,2019 NIC.br
 #
 # Distributed under the GPLv3+ license with additional terms and permissions
 # Refer to the COPYING file on the program source for details

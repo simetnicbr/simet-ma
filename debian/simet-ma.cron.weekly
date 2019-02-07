@@ -1,6 +1,6 @@
 #!/bin/sh
 # simet-ma.cron.weekly - weekly maintenance for the SIMET Measurement Agent
-# Copyright (c) 2018 NIC.br
+# Copyright (c) 2018,2019 NIC.br
 # Distributed under the GPLv3+ license
 
 # Attempt to auto-update if unattended-upgrades are not explicitly disabled.

@@ -1,6 +1,6 @@
 dnl Process this file with autoconf 2.69+ to produce a configure script.
 dnl
-dnl Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>
+dnl Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
 dnl
 dnl This program is free software: you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ AC_INIT([inetupc], m4_esyscmd_s([./version.sh]),
         [],
         [inetupc],
         [])
-AC_COPYRIGHT([Copyright (c) 2018 NIC.br <medicoes@simet.nic.br>])
+AC_COPYRIGHT([Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>])
 
 AC_CONFIG_SRCDIR([src/simet-inetuptime.c])
 AC_CANONICAL_HOST
