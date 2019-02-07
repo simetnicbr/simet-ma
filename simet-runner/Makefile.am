@@ -18,8 +18,10 @@ simetlibdir=$(libdir)/simet
 
 if SIMETBOX_BUILD
 usetheshell=/bin/sh
+agentinfo=src/simetbox_agentinfo.sh
 else
 usetheshell=/bin/bash
+agentinfo=src/lsb_agentinfo.sh
 endif
 
 dist_bin_SCRIPTS = simet-ma_run.sh
@@ -31,19 +33,31 @@ dist-local: version
 version: $(top_srcdir)/version.sh
 	$(top_srcdir)/version.sh > version
 
-simetma_sources = src/log.sh \
+# .sh.in files go in EXTRA_DIST, the corresponding .sh goes in _sources and CLEANFILES
+%.sh: %.sh.in
+	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
+	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
+	    -e "s!@RUNNERNAME@!$(PACKAGE_NAME)!g" -e "s!@RUNNERVERSION@!$(PACKAGE_VERSION)!g" \
+	    -e "s!@RUNNERSTRING@!$(PACKAGE_STRING)!g" \
+	    "$^" > "$@"
+
+simetma_sources = src/defines.sh \
+		src/log.sh \
 		src/task_authentication.sh  \
 		src/task_authorization.sh  \
 		src/task_discover.sh \
 		src/task_geolocation.sh \
+		$(agentinfo) \
+		src/task_environment.sh \
 		src/templates.sh \
 		src/main.sh
 
 simet-ma_run.sh: $(simetma_sources)
 	( echo "#!$(usetheshell)" ; cat $^ ) > "$@" && chmod +x "$@"
 
-EXTRA_DIST += $(simetma_sources)
-CLEANFILES = simet-ma_run.sh
+EXTRA_DIST += $(simetma_sources) src/simetbox_agentinfo.sh src/lsb_agentinfo.sh src/defines.sh.in
+CLEANFILES = simet-ma_run.sh src/defines.sh
 
 .PHONY: help
 help:

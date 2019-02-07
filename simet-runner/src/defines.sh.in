@@ -1,0 +1,11 @@
+#shellcheck shell=ash
+# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+# Source code fraction, for license information refer to the
+# main program source code.
+
+PACKAGE_NAME="@RUNNERNAME@"
+PACKAGE_VERSION="@RUNNERVERSION@"
+PACKAGE_STRING="@RUNNERSTRING@"
+SIMET_ENGINE_NAME="nic_simet2_simet-ma"
+
+# keep line
