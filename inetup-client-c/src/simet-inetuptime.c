@@ -1121,9 +1121,12 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     }
     if (agent_mac)
         json_object_object_add(jo, "mac", json_object_new_string(agent_mac));
-    if (task_name)
+    if (task_name) {
         json_object_object_add(jo, "task-name", json_object_new_string(task_name));
-    json_object_object_add(jo, "task-version", json_object_new_string(PACKAGE_VERSION));
+        json_object_object_add(jo, "task-version", json_object_new_string(PACKAGE_VERSION));
+    }
+    json_object_object_add(jo, "engine-name", json_object_new_string(SIMET_ENGINE_NAME));
+    json_object_object_add(jo, "engine-version", json_object_new_string(PACKAGE_VERSION));
     if (s->connect_timestamp)
         json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
 
