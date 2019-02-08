@@ -8,21 +8,22 @@ SIMET2 overview:
 The SIMET2 measurement system consists of:
 
  * Centralized UI servers (handling data analysis pipelines, storage,
-   search and retrieval, via web interfaces or REST APIs);
+   search and retrieval, web interfaces and webservice APIs);
  * Centralized coordination servers (handling measurement agent
    registry, authorization, and resource usage control);
  * Distributed measurement peers (hosted at IXPs, e.g. IX.br);
  * Measurement Agents (clients).
 
-The architecture is based on IETF LMAP, and other IETF IPPM/LMAP work.
+The architecture is (currently loosely) based on IETF LMAP, and other
+IETF IPPM/LMAP work.
 
 At bootstrap or factory reset, as well as periodically, the client
-(SIMET measurement agent, or SIMET MA) will connect with the SIMET
+(SIMET2 measurement agent, or SIMET MA) will connect with the SIMET2
 central servers to register themselves and obtain (or update) their
 agent-id and an agent authorization token ("agent token").
 
 The SIMET MA is identified by its SIMET agent-id, and access to the
-SIMET API is granted by its agent token [if valid].  The SIMET MA should
+SIMET2 API is granted by its agent token [if valid].  The SIMET MA should
 persist its agent-id and agent token in non-volatile storage, to create
 an useful measurement history that allows the user to refer to past
 measurements, etc.
@@ -56,25 +57,21 @@ tickets too often.
 
 The pair of (agent-id, agent token) should be refreshed every so often,
 as they might expire or get invalidated due to internal changes on the
-SIMET system server-side.  They should be refreshed at least once a week.
+SIMET2 system server-side.  They should be refreshed at least once a week.
 
-To refresh, the MA supplies the agent token it had to the API as if
-requesting a new one, and it will get the same agent token and agent-id
-back if they are still valid, or new ones if they need to be replaced.
+To refresh this information, the MA supplies the agent token it had to
+the API as if requesting a new one, and it will get the same agent token
+and agent-id back if they are still valid, or new ones if they need to
+be replaced.
 
 To reduce measurement downtime, the MA should also try to refresh the
-authentication token any time a SIMET API reports error 401 (access
-denied).
+authentication token any time a SIMET2 webservice reports error 401
+(access denied).
 
-If a measurement agent gets a 4xx reply while trying to get its agent-id
-and agent token, it must wait some time before trying again.  It is
-acceptable to have a back-off strategy of: once in five minutes, then
-once in 30 minutes, then once an hour after that.
-
-If a measurement agent gets a 5xx reply while trying to get, or refresh,
-its agent-id and agent token, it must delete them, consider itself
-unregistered from the SIMET system, and it must no longer attempt to
-access any SIMET services until it is power-cycled.
+If a measurement agent gets an http error reply while trying to get its
+agent-id and agent token from SIMET2, it must wait some time before
+trying again.  It is acceptable to have a back-off strategy of: once in
+five minutes, then once in 30 minutes, then once an hour after that.
 
 APIs and measurement tasks that require a measurement token are
 considered "expensive" or have some sort of fleet-wide orchestration
@@ -85,6 +82,17 @@ token for it.
 Measurement tokens are not to be persisted: they are volatile, one-use,
 and short-lived.
 
+
+SIMET2 service access:
+
+We reserve the right to temporarily or permanently ban from access to
+any of our services any clients and client groups that misbehave, abuse,
+or place undue load on our services, server and networks, without any
+prior notice.
+
+We reserve the right to change any terms of service, and to discontinue
+the service at any time, *with* prior notice of at least 60 days on
+SIMET's main web page.
 
 
 SIMET2 core measurements:
