@@ -38,6 +38,7 @@
 #define SIMET_INETUP_P_MSGTYPE_KEEPALIVE  0x0001U
 #define SIMET_INETUP_P_MSGTYPE_EVENTS     0x0002U
 #define SIMET_INETUP_P_MSGTYPE_MACONFIG   0x0003U
+#define SIMET_ENGINE_NAME "nic_simet2_simet-ma"
 
 enum simet_inetup_protocol_state {
     SIMET_INETUP_P_C_INIT = 0,		/* Initial setup, go to connect */

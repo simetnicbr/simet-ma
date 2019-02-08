@@ -38,6 +38,8 @@ main(){
   local _result="undefined"
   local _configured=0
 
+  log_info "$PACKAGE_STRING start"
+
   # read params
   while [ ! $# -eq 0 ]; do
     case "$1" in
@@ -59,6 +61,8 @@ main(){
   _main_setup
   _main_orchestrate
   _main_cleanup
+
+  log_info "$PACKAGE_STRING end"
 }
 
 _main_orchestrate(){ 
@@ -91,6 +95,8 @@ _main_orchestrate(){
     exit 1
   fi
 
+  ## start of a measurement run
+
   # 4. task twamp
   _task_twamp "4"
   _task_twamp "6"
@@ -108,6 +114,9 @@ _main_orchestrate(){
 
   # 6. task geolocation
   _task_geolocation
+
+  # end of a measurement run
+  _task_environment
 
   # 7. task report
   log_info "Start task REPORT"
@@ -142,10 +151,31 @@ haspipefail(){
   return 1
 }
 
+_task_environment(){
+  log_info "Start task agent environment"
+  export _task_name="${LMAP_TASK_NAME_PREFIX}${PACKAGE_NAME}_report_context_short"
+  export _task_version="$PACKAGE_VERSION"
+  export _task_dir="$BASEDIR/report/0metadata"
+  export _task_action="report_context"
+  export _task_parameters='{ }'
+  export _task_options='[]'
+  export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  mkdir -p "$_task_dir/tables"
+  ma_environment > "$_task_dir/tables/environment_short.json"
+  export _task_status="$?"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  if [ "$_task_status" -ne 0 ]; then
+    rm -rf "$_task_dir"
+  else
+    task_template > "$_task_dir/result.json"
+  fi
+  log_info "End task agent environment"
+}
+
 _task_geolocation(){
   log_info "Start task geolocation"
-  export _task_name="$LMAP_TASK_NAME_PREFIXsimet_geolocation"
-  export _task_version="v1"
+  export _task_name="${LMAP_TASK_NAME_PREFIX}${PACKAGE_NAME}_simet_geolocation"
+  export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/geolocation"
   export _task_action="geolocation_https_bssids"
   export _task_parameters='{ }'

@@ -286,6 +286,22 @@ if test "x${GCC}${enable_ldflags_setting}${enable_cflags_setting}" = "xyesyesyes
         ]])])
 fi
 
+AC_ARG_ENABLE([simetbox],
+    [AC_HELP_STRING([--enable-simetbox],
+        [build for SIMETBOX (OpenWRT)])],
+    [case "${enableval}" in
+        yes) simetbox=true ;;
+        no)  simetbox=false ;;
+        *) AC_MSG_ERROR([bad value ${enableval} for --enable-simetbox]) ;;
+     esac],
+    [simetbox=false])
+AM_CONDITIONAL([SIMETBOX_BUILD], [test x$simetbox = xtrue])
+AM_COND_IF([SIMETBOX_BUILD],
+	   [
+	      AC_MSG_NOTICE([building for SIMETBOX (OpenWRT)])
+	      AC_DEFINE([IS_SIMETBOX_BUILD], [], [Is a SIMETBOX build])
+	   ] )
+
 dnl --------------------------
 dnl autoconf output generation
 dnl --------------------------
