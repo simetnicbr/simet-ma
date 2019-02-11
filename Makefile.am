@@ -16,7 +16,7 @@
 ## for details.
 
 SUBDIRS     = simet-api twamp-client-c tcpbw-client-c inetup-client-c simet-runner cmake-projects
-EXTRA_DIST  = autogen.sh version version.sh
+EXTRA_DIST  = autogen.sh version version.sh .dockerignore docker/
 
 # we need to use an intermetiate variable, otherwise the shell dirties the
 # repository creating the output file *before* running the version.sh script
@@ -33,6 +33,24 @@ bin-dist: all
 	$(MAKE) install-strip DESTDIR="$(abs_top_builddir)/binary-dist"
 	tar zcf "${PACKAGE}-${VERSION}.binaries.tar.gz" --owner=root --group=root -C "$(abs_top_builddir)/binary-dist" .
 	rm -rf "$(abs_top_builddir)/binary-dist"
+
+
+# Docker examples
+# run docker-build first, to get the image.
+docker-build:
+	test -r docker/Dockerfile
+	docker build -t simet-ma:local -f docker/Dockerfile .
+
+docker-simetma:
+	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
+
+docker-twamp:
+	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \
+		-e SIMET_RUN_TEST=TWAMP simet-ma:local
+
+docker-tcpbw:
+	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \
+		-e SIMET_RUN_TEST=TCPBW simet-ma:local
 
 # SIMET internal: reminder of how to update the version file
 .PHONY: bump-version
