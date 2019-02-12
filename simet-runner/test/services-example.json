@@ -1,8 +1,8 @@
 [{
-  "locality": "São Paulo - SP",
+  "locality": "Test Locality",
   "serverMonitor": [{
     "serviceName": "serverMonitor",
-    "hostname": "kubelab-ix-p1.lab.simet.nic.br",
+    "hostname": "hostname.example.com",
     "basePath": "server-monitor/",
     "ports": [
       443
@@ -10,7 +10,7 @@
   }],
   "collector": [{
     "serviceName": "collector",
-    "hostname": "api.lab.simet.nic.br",
+    "hostname": "api.hostname.example.com",
     "basePath": "collector/",
     "ports": [
       443
@@ -18,7 +18,7 @@
   }],
   "twamp": [{
     "serviceName": "twamp",
-    "hostname": "kubelab-ix-p1.lab.simet.nic.br",
+    "hostname": "twamp-mp.example.com",
     "basePath": "",
     "ports": [
       862
@@ -26,7 +26,7 @@
   }],
   "tcpbw": [{
     "serviceName": "tcpbw",
-    "hostname": "kubelab-ix-p1.lab.simet.nic.br",
+    "hostname": "tcpbw-mp.example.com",
     "basePath": "tcp-server/",
     "ports": [
       443
