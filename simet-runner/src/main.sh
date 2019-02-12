@@ -58,6 +58,12 @@ main(){
     shift
   done
 
+  if [ $_configured -eq 0 ] ; then
+    for i in $SIMET_CONFIG_FILES ; do
+      [ -r "$i" ] && _main_config "$i"
+    done
+  fi
+
   _main_setup
   _main_orchestrate
   _main_cleanup
