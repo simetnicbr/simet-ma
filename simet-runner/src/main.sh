@@ -44,12 +44,12 @@ main(){
   while [ ! $# -eq 0 ]; do
     case "$1" in
       --config)
-	if [ $_configured -eq 0 ] ; then
-		_main_config "$2" || exit 1
-		_configured=1
-	else
-		[ -r "$2" ] && _main_config "$2"
-	fi
+        if [ $_configured -eq 0 ] ; then
+          _main_config "$2" || exit 1
+          _configured=1
+        else
+          [ -r "$2" ] && _main_config "$2"
+        fi
         ;;
       --debug)
         DEBUG="true"
