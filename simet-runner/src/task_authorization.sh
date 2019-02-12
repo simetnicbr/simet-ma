@@ -21,9 +21,9 @@
 ################################################################################
 
 authorization() {
-  if [ "$MOCK_AUTHORIZATION" = "true" ]; then
-    log_debug "Mocking authorization request, with allow."
-    AUTHORIZATION_TOKEN="mocked_authorization_token"
+  if [ -n "$SIMET_SERVICELIST_OVERRIDE" ]; then
+    log_debug "Disabling authorization token support."
+    AUTHORIZATION_TOKEN=
     return 0  
   fi
 

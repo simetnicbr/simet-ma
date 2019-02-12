@@ -97,7 +97,7 @@ _main_orchestrate(){
     local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
     log_info "Discovered measurement peer. Authorization attempt at $_auth_endpoint"
     # 3. task authorization: try at successive peers, until first success 
-    AUTHORIZATION_TOKEN="undefined"
+    AUTHORIZATION_TOKEN=
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
     if [ $? -eq 0 ]; then
       _discovered="true"
@@ -287,14 +287,19 @@ _task_tcpbw(){
   export _task_options='[]'
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
-  log_debug "Executing: $TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
+  if [ -n "$AUTHORIZATION_TOKEN" ] ; then
+    tcpbwauth="-j $AUTHORIZATION_TOKEN"
+  else
+    tcpbwauth=
+  fi
+  log_debug "Executing: $TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
   if haspipefail ; then
     set -o pipefail
-    eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TCPBWC -$_af -d $AGENT_ID -j $AUTHORIZATION_TOKEN https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

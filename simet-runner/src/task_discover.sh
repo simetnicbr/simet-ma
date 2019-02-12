@@ -49,9 +49,12 @@
 
 discover_init() {
   GLOBAL_STATE_CURRENT_PEER=-1
-  if [ "$MOCK_API_SERVICE_DISCOVERY" = "true" ]; then
-    cp "$MOCK_SERVICE_DISCOVERY_RESPONSE" $BASEDIR/services.json
-    log_debug "Mocking request to API_SERVICE_DISCOVERY with precanned response: $BASEDIR/services.json"
+  if [ -n "$SIMET_SERVICELIST_OVERRIDE" ] ; then
+    cp "$SIMET_SERVICELIST_OVERRIDE" "$BASEDIR/services.json" || {
+      log_error "Failed when trying to override services.json from --services command line option"
+      exit 1
+    }
+    log_debug "Overriding services.json by command line request"
     return    
   fi
   curl -s "$API_SERVICE_DISCOVERY" > $BASEDIR/services.json
