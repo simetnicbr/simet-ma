@@ -26,6 +26,7 @@
 #
 # Execution (after build):
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
+# [--test TWAMP|TCPBW|GEOLOC]
 #
 # Dependencies:
 # - curl
@@ -50,9 +51,19 @@ main(){
         else
           [ -r "$2" ] && _main_config "$2"
         fi
+        shift
         ;;
       --debug)
         DEBUG="true"
+        ;;
+      --test)
+        if [ -n "$2" ] ; then
+          RUN_ONLY_TASK="$2"
+        else
+          log_error "--test requires a test name as a parameter: TWAMP, TCPBW, GEOLOC"
+          exit 1
+        fi
+        shift
         ;;
     esac
     shift
@@ -102,24 +113,31 @@ _main_orchestrate(){
   fi
 
   ## start of a measurement run
+  ## if RUN_ONLY_TASK is set, we only run that one
 
   # 4. task twamp
-  _task_twamp "4"
-  _task_twamp "6"
+  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
+    _task_twamp "4"
+    _task_twamp "6"
+  fi
 
   # 5. task bw tcp
-  _task_tcpbw "4"
-  sleep 3
-  log_debug "Refresh the authorization token, as each bandwidth measurement session (ipv4, ipv6) requires a unique token."
-  authorization "$_auth_endpoint" "$AGENT_TOKEN"
-  if [ $? -eq 0 ]; then
-    _task_tcpbw "6"
-  else
-    log_info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
+  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TCPBW" ] ; then
+    _task_tcpbw "4"
+    sleep 3
+    log_debug "Refresh the authorization token, as each bandwidth measurement session (ipv4, ipv6) requires a unique token."
+    authorization "$_auth_endpoint" "$AGENT_TOKEN"
+    if [ $? -eq 0 ]; then
+      _task_tcpbw "6"
+    else
+      log_info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
+    fi
   fi
 
   # 6. task geolocation
-  _task_geolocation
+  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "GEOLOC" ] ; then
+    _task_geolocation
+  fi
 
   # end of a measurement run
   _task_environment
