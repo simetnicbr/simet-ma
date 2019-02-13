@@ -1,0 +1,57 @@
+SIMET2 - task/module API
+Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version.  In every case, additional restrictions and permissions
+apply, refer to the COPYING file in the program Source for details.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+and the COPYING file in the program Source for details.
+
+
+Pre-lmapd API:
+--------------
+
+This is what is currently implemented.
+
+
+stdin:  JSON, task-specific.  Data from previous pipeline (currently unused)
+
+stdout: JSON, lmap report format.  Contents for the "table" list, without [ ]
+        the task can output zero or more complete tables.
+
+stderr: user/debug output, free-form
+
+exit status: refer to docs/task_exit_status.h
+
+The task executable is called by the simet-runner script, with hardcoded
+parameters.  All interaction with generic SIMET2 system are done by
+simet-runner itself, as is the LMAP report generation based on the task
+output, and grouping.  Scheduling done by the system cron daemon.
+
+CLI:    task executables should support:
+
+        -V   output name and version, separated by space on first line
+             copyright and license on following lines
+             (long: --version)
+        -q   quiet human output, only startup and errors to stderr
+        -v   verbose (twice for debug, tree times for tracing)
+        -h   usage and help (long: --help)
+
+
+lmapd-based API:
+----------------
+
+In the planning stage.  High priority.
+
+stdin:  <TBD>, some structured input channel 
+stdout: <TBD>, the CSV used by current lmapd does not meet multi-output spec.
+stderr: user/debug output, free-form (human-centric output cleanups and common
+        format is planned for later)
+
+exit status: refer to docs/task_exit_status.h
+

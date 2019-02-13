@@ -1,0 +1,28 @@
+Main TODO:
+
+ ! Move to a lmapd-based scheduling core and extension system
+   + Teach json to lmapd to avoid libxml2 runtime cost on embedded
+
+ * Unify the common source and functions and while at it clean up
+   and consolidate the build system.
+
+ * Drop the use of libubox, we want more visibility to the underlying
+   details than it gives us, and it doesn't do everything we need it to
+   anyway.
+
+ * Write proper lua or C replacements for shell hacks.
+
+ * O.S./hardware timestamping for LAN measurement (Internet
+   measurements are too coarse to need this).
+
+ * Refactor most of the code as we go, much of it is basically a
+   working prototype... and nauseating to look at for too long.
+
+ * Add all the missing functionality ;-)
+
+ * Valgrind is our friend, so we should invite it to tea at every
+   "make test".
+
+ * Actually add "make test" (unit tests and systemic tests), use
+   "check" for the C unit tests, and a harness for the systemic
+   tests.

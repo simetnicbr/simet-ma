@@ -1,0 +1,41 @@
+Developer notes:
+
+SIMETBOX is an OpenWRT-based measurement system for home routers and such
+"big" embedded devices.
+
+Files with "simetbox" in the name are SIMETBOX-specific, they usually have
+a "simet" counterpart that is generic.
+
+For a SIMETBOX build, you would typically want this:
+  --enable-simetbox --prefix=/usr --sysconfdir=/etc --localstatedir=/var
+(and OpenWRT will already set everything but --enable-simetbox for you)
+
+For a Linux build, watch out for localstatedir, we do -NOT- create
+${localstatedir}/lock except in the simet_register_ma.sh script, and this
+can become a problem if you also give --prefix to configure and would need
+${prefix}/var to be created.
+
+An example of the correct usage is:
+--prefix=/opt/simet --localstatedir=/var
+
+Linux builds will use an embedded copy of OpenWRT's jsonpath/jsonfilter
+and libubox.  SIMETBOX builds will use the system copy of jsonfilter,
+which must be in the system path.
+
+
+Conventions:
+
+Look into simet-api/Makefile.am for conventions for scripts and config files.
+
+Configuration (after install):
+ * Hardcoded defaults go into $LIBDIR/simet/*conf
+ * These defaults can be user-overridden through
+   $SYSCONFDIR/simet/<same name as above>.conf
+
+Versioning:
+  The main version is set by the top level "version" file.  If working from
+  a git checkout, it will be based on "git describe" instead (see version.sh).
+
+  Please always commit an up-to-date version file and then tag the new release:
+
+  echo "v1.2.3" > version ; git add version ; git commit -m "version: update" ; git tag -m "simet-ma version $(cat version)" $(cat version)
