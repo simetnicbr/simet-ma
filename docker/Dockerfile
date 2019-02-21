@@ -31,7 +31,7 @@ LABEL description="SIMET2 Measurement Agent builder environment"
 LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
 
 # general build depends
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get dist-upgrade && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade && \
     apt-get -y install --install-recommends \
       build-essential autoconf automake libtool fakeroot debhelper
 
@@ -63,7 +63,7 @@ FROM $DISTRO
 LABEL description="SIMET2 Measurement Agent"
 LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get dist-upgrade
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install sudo
 
 COPY --from=0 /tmp/debs/ /tmp/debs/
