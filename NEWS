@@ -1,3 +1,7 @@
+v0.9.1:
+  * Docker container support/examples (build and run)
+  * Some documentation added to docs/
+
 v0.9.0:
   * First public release.  BETA code, which will still undergo
     several relevant changes.
