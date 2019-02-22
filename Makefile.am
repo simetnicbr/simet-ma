@@ -39,7 +39,7 @@ bin-dist: all
 # run docker-build first, to get the image.
 docker-build:
 	test -r docker/Dockerfile
-	docker build -t simet-ma:local -f docker/Dockerfile .
+	docker build --network host -t simet-ma:local -f docker/Dockerfile .
 
 docker-simetma:
 	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
