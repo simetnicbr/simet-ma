@@ -2,8 +2,8 @@ Fast-and-dirty build instructions
 =================================
 
 For OpenWRT, look at the simetbox-openwrt-feed package from simetnicbr,
-instead.  The instructions in this file are for the native simet-ma client,
-which targets standard desktop/server Linux distributions.
+instead.  The instructions in this file are for the native simet-ma
+client, which targets standard desktop/server Linux distributions.
 
 1. Install dependencies (refer to docker/Dockerfile, it has them all)
    or install and configure a recent enough docker-ce.
@@ -21,11 +21,13 @@ which targets standard desktop/server Linux distributions.
    autotools suite (recent version) for this.
 
 3. Generate the real Makefile:
-   From the top level source directory, run ./configure to create the Makefile.
-   configure --help will give you hints.
+   From the top level source directory, run ./configure to create the
+   Makefile.  configure --help will give you hints.
 
    The Debian packaging uses, for example:
-   ./configure --prefix=/opt/simet --localstatedir=/var --libdir=/opt/simet/lib --sysconfdir=/opt/simet/etc
+
+   ./configure --prefix=/opt/simet --localstatedir=/var \
+               --libdir=/opt/simet/lib --sysconfdir=/opt/simet/etc
 
 4a. Using docker to build (and run):
 
@@ -37,8 +39,9 @@ which targets standard desktop/server Linux distributions.
 
 4b. Native build:
    make
-   make install   (to install to whatever directories you told configure to use)
-   make install DESTDIR=/tmp/simet-ma   (to install using /tmp/simet-ma as the root)
+   make install
+
+   make install supports DESTDIR, e.g. make install DESTDIR=/tmp/simet-ma
 
 
 Debian package
@@ -72,11 +75,9 @@ Refer to the bin-dist target in the top level Makefile.am for details.
 CAVEATS
 =======
 
-The automake + cmake integration in this package is currently an incomplete
-mess, we might sort it out later.
-
-This incomplete integration breaks some automake features like "make
-dist-check", which have no direct equivalent in CMake.
+The automake + cmake integration in this package is currently incomplete,
+and this breaks some automake features like "make dist-check", which have
+no direct equivalent in CMake.
 
 Eventually we will either switch entirely to CMake, or to automake.
 
