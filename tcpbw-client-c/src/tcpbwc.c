@@ -22,11 +22,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <limits.h>
 #include <getopt.h>
 
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <time.h>
 
 #include "simet_err.h"
 #include "logger.h"
@@ -178,6 +180,21 @@ int main(int argc, char **argv) {
 	print_usage(progname, 0);
 
     control_url = argv[optind];
+
+    /* the server needs something to know whom we are, either a token, or a guuid */
+
+    if (!token) {
+	struct timespec now;
+	token = malloc(64);
+	if (!token || clock_gettime(CLOCK_REALTIME, &now)) {
+	    print_err("out of memory or broken clock!");
+	    return SEXIT_OUTOFRESOURCE;
+	}
+	srandom((long int)(now.tv_nsec + now.tv_sec) & INT_MAX);
+	snprintf(token, 64, "TCPC%lx%lx%lxCPCT",
+		(long int)now.tv_nsec, (long int)now.tv_sec, random());
+	print_msg(MSG_DEBUG, "generated session id: %s", token);
+    }
 
     MeasureContext ctx = {
 	.agent_id = agent_id,
