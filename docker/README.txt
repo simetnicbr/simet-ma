@@ -12,6 +12,10 @@ This will create a simet-ma:local image with simet-ma installed inside.  Some
 environment variables may be set to create images with an specific purpose,
 please refer to the Dockerfile for details.
 
+Note that you must give the container some sort of network access for it to work
+(it downloads the build environment) so you might need to add --network host or
+other network access configurantion to the docker line.
+
 
 To run the full simet-ma agent, with agent-id persistence:
 docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
