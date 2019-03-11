@@ -254,7 +254,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     jo2 = json_object_new_array();
     assert(jo && jo1 && jo2);
     json_object_object_add(jo1, "uri", json_object_new_string(metric_name));
-    json_object_array_add(jo2, json_object_new_string("client"));
+    json_object_array_add(jo2, json_object_new_string("Src"));
     json_object_object_add(jo1, "role", jo2);
     json_object_array_add(jo, jo1);
     json_object_object_add(jres_tbl_content, "function", jo);

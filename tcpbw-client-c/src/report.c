@@ -232,13 +232,13 @@ static json_object *createReport(json_object *jresults,
     assert(ctx);
 
     snprintf(metric_name, sizeof(metric_name),
-	    "urn:ietf:metrics:perf:Priv_OWBTC_Active_TCP-SustainedBurst-MultipleStreams-"
+	    "urn:ietf:metrics:perf:Priv_OWBTC_Active_TCP-SustainedBurst-MultipleParallelStreams-"
 	    "TCPOptsUndefined-SamplePeriodMs%u-StreamDurationMs%u000__Multiple_Raw",
 	    ctx->sample_period_ms, ctx->test_duration);
 
     /* FIXME: handle NULL returns as error... */
 
-    json_object *jo, *jo1; /* used when transfering ownership via _add */
+    json_object *jo, *jo1, *jo2; /* used when transfering ownership via _add */
 
     /* shall contain function, column, row arrays */
     json_object *jtable = json_object_new_object();
@@ -253,11 +253,16 @@ static json_object *createReport(json_object *jresults,
     /* function object list */
     jo = json_object_new_array();
     jo1 = json_object_new_object();
-    assert(jo && jo1);
+    jo2 = json_object_new_array();
+    assert(jo && jo1 && jo2);
+
     json_object_object_add(jo1, "uri", json_object_new_string(metric_name));
     json_object_array_add(jo, jo1);
+    json_object_array_add(jo2, json_object_new_string("Client"));
+    json_object_object_add(jo1, "role", jo2);
+    json_object_array_add(jo, jo1);
     json_object_object_add(jtable, "function", jo);
-    jo = jo1 = NULL;
+    jo = jo1 = jo2 = NULL;
 
     /* columns list */
     jo = json_object_new_array();
