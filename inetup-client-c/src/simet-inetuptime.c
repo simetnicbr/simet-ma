@@ -66,6 +66,7 @@ static const char *task_name = NULL;
 static unsigned int simet_uptime2_tcp_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
 
 static time_t client_start_timestamp;
+static time_t client_eventrec_start_timestamp;
 
 static const int simet_uptime2_request_remotekeepalive = 1;
 
@@ -1044,7 +1045,15 @@ const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
 
 static int simet_uptime2_msg_clientlifetime(struct simet_inetup_server * const s, int is_start)
 {
-    return xx_simet_uptime2_sndevent(s, (is_start)? client_start_timestamp : reltime(),
+    /* FIXME: ma_clientstart/stop actually tracks event recording,
+     * we need to update/change this code when we implement event recording */
+    if (is_start && !client_eventrec_start_timestamp) {
+        client_eventrec_start_timestamp = reltime();
+    } else if (!is_start) {
+        client_eventrec_start_timestamp = 0;
+    }
+
+    return xx_simet_uptime2_sndevent(s, (is_start)? client_eventrec_start_timestamp : reltime(),
                                         (is_start)? "ma_clientstart" : "ma_clientstop");
 }
 
@@ -1444,6 +1453,8 @@ static int uptimeserver_disconnect(struct simet_inetup_server *s)
         protocol_trace(s, "attempting clean disconnection for up to %d seconds", SIMET_DISCONNECT_WAIT_TIMEOUT);
     }
 
+    /* FIXME: this needs to track event recording lifetime when we implement it,
+     * so we should not do ma_clientstop on non-shutdown */
     if (!simet_uptime2_msg_clientlifetime(s, 0)) {
         /* queued sucessfully */
         s->state = SIMET_INETUP_P_C_DISCONNECT_WAIT;
@@ -1626,6 +1637,7 @@ int main(int argc, char **argv) {
     sanitize_std_fds();
 
     client_start_timestamp = reltime();
+    client_eventrec_start_timestamp = 0;
 
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
