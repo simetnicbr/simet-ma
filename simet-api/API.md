@@ -17,43 +17,43 @@
 ## API version
 
   The full agent version (e.g. simet-ma/<version>) is available
-  at $AGENT_VERSION_FILE.
+  at $AGENT\_VERSION\_FILE.
 
 
 ## TOKEN and LMAP AGENT-ID API
 
   The agent token, required to authorize with SIMET-2 services, will
-  be retrieved and refreshed by {simet,simetbox}_register_ma.sh.
+  be retrieved and refreshed by {simet,simetbox}\_register\_ma.sh.
 
-  *  The agent token will be stored in $AGENT_TOKEN_FILE
-  *  The LMAP agent-id will be stored in $AGENT_ID_FILE
+  *  The agent token will be stored in $AGENT\_TOKEN\_FILE
+  *  The LMAP agent-id will be stored in $AGENT\_ID\_FILE
 
-  The <>_register_ma.sh script can be called at any time, so all reads
-  from the above files must be atomic *or* must flock($AGENT_TOKEN_LOCK)
+  The <>\_register\_ma.sh script can be called at any time, so all reads
+  from the above files must be atomic *or* must flock($AGENT\_TOKEN\_LOCK)
   in shared mode (reading) or exclusive mode (writing).  This lock
-  protects both $AGENT_TOKEN_FILE and $AGENT_ID_FILE.
+  protects both $AGENT\_TOKEN\_FILE and $AGENT\_ID\_FILE.
 
   If either file is missing, measurements are *NOT* to be carried out.
 
 
 ## Locks (misc)
-  $AGENT_LOCK  -  runner/scheduler lock.  Protects a measurement run.
+  $AGENT\_LOCK  -  runner/scheduler lock.  Protects a measurement run.
      take the shared lock to block measurements, take the exclusive
      lock to measure.
 
 ## Hooks
 
   Some of the API scripts (in shell) have (shell) hooks, or can have its
-  internal functions replaced (via functions named FUNCTION_override).
+  internal functions replaced (via functions named FUNCTION\_override).
 
   Hooks are highly integrated with the script, you usually need to
   manipulate local variables, etc.  As such, please read the script to
   know what hooks are available.
 
-### simet_register_ma.sh (in the future, maybe simetbox_register_ma.sh)
+### simet\_register\_ma.sh (in the future, maybe simetbox\_register\_ma.sh)
 
-  <libdir>/simet/simet_register_ma-hooks.sh
-  <sysconf dir>/simet/simet_register_ma-hooks.sh
+  <libdir>/simet/simet\_register\_ma-hooks.sh
+  <sysconf dir>/simet/simet\_register\_ma-hooks.sh
 
 
 ## Geolocation
@@ -63,7 +63,7 @@
   implemented in simet-ma.
 
   The geolocation API is:
-  simet_geolocation.sh
+  simet\_geolocation.sh
      returns in stdout the geolocation information
      returns in stderr relevant error or progress messages
      returns in exit status 0 (ok), non-zero (error)
