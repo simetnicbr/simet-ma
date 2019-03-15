@@ -56,7 +56,7 @@ EOF2TASKTEMPLATE
 
 report_template(){
   cat << EOF1REPORTTEMPLATE
-{   
+{ "ietf-lmap-report:report": {
     "date": "$_lmap_report_date",
     "agent-id": "$AGENT_ID",
     "result": [
@@ -64,7 +64,7 @@ EOF1REPORTTEMPLATE
   _cat_many $(find "$_report_dir" -mindepth 2 -type f -name result.json | sort)
   cat << EOF2REPORTTEMPLATE
     ]
-}
+}}
 EOF2REPORTTEMPLATE
   :
 }
