@@ -1,0 +1,62 @@
+#!/lib/init/init-d-script
+#
+### BEGIN INIT INFO
+# Required-Start:    $local_fs $remote_fs $time simet-ma
+# Required-Stop:     $local_fs $remote_fs $time simet-ma
+# Provides:          simet-lmapd
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: SIMET-MA LMAP scheduler
+# Description:       SIMET Management Agent LMAP task scheduler
+### END INIT INFO
+set -e
+
+DAEMON=/opt/simet/bin/lmapd
+NAME="lmapd"
+DESC="SIMET Measurement Agent LMAP scheduler"
+USER=nicbr-simet
+GROUP=$USER
+
+PID_DIR=/var/run/lmapd
+PIDFILE="${PID_DIR}/lmapd.pid"
+
+START_ARGS="-u $USER -c $USER --background"
+STOP_ARGS="-u $USER"
+DAEMON_ARGS="-j"
+
+# not called on default init-d-script do_restart/reload
+do_start_prepare() {
+	[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
+	[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
+	LMAP_QUEUE_DIR="${LMAP_QUEUE_DIR:-/opt/simet/lib/simet/lmap/queue}"
+	LMAP_SCHEDULE_FILE="${LMAP_SCHEDULE_FILE:-/var/run/lmapd/lmap-schedule.json}"
+	LMAP_AGENT_FILE="${LMAP_AGENT_FILE:-/opt/simet/etc/simet/lmap/agent-id.json}"
+
+	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
+
+	mkdir -p "$PID_DIR" 
+	chgrp $GROUP "$PID_DIR" && chmod 02770 "$PID_DIR"
+	mkdir -p "$LMAP_QUEUE_DIR"
+	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $USER:$GROUP "$LMAP_QUEUE_DIR" && chmod 0770 "$LMAP_QUEUE_DIR"
+	[ -r "$LMAP_SCHEDULE_FILE" ] || {
+		ln -sf /opt/simet/lib/simet/lmap-default-schedule.json \
+		       "$LMAP_SCHEDULE_FILE" \
+		&& chown nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_DIR"/*json \
+		&& chmod g+r "$LMAP_SCHEDULE_DIR"/*json
+	}
+
+	start-stop-daemon -c "$USER" --start --name simet_register --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
+	[ -r "$LMAP_AGENT_FILE" ] || {
+		log_warning_msg "LMAP agent-id is not configured yet"
+		exit 0
+	}
+	:
+}
+
+do_reload() {
+	log_daemon_msg "Reloading $DESC configuration files" "$NAME"
+	start-stop-daemon --oknodo --stop --signal HUP --quiet \
+		--pidfile "$PIDFILE" --exec "$DAEMON"
+	log_end_msg $?
+	:
+}

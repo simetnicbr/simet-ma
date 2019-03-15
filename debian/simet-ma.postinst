@@ -46,6 +46,9 @@ case "$1" in
                 --gecos "NIC.br SIMET Measurement Agent" nicbr-simet
 	chgrp nicbr-simet /opt/simet/etc/simet
 	chmod 02770 /opt/simet/etc/simet
+	mkdir -m 0700 -p /opt/simet/etc/simet/lmap
+	chgrp nicbr-simet /opt/simet/etc/simet/lmap
+	chmod 02770 /opt/simet/etc/simet/lmap
 
 	#FIXME: the first time we need to change the contents of the
 	#generated crontab, the [ -e ] test must be replaced

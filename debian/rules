@@ -64,3 +64,8 @@ override_dh_install:
 		< debian/etc.apt.sources.list.d/simet.apt.source.template \
 		> debian/etc.apt.sources.list.d/nicbr-simet.apt.source.list
 	dh_install
+
+override_dh_installinit:
+	dh_installinit
+	dh_installinit --name=simet-lmapd
+

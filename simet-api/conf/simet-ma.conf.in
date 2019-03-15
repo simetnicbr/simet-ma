@@ -4,6 +4,12 @@ AGENT_TOKEN_LOCK=@LOCALSTATEDIR@/lock/simet-agent-token.lock
 AGENT_LOCK=@LOCALSTATEDIR@/lock/simet-ma.lock
 AGENT_VERSION_FILE=@SIMETLIBDIR@/agent-version.txt
 
+LMAP_AGENT_FILE=@SIMETCONFDIR@/lmap/agent-id.json
+LMAP_CHANNEL_URL=https://api.simet.nic.br/controller/
+LMAP_SCHEDULE_FILE=@LOCALSTATEDIR@/run/lmapd/lmap-schedule.json
+LMAP_CONFIG_PATH=@SIMETLIBDIR@/lmap/config.d
+LMAP_QUEUE_DIR=@LMAPQUEUEDIR@
+
 #SIMET_SERVICELIST_OVERRIDE=
 TEMPLATE_DIR=@SIMETLIBDIR@
 
