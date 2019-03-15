@@ -257,7 +257,6 @@ static json_object *createReport(json_object *jresults,
     assert(jo && jo1 && jo2);
 
     json_object_object_add(jo1, "uri", json_object_new_string(metric_name));
-    json_object_array_add(jo, jo1);
     json_object_array_add(jo2, json_object_new_string("Client"));
     json_object_object_add(jo1, "role", jo2);
     json_object_array_add(jo, jo1);
