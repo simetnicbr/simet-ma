@@ -1,2 +1,5 @@
 # We are an add-on vendor package that uses /opt/simet
 simet-ma: dir-or-file-in-opt
+simet-ma: unusual-interpreter
+simet-ma: copyright-should-refer-to-common-license-file-for-gpl
+simet-ma: package-installs-apt-sources
