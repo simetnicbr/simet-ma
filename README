@@ -7,6 +7,9 @@ and about this software.
 
 You will also find a quick guide on how to compile the software there.
 
+This package has a runtime dependency on the simet-lmapd package: both
+packages must be installed for measurements tasks to be run.
+
 
 The copyright license for the SIMET-MA source code and software is on
 the COPYING file.  It is based on the GNU GPL version 3 license WITH

@@ -26,10 +26,12 @@ abend() {
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
 AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
-AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-/var/lock/simet-agent-token.lock}
+AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
 API_AGENT_TOKEN=${API_AGENT_TOKEN:-https://api.simet.nic.br/measurement/jwt}
-AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-/opt/simet/lib/simet/agent-version.txt}
-SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma restart}
+
+AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
+LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-@SIMETCONFDIR@/lmap/agent-id.json}
+SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
 JSONFILTER=${JSONFILTER:-jsonfilter}
 
 BOXID=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
@@ -57,6 +59,17 @@ apicall() {
 	done
 }
 
+write_lmap_agent() {
+	if [ -z "$1" ] ; then
+		rm -f  "$LMAP_AGENT_FILE"
+		logger -s -t simet-ma -p daemon.notice "SIMET: removed LMAP agent-id"
+	else
+		cat <<- LMAPAGENTEOF >"$OUTFILE" && mv -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
+			{"ietf-lmap-control:lmap":{"agent":{"agent-id":"$1"}}}
+		LMAPAGENTEOF
+	fi
+}
+
 gettoken() {
 	OLDAT=
 	OLDAID=
@@ -66,10 +79,17 @@ gettoken() {
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
 	apicall || abend "failed to contact agent-token service"
 	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agentId" -e "AT=@.token") || abend "illegal response from agent-token service"
-	rm -f "$OUTFILE"
 	eval "$SID" || abend "internal error"
+
 	[ x"$AID" != x"$OLDAID" ] && echo "$AID" > "$AGENT_ID_FILE"
 	[ x"$AT"  != x"$OLDAT"  ] && echo "$AT" > "$AGENT_TOKEN_FILE"
+
+	if [ ! -r "$LMAP_AGENT_FILE" ] || [ x"$AID" != x"$OLDAID" ] ; then
+		write_lmap_agent "$AID"
+	fi
+
+	rm -f "$OUTFILE"
+	OUTFILE=
 
 	if [ ! -r "$AGENT_ID_FILE" ] || [ -z "$AID" ] || [ ! -r "$AGENT_TOKEN_FILE" ] || [ -z "$AT" ] ; then
 		abend "failed to register, please retry later"
@@ -84,4 +104,6 @@ gettoken() {
 	:
 }
 
+AGENT_LOCK_DIR=$(dirname "$AGENT_TOKEN_LOCK")
+[ -d "$AGENT_LOCK_DIR" ] || mkdir -p -m 0755 -- "$AGENT_LOCK_DIR"
 ( flock -n -x 9 && gettoken ) <&- 9>> "$AGENT_TOKEN_LOCK"

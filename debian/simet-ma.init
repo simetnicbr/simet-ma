@@ -17,8 +17,9 @@ NAME="inetupc"
 DESC="SIMET Measurement Agent"
 USER=nicbr-simet
 
+PIDFILE=/var/run/simet-inetupc.pid
+
 START_ARGS="-u $USER -c $USER --background --make-pidfile"
-STOP_ARGS="-u $USER"
 
 [ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
 [ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
@@ -27,13 +28,22 @@ AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-/opt/simet/etc/simet/agent.jwt}
 SIMET_INETUP_SERVER=${SIMET_INETUP_SERVER:-simet-monitor-inetup.simet.nic.br}
 BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 
-# call simet_register_ma.sh here
+DAEMON_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
+[ -r "$AGENT_TOKEN_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -j $(cat $AGENT_TOKEN_FILE)"
+[ -r "$AGENT_ID_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -d $(cat $AGENT_ID_FILE)"
+DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
+
+# not called by default init-d-script reload/restart
 do_start_prepare() {
 	# --name doesn't matter, as long as it doesn't match
 	start-stop-daemon -c "$USER" --start --name simet_register --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
-	DAEMON_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
-	[ -r "$AGENT_TOKEN_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -j $(cat $AGENT_TOKEN_FILE)"
-	[ -r "$AGENT_ID_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -d $(cat $AGENT_ID_FILE)"
-	DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
+	:
+}
+
+do_reload() {
+	invoke-rc.d --quiet simet-lmapd reload || true
+	# "reload" inetup by restarting it
+	do_restart
+	:
 }
 

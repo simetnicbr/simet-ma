@@ -1,3 +1,10 @@
+v0.10.0:
+  * Initial LMAP scheduler support.  simet-ma now requires
+    the simet-lmapd package to be installed, or measurements
+    won't run.  Crontab and boot services are still required
+    for critical administrative tasks that must not (or cannot)
+    depend on lmapd.
+
 v0.9.1:
   * Docker container support/examples (build and run)
   * Some documentation added to docs/
