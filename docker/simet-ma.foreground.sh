@@ -49,7 +49,7 @@ BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 # first, ensure MA is registered
 [ "$SIMET_REFRESH_AGENTID" = "true" ] && \
 	rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE"
-$REGISTER --boot
+sudo -u $USER -g $USER -H -n $REGISTER --boot
 echo "SIMET-MA: agent-id=$(cat $AGENT_ID_FILE)"
 echo
 
@@ -57,20 +57,15 @@ echo
 INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
 [ -r "$AGENT_TOKEN_FILE" ] && INETUP_ARGS="$INETUP_ARGS -j $(cat $AGENT_TOKEN_FILE)"
 [ -r "$AGENT_ID_FILE" ] && INETUP_ARGS="$INETUP_ARGS -d $(cat $AGENT_ID_FILE)"
-if [ $USER ] ; then
-	INETUPCMD="sudo -u $USER -g $USER -H -n"
-else
-	INETUPCMD=
-fi
+INETUPCMD="sudo -u $USER -g $USER -H -n"
 
-[ "$SIMET_CRON_DISABLE" != "true" ] && [ -z "$SIMET_RUN_TEST" ] && [ -r /etc/cron.d/simet-ma ] && {
-	echo "SIMET-MA: using cron to run measurements in background..."
-	service cron start
-	service cron status
-	echo
-	echo "SIMET-MA: cron configuration follows:"
-	cat /etc/cron.d/simet-ma
-	echo
+[ "$SIMET_CRON_DISABLE" != "true" ] && [ -z "$SIMET_RUN_TEST" ] && {
+	if [ -r /etc/cron.d/simet-ma ] ; then
+		echo "SIMET-MA: starting cron to run management tasks in background..."
+		service cron start
+	fi
+	echo "SIMET-MA: starting LMAP scheduler..."
+	service simet-lmapd start
 }
 
 [ "$SIMET_INETUP_DISABLE" != "true" ] && [ -z "$SIMET_RUN_TEST" ] && {

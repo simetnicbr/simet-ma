@@ -21,7 +21,9 @@
 
 ## Docker build arguments
 ##    distro:    (debian:stretch), debian:jessie, ubuntu:bionic, ubuntu:xenial
-##    BUILD_DIR: /usr/src/simet/simet-ma/
+##    BUILD_DIR: /usr/src/simet
+##    SIMET_LMAPD: https://github.com/simetnicbr/simet-lmapd/archive/master.tar.gz
+##    DEB_BUILD_OPTIONS: "noautodbgsym nodoc terse hardening=+all"
 
 # Base distro
 ARG DISTRO=debian:stretch
@@ -33,25 +35,42 @@ LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
 # general build depends
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade && \
     apt-get -y install --install-recommends \
-      build-essential autoconf automake libtool fakeroot debhelper
+      build-essential autoconf automake libtool fakeroot debhelper \
+      cmake pkg-config
 
-# package-specific build-depends
+# package-specific build-depends (simet-ma)
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --install-recommends \
-      libjson-c-dev cmake libcurl4-gnutls-dev pkg-config \
-      lsb-release
+      libjson-c-dev libcurl4-gnutls-dev lsb-release
+
+# package-specific build-depends (simet-lmapd)
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --install-recommends \
+      libjson-c-dev libxml2-dev libevent-dev check
 
 RUN echo "umask 022" > /etc/profile.d/safe-umask && \
     adduser --disabled-password --uid 100000 --gecos "Docker Builder,,," --home "/usr/src/simet" --shell /bin/bash builder
 
-ARG BUILD_DIR=/usr/src/simet/simet-ma/
-COPY --chown=builder:builder ./ "$BUILD_DIR"
+ARG SIMET_LMAPD=https://github.com/simetnicbr/simet-lmapd/archive/master.tar.gz
+ARG BUILD_DIR=/usr/src/simet
+ADD --chown=builder:builder "$SIMET_LMAPD" "$BUILD_DIR"/simet-lmapd.tar.gz
+COPY --chown=builder:builder ./ "$BUILD_DIR"/simet-ma
 
 USER builder:builder
 WORKDIR $BUILD_DIR
 
-#CMD ./autogen.sh && ./configure --prefix=/opt/simet-ma && make install
-#but if we did that, we'd need to figure out the lib packages we need...
-RUN dpkg-buildpackage --build=binary -uc -us -rfakeroot && mkdir /tmp/debs && mv ../*deb /tmp/debs/
+# unpack and build every subdirectory, using the debian packaging support.
+# we could avoid doing a package buikd, something like:
+#    CMD ./autogen.sh && ./configure --prefix=/opt/simet-ma \
+#        && make install
+# but if we did that, we'd need to figure out the lib packages we need,
+# whether it uses autoconf or cmake, etc.
+
+ARG DEB_BUILD_OPTIONS="noautodbgsym nodoc terse hardening=+all"
+
+RUN tar zxf simet-lmapd.tar.gz && rm -f simet-lmapd.tar.gz
+RUN find . -maxdepth 1 -type d '!' -name ".*" | while read -r i ; do echo $i ; \
+	( cd "$i" && dpkg-buildpackage --build=binary -uc -us -rfakeroot ) ; \
+    done
+RUN mkdir /tmp/debs && mv *deb /tmp/debs/
 
 ##
 ##  Runtime image
