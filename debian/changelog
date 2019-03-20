@@ -1,3 +1,11 @@
+simet-ma (0.10.0) unstable; urgency=medium
+
+  * simet-ma version 0.10.0
+  * simet-lmapd integration, step 1:
+    Depends on the simet-lmapd package.
+
+ -- SIMET <medicoes@simet.nic.br>  Wed, 20 Mar 2019 10:22:36 -0300
+
 simet-ma (0.9.3) unstable; urgency=medium
 
   * simet-ma version 0.9.3
