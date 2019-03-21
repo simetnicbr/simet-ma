@@ -57,7 +57,7 @@ AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-/opt/simet/lib/simet/agent-version.txt}
 JSONFILTER=${JSONFILTER:-jsonfilter}
 
 LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-@SIMETCONFDIR@/lmap/agent-id.json}
-LMAP_CHANNEL_URL=${LMAP_CHANNEL_URL:-https://api.simet.nic.br/controller/}
+LMAP_CHANNEL_URL=${LMAP_CHANNEL_URL:-https://api.simet.nic.br/controller}
 LMAP_SCHEDULE_FILE=${LMAP_SCHEDULE_FILE:-@LOCALSTATEDIR@/lmap/lmap-schedule.json}
 LMAP_RECONFIG=${LMAP_RECONFIG:=/etc/init.d/simet-lmapd reload}
 
