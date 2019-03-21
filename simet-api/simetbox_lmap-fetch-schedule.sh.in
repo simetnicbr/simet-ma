@@ -70,8 +70,8 @@ esac
 simet_api_lmapputstate() {
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" --post301 --post302 --post303 \
 		-T - -f -L -j -o "$OUTFILE" \
-		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
-		"${LMAP_CHANNEL_URL}/v1/ma/$OLDAID/reported-state"
+		-H "Authorization: Bearer $OLDAT" \
+		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/reported-state"
 }
 
 simet_lmap_sendstate() {
@@ -83,8 +83,8 @@ simet_lmap_sendstate() {
 simet_api_lmapgetsched() {
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
 		-X GET -f -L -j -o "$OUTFILE" \
-		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
-		"${LMAP_CHANNEL_URL}/v1/ma/$OLDAID/required-config"
+		-H "Authorization: Bearer $OLDAT" \
+		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config"
 }
 
 simet_lmap_download_schedule() {
