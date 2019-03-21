@@ -172,7 +172,11 @@ getschedule() {
 		|| logger -s -t simet-lmapd -p daemon.err "failed to load/activate new schedule"
 
 	# always try to send state after downloading a schedule
-	simet_lmap_sendstate
+	simet_lmap_sendstate \
+		|| abend "failed to send state update to controller"
+
+	rm -f "$OUTFILE"
+	OUTFILE=
 }
 
 AGENT_TOKEN_LOCK_DIR=$(dirname "$AGENT_TOKEN_LOCK")
