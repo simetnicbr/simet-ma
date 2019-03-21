@@ -34,16 +34,20 @@ do_start_prepare() {
 
 	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
 
-	mkdir -p "$PID_DIR" 
+	mkdir -p "$PID_DIR"
 	chgrp $GROUP "$PID_DIR" && chmod 02770 "$PID_DIR"
+	mkdir -p "$LMAP_SCHEDULE_DIR"
+	chgrp $GROUP "$LMAP_SCHEDULE_DIR" && chmod 02770 "$LMAP_SCHEDULE_DIR"
 	mkdir -p "$LMAP_QUEUE_DIR"
 	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $USER:$GROUP "$LMAP_QUEUE_DIR" && chmod 0770 "$LMAP_QUEUE_DIR"
-	[ -r "$LMAP_SCHEDULE_FILE" ] || {
+
+	[ -r "$LMAP_SCHEDULE_FILE" ] || \
 		ln -sf /opt/simet/lib/simet/lmap-default-schedule.json \
-		       "$LMAP_SCHEDULE_FILE" \
-		&& chown nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_DIR"/*json \
-		&& chmod g+r "$LMAP_SCHEDULE_DIR"/*json
-	}
+			"$LMAP_SCHEDULE_FILE"
+
+	# don't mess with not-files, like symlinks. chown must run before chmod.
+	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown $USER:$GROUP '{}' +)
+	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod g+r '{}' +)
 
 	start-stop-daemon -c "$USER" --start --name simet_register --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	[ -r "$LMAP_AGENT_FILE" ] || {
