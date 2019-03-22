@@ -41,9 +41,11 @@ do_start_prepare() {
 	mkdir -p "$LMAP_QUEUE_DIR"
 	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $USER:$GROUP "$LMAP_QUEUE_DIR" && chmod 0770 "$LMAP_QUEUE_DIR"
 
+	# might race a schedule download, we don't want to clobber the
+	# downloaded schedule with a ln -sf.
 	[ -r "$LMAP_SCHEDULE_FILE" ] || \
-		ln -sf /opt/simet/lib/simet/lmap-default-schedule.json \
-			"$LMAP_SCHEDULE_FILE"
+		ln -s /opt/simet/lib/simet/lmap-default-schedule.json \
+			"$LMAP_SCHEDULE_FILE" 2>/dev/null || true
 
 	# don't mess with not-files, like symlinks. chown must run before chmod.
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown $USER:$GROUP '{}' +)
@@ -54,6 +56,10 @@ do_start_prepare() {
 		log_warning_msg "LMAP agent-id is not configured yet"
 		exit 0
 	}
+
+	# contact controller at daemon start/boot, we will use the default schedule
+	# if this fails
+	start-stop-daemon -c "$USER" --start --name simet_lmap_fetch --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
 	:
 }
 
