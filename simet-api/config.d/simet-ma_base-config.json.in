@@ -1,5 +1,6 @@
 {"ietf-lmap-control:lmap":{"tasks":{"task":[
-  { "name":"simet-run-basictests","program":"@BINDIR@/simet-ma_run.sh",
-    "option":[ {"id":"config1", "name":"--config @SIMETLIBDIR@/simet-ma.conf"},
-               {"id":"config2", "name":"--config @SIMETCONFDIR@/simet-ma.conf"} ] }
+  { "name":"simet-basic_tests", "program":"@BINDIR@/simet-ma_run.sh" },
+  { "name":"simet-inetup", "program":"@BINDIR@/inetupc" },
+  { "name":"simet-nop", "program":"/bin/true" },
+  { "name":"simet-err", "program":"/bin/false" }
 ]}}}

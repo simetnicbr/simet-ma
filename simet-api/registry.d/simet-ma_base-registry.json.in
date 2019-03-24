@@ -1,3 +1,6 @@
 {"ietf-lmap-control:lmap":{"capabilities":{"tasks":{"task":[
-  { "name":"simet-runner","program":"@BINDIR@/simet-ma_run.sh" }
+  { "name":"ma_local_simet-runner","program":"@BINDIR@/simet-ma_run.sh" },
+  { "name":"simet-inetupc","program":"@BINDIR@/inetupc" },
+  { "name":"simet-nop","program":"/bin/true" },
+  { "name":"simet-err","program":"/bin/false" }
 ]}}}}
