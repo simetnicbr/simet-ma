@@ -23,30 +23,32 @@ CLEANFILES=
 
 if SIMETBOX_BUILD
 dist_bin_SCRIPTS = simetbox_register_ma.sh simetbox_lmap-fetch-schedule.sh
+sbprefix = simetbox
 jsonfilter=jsonfilter
 else
 dist_bin_SCRIPTS = simet_register_ma.sh simet-ma_periodic.sh simet_lmap-fetch-schedule.sh
+sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
 endif
 
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" \
+	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    "$^" > "$@"
 
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" \
+	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    "$^" > "$@"
 
 %.json: %.json.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" \
+	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES

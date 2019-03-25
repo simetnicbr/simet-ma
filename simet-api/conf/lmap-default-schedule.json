@@ -1,11 +1,19 @@
 {"ietf-lmap-control:lmap":{
 "schedules":{"schedule":[
-  { "name":"simet-periodic-testrun",
+  { "name":"ma_local-default_sched_refresh",
+    "start":"every-six-hours",
+    "execution-mode":"sequential",
+    "action":[ {
+      "name":"simet.nic.br-reschedule",
+      "task":"simet.nic.br-reschedule"
+      }
+    ] },
+  { "name":"ma_local-default_simet-periodic_test_run",
     "start":"every-four-hours",
     "execution-mode":"sequential",
     "action":[ {
-      "name":"simet-basic_tests",
-      "task":"simet-basic_tests",
+      "name":"simet.nic.br-basic_tests",
+      "task":"simet.nic.br-basic_tests",
       "destination":[
 	"report-primary"
       ] }
