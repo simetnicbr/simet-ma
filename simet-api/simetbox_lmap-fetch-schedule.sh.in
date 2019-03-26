@@ -181,4 +181,5 @@ getschedule() {
 
 AGENT_TOKEN_LOCK_DIR=$(dirname "$AGENT_TOKEN_LOCK")
 [ -d "$AGENT_TOKEN_LOCK_DIR" ] || mkdir -p -m 0755 -- "$AGENT_TOKEN_LOCK_DIR"
-( flock -n -x 9 && getschedule ) <&- 9>> "$AGENT_TOKEN_LOCK"
+[ -r "$AGENT_TOKEN_LOCK" ] || touch "$$AGENT_TOKEN_LOCK"
+( flock -n -s 9 && getschedule ) <&- 9< "$AGENT_TOKEN_LOCK"

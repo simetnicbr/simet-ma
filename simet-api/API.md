@@ -13,6 +13,10 @@
   (*if* it exists, it is not required to be there).  The last definition
   for each variable "wins".
 
+  The config files are not to be modifiable by the same user that runs
+  the SIMET suite (unless it is running as root, which is also not
+  advised).
+
 
 ## API version
 
@@ -34,6 +38,9 @@
   protects both $AGENT\_TOKEN\_FILE and $AGENT\_ID\_FILE.
 
   If either file is missing, measurements are *NOT* to be carried out.
+
+  Beware of file system permission issues if you call these scripts as
+  different users (e.g. "root" and "nicbr-simet").
 
 
 ## LMAP scheduler API
@@ -67,6 +74,10 @@
   configuration also goes into this directory, such as hardcoded
   schedules and predefined events and schedules.
 
+  Tasks present in the schedule that are not defined anywhere will cause
+  the schedule to be refused entirely.  Care must be taken for this to
+  never happen to the hardcoded configuration.
+
   JSON-rendered per-agent lmap-control configs with the agent-id,
   group-id go in /etc/simet/lmap/\*.json:
 
@@ -83,6 +94,11 @@
   <runstatedir>/lmap/lmap-schedule.json - variable schedule
        received from the controller
 
+  Tasks present in the schedule that are not defined anywhere will cause
+  the schedule to be refused entirely.  Care must be taken for this to
+  never happen to the default schedule (i.e. it must be fully compatible
+  with the hardcoded configuration).
+
   All hardcoded schedules, tasks, events, as well as other such
   identifiers must be prefixed by "ma\_local\_", except when it is
   explicitly specified otherwise in the documentation.
@@ -95,7 +111,7 @@
   is not running.
 
   For safety, security and resilience reasons, software/firmware auto
-  update tasks must be completely independent of the lmap schedule.
+  update tasks must be completely independent of the lmap core.
 
 
 ## Locks (misc)
@@ -106,6 +122,11 @@
   $AGENT\_TOKEN\_LOCK   -  general config lock.  Protects agent-id,
      agent token, LMAP config, and so on.  Take the exclusive lock
      when doing a non-atomic update.
+
+  Locks are empty files, locked using flock.  Beware permission issues
+  with the lock directory and lock files when scripts are run with
+  different privilege levels (e.g. root and a non-privileged user).
+
 
 ## Hooks
 
@@ -124,9 +145,9 @@
 
 ## Geolocation
 
-  Right now, only the openwrt (SIMETBox) version has any geolocation
-  capabilities, and the related functionality is not hosted or
-  implemented in simet-ma.
+  Right now, only the openwrt (SIMETBox) version of simet-ma has any
+  geolocation capabilities, and the related functionality is not hosted
+  or implemented in simet-ma.
 
   The geolocation API is:
   simet\_geolocation.sh
@@ -138,8 +159,12 @@
      <unix time of measurement, seconds>
      <latitude> <longitude> <precision in meters>
 
+     Unix time is a large positive integer:
+       * Number of seconds since 1970-01-01 00:00:00 UTC
+       * y2038-safe: assume a 64-bit integer type
      Latitude and longitude are in degrees, floating point.
-     Negative is South/West, positive is North/East.
+       * As defined by ISO C for printf of floats (double)
+       * Negative is South/West, positive is North/East.
 
   Caching, query limits, and sideband REST API access to persist agent
   geolocation and other such sidechannels are not specified, but they do
