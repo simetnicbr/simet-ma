@@ -15,7 +15,7 @@
 
 simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
-simetlmapqueuedir=$(simetlibdir)/lmap/queue
+simetlmapqueuedir=$(localstatedir)/spool/lmapd/queue
 simetlmapregistrydir=$(simetlibdir)/lmap/registry.d
 simetlmapconfigdir=$(simetlibdir)/lmap/config.d
 EXTRA_DIST=
@@ -61,7 +61,7 @@ CLEANFILES += $(dist_bin_SCRIPTS)
 install-data-local:
 	$(MKDIR_P) -m 0711 -- "$(DESTDIR)$(simetconfdir)"
 	$(MKDIR_P) -m 0755 -- "$(DESTDIR)$(simetconfdir)/lmap"
-	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlibdir)/lmap/queue"
+	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapqueuedir)"
 
 dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-default-schedule.json
 EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-default-schedule.json

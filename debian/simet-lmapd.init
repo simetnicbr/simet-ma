@@ -28,7 +28,7 @@ DAEMON_ARGS="-j"
 do_start_prepare() {
 	[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
 	[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
-	LMAP_QUEUE_DIR="${LMAP_QUEUE_DIR:-/opt/simet/lib/simet/lmap/queue}"
+	LMAP_QUEUE_DIR="${LMAP_QUEUE_DIR:-/var/spool/lmapd/queue}"
 	LMAP_SCHEDULE_FILE="${LMAP_SCHEDULE_FILE:-/var/run/lmapd/lmap-schedule.json}"
 	LMAP_AGENT_FILE="${LMAP_AGENT_FILE:-/opt/simet/etc/simet/lmap/agent-id.json}"
 
@@ -39,7 +39,7 @@ do_start_prepare() {
 	mkdir -p "$LMAP_SCHEDULE_DIR"
 	chgrp $GROUP "$LMAP_SCHEDULE_DIR" && chmod 02770 "$LMAP_SCHEDULE_DIR"
 	mkdir -p "$LMAP_QUEUE_DIR"
-	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $USER:$GROUP "$LMAP_QUEUE_DIR" && chmod 0770 "$LMAP_QUEUE_DIR"
+	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $USER:$GROUP "$LMAP_QUEUE_DIR" && chmod 02770 "$LMAP_QUEUE_DIR"
 
 	# might race a schedule download, we don't want to clobber the
 	# downloaded schedule with a ln -sf.
