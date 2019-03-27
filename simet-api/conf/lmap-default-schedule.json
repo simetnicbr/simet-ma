@@ -1,4 +1,5 @@
 {"ietf-lmap-control:lmap":{
+"agent":{"report-agent-id":true},
 "schedules":{"schedule":[
   { "name":"ma_local-default_sched_refresh",
     "start":"every-six-hours",
