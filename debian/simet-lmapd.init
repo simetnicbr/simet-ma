@@ -1,4 +1,9 @@
 #!/lib/init/init-d-script
+# simet-lmapd.init - Debian sysv-rc initscript for simet-lmapd
+# Copyright (c) 2019 NIC.br
+#
+# Distributed under the GPLv3+ license with additional terms and permissions
+# Refer to the COPYING file on the program source for details
 #
 ### BEGIN INIT INFO
 # Required-Start:    $local_fs $remote_fs $time simet-ma
