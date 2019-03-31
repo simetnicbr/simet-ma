@@ -21,6 +21,9 @@ simetlmapconfigdir=$(simetlibdir)/lmap/config.d
 EXTRA_DIST=
 CLEANFILES=
 
+## FIXME: autoconfize this
+simetenginename=nic_simet2_simet-ma
+
 if SIMETBOX_BUILD
 dist_bin_SCRIPTS = simetbox_register_ma.sh simetbox_lmap-fetch-schedule.sh
 sbprefix = simetbox
@@ -35,20 +38,24 @@ endif
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
-	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
+	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
 	    "$^" > "$@"
 
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
-	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
+	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
 	    "$^" > "$@"
 
 %.json: %.json.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
+	    -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
+	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
