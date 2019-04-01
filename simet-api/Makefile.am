@@ -28,11 +28,15 @@ if SIMETBOX_BUILD
 dist_bin_SCRIPTS = simetbox_register_ma.sh simetbox_lmap-fetch-schedule.sh
 sbprefix = simetbox
 jsonfilter=jsonfilter
+theshell=/bin/sh
 else
 dist_bin_SCRIPTS = simet_register_ma.sh simet-ma_periodic.sh simet_lmap-fetch-schedule.sh
 sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
+theshell=/bin/bash
 endif
+
+dist_bin_SCRIPTS += simet_lmap-send-report.sh
 
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
@@ -40,6 +44,7 @@ endif
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
+	    -e "1 s!/bin/sh!$(theshell)!" \
 	    "$^" > "$@"
 
 %.conf: %.conf.in
@@ -62,6 +67,7 @@ endif
 EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
 EXTRA_DIST += simet-ma_periodic.sh.in
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
+EXTRA_DIST += simet_lmap-create-report.sh.in simet_lmap-send-report.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
 # Ensures the empty directories we don't create at runtime do exist

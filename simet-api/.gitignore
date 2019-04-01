@@ -7,3 +7,5 @@ registry.d/simet-ma_base-registry.json
 simet*_register_ma.sh
 simet-ma_periodic.sh
 simet*_lmap-fetch-schedule.sh
+simet*_lmap-create-report.sh
+simet*_lmap-send-report.sh
