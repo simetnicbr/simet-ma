@@ -1,20 +1,20 @@
 {"ietf-lmap-control:lmap":{
 "agent":{"report-agent-id":true},
 "schedules":{"schedule":[
-  { "name":"ma_local-default_sched_refresh",
+  { "name":"ma-local_default-sched-refresh",
     "start":"every-six-hours",
     "execution-mode":"sequential",
     "action":[ {
-      "name":"simet.nic.br-reschedule",
-      "task":"simet.nic.br-reschedule"
+      "name":"simet.nic.br_reschedule",
+      "task":"simet.nic.br_reschedule"
       }
     ] },
-  { "name":"ma_local-default_simet-periodic_test_run",
+  { "name":"ma-local_default-periodic-test-run",
     "start":"every-four-hours",
     "execution-mode":"sequential",
     "action":[ {
-      "name":"simet.nic.br-basic_tests",
-      "task":"simet.nic.br-basic_tests",
+      "name":"simet.nic.br_basic-tests",
+      "task":"simet.nic.br_basic-tests",
       "destination":[
 	"report-primary"
       ] }

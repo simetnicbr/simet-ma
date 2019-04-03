@@ -1,7 +1,7 @@
 {"ietf-lmap-control:lmap":{"capabilities":{"tasks":{"task":[
-  { "name":"simet.nic.br-reschedule", "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
-  { "name":"ma_local_simet-runner","program":"@BINDIR@/simet-ma_run.sh" },
-  { "name":"simet.nic.br-internet_availability","program":"@BINDIR@/inetupc" },
-  { "name":"simet.nic.br-nop","program":"/bin/true" },
-  { "name":"simet.nic.br-err","program":"/bin/false" }
+  { "name":"simet.nic.br_reschedule", "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
+  { "name":"ma-local_simet-runner","program":"@BINDIR@/simet-ma_run.sh" },
+  { "name":"simet.nic.br_internet-availability","program":"@BINDIR@/inetupc" },
+  { "name":"simet.nic.br_nop","program":"/bin/true" },
+  { "name":"simet.nic.br_err","program":"/bin/false" }
 ]}}}}

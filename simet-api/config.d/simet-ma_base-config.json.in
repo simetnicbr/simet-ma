@@ -1,9 +1,9 @@
 {"ietf-lmap-control:lmap":{
 "agent":{"report-agent-id":true},
 "tasks":{"task":[
-  { "name":"simet.nic.br-reschedule", "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
-  { "name":"simet.nic.br-basic_tests", "program":"@BINDIR@/simet-ma_run.sh" },
-  { "name":"simet.nic.br-internet_availability", "program":"@BINDIR@/inetupc" },
-  { "name":"simet.nic.br-nop", "program":"/bin/true" },
-  { "name":"simet.nic.br-err", "program":"/bin/false" }
+  { "name":"simet.nic.br_reschedule", "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
+  { "name":"simet.nic.br_basic-tests", "program":"@BINDIR@/simet-ma_run.sh" },
+  { "name":"simet.nic.br_internet-availability", "program":"@BINDIR@/inetupc" },
+  { "name":"simet.nic.br_nop", "program":"/bin/true" },
+  { "name":"simet.nic.br_err", "program":"/bin/false" }
 ]}}}

@@ -100,7 +100,7 @@
   with the hardcoded configuration).
 
   All hardcoded schedules, tasks, events, as well as other such
-  identifiers must be prefixed by "ma\_local\_", except when it is
+  identifiers must be prefixed by "ma-local\_", except when it is
   explicitly specified otherwise in the documentation.
 
   For fleet resilience reasons, the MA must be able to register itself
