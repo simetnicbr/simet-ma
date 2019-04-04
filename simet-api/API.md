@@ -61,11 +61,12 @@
   capability must add a JSON file in there that defines the capability.
 
   Tasks that requires executable programs not present in one of the
-  capabilities will be refused.
+  capabilities will be refused with a warning (schedule is still to be
+  accepted).
 
   There are a few "general" capabilities and/or programs that MUST be
   available, these are documented by the hardcoded capabilities of
-  simet-ma.
+  simet-ma.  They are all prefixed by "simet.nic.br\_".
 
   JSON-rendered lmap-control config with the hardcoded task definitions
   go into <libdir>/lmap/config.d/\*.json.  Each module that implements a
@@ -85,6 +86,11 @@
        measurement agent is registered (LMAP "preboot").
   <sysconfdir>/simet/lmap/group-id.json - group id, set when the
        measurement agent is registered (LMAP "preboot").
+
+  While in traditional LMAP the MA would start without an agent-id and
+  get one from the controller, SIMET2 requires prior registering through
+  REST API calls and provisions an agent-id at that time.  The SIMET2
+  controller will not attempt to change a MA's agent-id.
 
   The per-agent section of the schedule is volatile, and MUST be reset
   at every agent boot.  The agent will reset the volatile portion of the
@@ -112,6 +118,55 @@
 
   For safety, security and resilience reasons, software/firmware auto
   update tasks must be completely independent of the lmap core.
+
+### LMAP MA CAPABILITIES:
+
+  The MA must announce these tags in its capabilities to the SIMET2
+  controller:
+
+  - system-ipv4-capable -- system has IPv4 enabled in its IP stack
+  - system-ipv6-capable -- system has IPv6 enabled in its IP stack
+  - simet.nic.br_engine-name:< registered simet engine id >
+  - simet.nic.br_engine-version:< simet engine version >
+
+  All hardcoded and default tasks must have their "name", "version" and
+  "program" fields set to meaningful values.  They are _not_ to be
+  considered optional on SIMET2 MAs.
+
+  IPv6 support is mandatory.
+
+  Non-registered SIMET engines are not allowed to connect to the SIMET2
+  production servers.
+
+## LMAP runner API
+
+  Please refer to simet-lmapd documentation for the conventions used by
+  simet-lmapd when it is running a program (task).
+
+  Basically, only JSON is used (not XML), and tasks must output their
+  results in the same format as ietf-lmap-report::result:table, to be
+  merged into a single report by "lmapctl report".  There is a
+  convention for status exit codes as well, which should be followed
+  when possible.
+
+### SIMET LMAP task tags
+
+  There are a few SIMET2 tags that should be set on the hardcoded and
+  default tasks.
+
+  - simet-engine:< registered simet engine id >
+  - task-version:< version of the program/package that executes the task >
+    (this is usually the same as the SIMET engine version)
+  - task-program:< name of the program that is executed by the task >
+  - exit-status-urn:< URN identifying the exit status table >
+  - simet.nic.br-test:<tag>  --  causes a report to be destroyed upon
+    reception by the SIMET2 production LMAP collectors.  Used to aid
+    development and testing on instrumented development collectors.
+
+  MAs running development code must set the tag
+  "simet.nic.br-test:devel" on all tasks, unless they belong to NIC.br
+  public IP address space (for which such tag is enforced by the
+  collectors themselves).
 
 
 ## Locks (misc)
