@@ -18,6 +18,7 @@ simetlibdir=$(libdir)/simet
 simetlmapqueuedir=$(localstatedir)/spool/lmapd/queue
 simetlmapregistrydir=$(simetlibdir)/lmap/registry.d
 simetlmapconfigdir=$(simetlibdir)/lmap/config.d
+simetlmapbindir=$(simetlibdir)/lmap/bin
 EXTRA_DIST=
 CLEANFILES=
 
@@ -36,7 +37,44 @@ jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 endif
 
-dist_bin_SCRIPTS += simet_lmap-send-report.sh
+dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
+
+# LMAP wrapped tasklet links we want to create
+if SIMETBOX_BUILD
+tasklets = v_fping -help_traceroute -help_traceroute6 -help_ping -help_ping6 -help_nslookup v_drill v_dig
+else
+tasklets = v_fping V_traceroute V_traceroute6 V_ping V_ping6 version_nslookup v_drill v_dig
+endif
+
+dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh
+EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in
+CLEANFILES += $(dist_simetlmapbin_SCRIPTS)
+
+# automake will nicely "resolve" our symlinks, thus wasting space.
+# we use the install-exec-hook to create the symlinks to lmap-wrapper.sh
+tasklets_ln := $(patsubst %,lmap-task-%,$(tasklets))
+
+# Dynamically build the registry of tasklets and their tasks
+registry.d/simet-ma_tasklet-registry.json :
+	{ echo '{"ietf-lmap-control:lmap":{"capabilities":{' ; \
+	echo ' "tasks":{"task":[' ; \
+	{ for i in $(tasklets) ; do \
+		tn="$${i#*_}" ; \
+		pn="lmap-task-$${i}" ; \
+		echo "  {\"name\":\"$${tn}\",\"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
+	done ; } | sed -e '$$ s/,$$//' ; \
+	echo ']}}}}' ; \
+	} > "$@"
+
+config.d/simet-ma_tasklet-config.json :
+	{ echo '{"ietf-lmap-control:lmap":{"tasks":{"task":[' ; \
+	{ for i in $(tasklets) ; do \
+		tn="$${i#*_}" ; \
+		pn="lmap-task-$${i}" ; \
+		echo "  {\"name\":\"$${tn}\",\"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
+	done ; } | sed -e '$$ s/,$$//' ; \
+	echo ']}}}' ; \
+	} > "$@"
 
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
@@ -45,7 +83,7 @@ dist_bin_SCRIPTS += simet_lmap-send-report.sh
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
 	    -e "1 s!/bin/\(ba\)\?sh!$(theshell)!" \
-	    "$^" > "$@"
+	    "$^" > "$@" && chmod 0755 "$@"
 
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
@@ -68,6 +106,7 @@ EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
 EXTRA_DIST += simet-ma_periodic.sh.in
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
 EXTRA_DIST += simet_lmap-create-report.sh.in simet_lmap-send-report.sh.in
+EXTRA_DIST += simet_lmap-stdout-wrapper.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
 # Ensures the empty directories we don't create at runtime do exist
@@ -76,14 +115,24 @@ install-data-local:
 	$(MKDIR_P) -m 0755 -- "$(DESTDIR)$(simetconfdir)/lmap"
 	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapqueuedir)"
 
+# Creates tasklet symlinks
+install-exec-hook:
+	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlmapbindir)"
+	cd "$(DESTDIR)$(simetlmapbindir)" && \
+		for i in $(tasklets_ln) ; do \
+			ln -sf lmap-wrapper.sh "$$i" ; \
+		done
+
 dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-default-schedule.json
 EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-default-schedule.json
 CLEANFILES += conf/simet-ma.conf agent-version.txt
 
-dist_simetlmapregistry_DATA = registry.d/simet-ma_base-registry.json
-dist_simetlmapconfig_DATA   = config.d/simet-ma_base-config.json
-EXTRA_DIST += registry.d/simet-ma_base-registry.json.in config.d/simet-ma_base-config.json.in
-CLEANFILES += registry.d/simet-ma_base-registry.json config.d/simet-ma_base-config.json
+dist_simetlmapregistry_DATA = registry.d/simet-ma_base-registry.json registry.d/simet-ma_tasklet-registry.json
+EXTRA_DIST += registry.d/simet-ma_base-registry.json.in
+CLEANFILES += registry.d/simet-ma_base-registry.json registry.d/simet-ma_tasklet-registry.json
+dist_simetlmapconfig_DATA   = config.d/simet-ma_base-config.json config.d/simet-ma_tasklet-config.json
+EXTRA_DIST += config.d/simet-ma_base-config.json.in
+CLEANFILES += config.d/simet-ma_base-config.json config.d/simet-ma_tasklet-config.json
 
 # Other non-source files we want in the source tarball
 EXTRA_DIST += API.md
