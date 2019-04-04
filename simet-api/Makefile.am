@@ -44,7 +44,7 @@ dist_bin_SCRIPTS += simet_lmap-send-report.sh
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
-	    -e "1 s!/bin/sh!$(theshell)!" \
+	    -e "1 s!/bin/\(ba\)\?sh!$(theshell)!" \
 	    "$^" > "$@"
 
 %.conf: %.conf.in

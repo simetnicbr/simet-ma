@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Render a LMAP report, and compress it for later sending
 # Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
 #

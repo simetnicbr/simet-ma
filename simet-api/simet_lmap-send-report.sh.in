@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Send a LMAP report to a SIMET2 report collector
 # Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
 #
