@@ -51,7 +51,7 @@ do_start_prepare() {
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown $USER:$GROUP '{}' +)
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod g+r '{}' +)
 
-	start-stop-daemon -c "$USER" --start --name simet_register --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
+	start-stop-daemon -c "$USER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	[ -r "$LMAP_AGENT_FILE" ] || {
 		log_warning_msg "LMAP agent-id is not configured yet"
 		exit 0
@@ -59,7 +59,7 @@ do_start_prepare() {
 
 	# contact controller at daemon start/boot, we will use the default schedule
 	# if this fails
-	start-stop-daemon -c "$USER" --start --name simet_lmap_fetch --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
+	start-stop-daemon -c "$USER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
 	:
 }
 
