@@ -186,6 +186,13 @@ getschedule() {
 		abend "missing essential data in simet-ma.conf, aborting"
 	fi
 
+	# might race something, so tolerate failures
+	# whatever cares (such as simet-ma/simet-lmapd init scripts) will fix
+	# the onwership of LMAP_SCHEDULE_DIR as required.
+	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
+	[ -d "$LMAP_SCHEDULE_DIR" ] || \
+		mkdir -p "$LMAP_SCHEDULE_DIR" 2>/dev/null || true
+
 	OUTFILE=$(mktemp -q -t simet-lmap-downloadschedule.$$.XXXXXXXXXX) \
 		|| abend "failed to create tmpfile"
 
