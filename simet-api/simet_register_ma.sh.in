@@ -99,15 +99,29 @@ simet_reginfo_restart_services() {
 	fi
 }
 
+gethash() {
+	# $1 - file to hash
+	[ -r "$1" ] || {
+		echo ""
+		return 0
+	}
+	sha256sum "$1" | sed -n '1 { s/[[:blank:]].*// ; p }'
+	return 0
+}
+
 write_lmap_agent() {
 	if [ -z "$1" ] ; then
 		rm -f  "$LMAP_AGENT_FILE"
 		logger -s -t simet-ma -p daemon.notice "SIMET: removed LMAP agent-id"
 	else
-		cat <<- LMAPAGENTEOF >"$OUTFILE" && mv -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
-			{"ietf-lmap-control:lmap":{"agent":{"agent-id":"$1"}}}
+		cat <<- LMAPAGENTEOF >"$OUTFILE" || return 1
+			{"ietf-lmap-control:lmap":{"agent":{"agent-id":"$1","report-agent-id":true}}}
 		LMAPAGENTEOF
+		HASHOLD=$(gethash "$LMAP_AGENT_FILE") || HASHOLD=
+		HASHNEW=$(gethash "$OUTFILE") || return 1
+		[ x"$HASHOLD" != x"$HASHNEW" ] && mv -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
 	fi
+	:
 }
 
 gettoken() {
@@ -135,9 +149,7 @@ gettoken() {
 			mkdir -m 0755 -p "$LMAP_AGENT_DIR"
 		}
 
-		if [ ! -r "$LMAP_AGENT_FILE" ] || [ x"$AID" != x"$OLDAID" ] ; then
-			write_lmap_agent "$AID"
-		fi
+		write_lmap_agent "$AID"
 	fi
 
 	call_hook after_reginfo_replace
