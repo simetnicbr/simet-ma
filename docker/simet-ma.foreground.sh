@@ -43,12 +43,13 @@ USER=nicbr-simet
 [ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
 AGENT_ID_FILE=${AGENT_ID_FILE:-/opt/simet/etc/simet/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-/opt/simet/etc/simet/agent.jwt}
+LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-/opt/simet/etc/simet/lmap/agent-id.json}
 SIMET_INETUP_SERVER=${SIMET_INETUP_SERVER:-simet-monitor-inetup.simet.nic.br}
 BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 
 # first, ensure MA is registered
 [ "$SIMET_REFRESH_AGENTID" = "true" ] && \
-	rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE"
+	rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE"
 sudo -u $USER -g $USER -H -n $REGISTER --boot
 echo "SIMET-MA: agent-id=$(cat $AGENT_ID_FILE)"
 echo
@@ -60,6 +61,7 @@ INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
 INETUPCMD="sudo -u $USER -g $USER -H -n"
 
 [ "$SIMET_CRON_DISABLE" != "true" ] && [ -z "$SIMET_RUN_TEST" ] && {
+	service rsyslog start
 	if [ -r /etc/cron.d/simet-ma ] ; then
 		echo "SIMET-MA: starting cron to run management tasks in background..."
 		service cron start
