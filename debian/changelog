@@ -1,3 +1,15 @@
+simet-ma (0.13.0) unstable; urgency=medium
+
+  * simet-ma version 0.13.0
+  * simet-lmapd integration:
+    Agent-info handling, many lmap-controller related fixes
+    and enhancements.  Requires simet-lmapd 0.13.0 or later
+  * docker: add rsyslog and a few improvements to the simet-ma
+    example "container-based measurement agent"
+  * deb packages: start-stop-daemon fixes
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 09 Apr 2019 12:34:21 -0300
+
 simet-ma (0.12.0) unstable; urgency=medium
 
   * simet-ma version 0.12.0
