@@ -32,6 +32,8 @@ abend() {
 	exit 1
 }
 
+. @SIMETLIBDIR@/simet_lib.sh
+
 # Do nothing when there are no input data files, otherwise lmapctl would
 # log errors.  Note: some versions of OpenWRT "find" lack -quit
 [ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
@@ -42,18 +44,14 @@ while [ $# -gt 0 ] ; do
 	shift
 done
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
 AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
-AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
 LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
 
 [ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
 [ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
-USERAGENT=$(echo "simet-ma LMAP report (temp)" | tr -dc ' A-Za-z0-9(),.;:/+~^_-')
-
+USERAGENT=$(get_http_useragent)
 CURLOPT="--proto =https -q -s -m 15"
 CURLOPT2="--retry 10 --retry-max-time 3600"
 

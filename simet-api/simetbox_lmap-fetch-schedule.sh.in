@@ -25,13 +25,11 @@ abend() {
 	exit 1
 }
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+. @SIMETLIBDIR@/simet_lib.sh
 
 AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
 AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
 AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
-AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-/opt/simet/lib/simet/agent-version.txt}
 JSONFILTER=${JSONFILTER:-jsonfilter}
 
 LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-@SIMETCONFDIR@/lmap/agent-id.json}
@@ -42,20 +40,7 @@ LMAP_RECONFIG=${LMAP_RECONFIG:=/etc/init.d/simet-lmapd reload}
 LMAPD=@BINDIR@/lmapd
 LMAPCTL=@BINDIR@/lmapctl
 
-BOXID=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
-BOXVERSION=$(get_simet_box_version.sh 2>/dev/null) || BOXVERSION="unknown"
-[ -r "${AGENT_VERSION_FILE}" ] && AGENTVERSION=$(cat "${AGENT_VERSION_FILE}")
-[ -z "$AGENTVERSION" ] && AGENTVERSION="simet-ma/unknown"
-if [ -r /etc/openwrt_release ] ; then
-	AGENTENV=$( \
-		. /etc/openwrt_release
-		echo "$DISTRIB_DESCRIPTION $DISTRIB_TARGET $DISTRIB_ARCH" | tr -s ' '
-	) || true
-fi
-[ -z "$AGENTENV" ] && AGENTENV="unknown"
-AGENTENV="$AGENTENV; $(uname -srm)" || AGENTENV="$AGENTENV; unknown"
-USERAGENT=$(echo "$AGENTVERSION (SIMETBOX/$BOXVERSION; $AGENTENV)" | tr -dc ' A-Za-z0-9(),.;:/+~^_-')
-
+USERAGENT=$(get_http_useragent)
 CURLOPT="-q -s -m 15 --max-filesize 1000000"
 CURLOPT2="--retry 10 --retry-max-time 3600"
 
