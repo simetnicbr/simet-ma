@@ -1,5 +1,8 @@
 {"ietf-lmap-control:lmap":{
 "tasks":{"task":[
+  { "name":"simet.nic.br_agent-info",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:simet2-agent-info"],
+    "program":"@LMAPBINDIR@/simet2-agent-info.sh" },
   { "name":"simet.nic.br_report",
     "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:simet_lmap-send-report"],
     "program":"@BINDIR@/simet_lmap-send-report.sh" },

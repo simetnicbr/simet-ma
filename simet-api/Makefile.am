@@ -46,8 +46,8 @@ else
 tasklets = v_fping V_traceroute V_traceroute6 V_ping V_ping6 version_nslookup v_drill v_dig
 endif
 
-dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh
-EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in
+dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh
+EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in
 CLEANFILES += $(dist_simetlmapbin_SCRIPTS)
 
 # automake will nicely "resolve" our symlinks, thus wasting space.
@@ -81,7 +81,7 @@ config.d/simet-ma_tasklet-config.json :
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
-	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
+	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
 	    -e "1 s!/bin/\(ba\)\?sh!$(theshell)!" \
 	    "$^" > "$@" && chmod 0755 "$@"
 
@@ -90,14 +90,14 @@ config.d/simet-ma_tasklet-config.json :
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
-	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
+	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
 	    "$^" > "$@"
 
 %.json: %.json.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
-	    -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
+	    -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
 	    "$^" > "$@"
 
