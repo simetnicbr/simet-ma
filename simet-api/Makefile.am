@@ -20,22 +20,27 @@ CLEANFILES=
 
 if SIMETBOX_BUILD
 dist_bin_SCRIPTS = simetbox_register_ma.sh
+sbprefix = simetbox
 jsonfilter=jsonfilter
+theshell=/bin/sh
 else
 dist_bin_SCRIPTS = simet_register_ma.sh simet-ma_periodic.sh
+sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
+theshell=/bin/bash
 endif
 
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
+	    -e "1 s!/bin/\(ba\)\?sh!$(theshell)!" \
 	    "$^" > "$@"
 
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
+	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
@@ -49,6 +54,13 @@ install-data-local:
 dist_simetlib_DATA  = conf/simet-ma.conf agent-version.txt
 EXTRA_DIST += conf/simet-ma.conf.in
 CLEANFILES += $(dist_simetlib_DATA)
+
+simet_lib.sh.in : simet_lib.$(sbprefix).sh.in
+	ln -sf "$^" "$@"
+
+dist_simetlib_SCRIPTS = simet_lib.sh
+EXTRA_DIST += simet_lib.simetbox.sh.in  simet_lib.simet.sh.in
+CLEANFILES += simet_lib.sh simet_lib.sh.in
 
 # Other non-source files we want in the source tarball
 EXTRA_DIST += API.md

@@ -1,0 +1,48 @@
+#!/bin/sh
+# SIMET-MA os-specific compatibility layer (shell script) - SIMETBOX
+# Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
+[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
+
+# stdout: HTTP-compatible agent name/version string
+# Note: subshell function!
+get_http_useragent()
+(
+	BOXID=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
+	BOXVERSION=$(get_simet_box_version.sh 2>/dev/null) || BOXVERSION="unknown"
+	[ -r "${AGENT_VERSION_FILE}" ] && AGENTVERSION=$(cat "${AGENT_VERSION_FILE}")
+	[ -z "$AGENTVERSION" ] && AGENTVERSION="simet-ma/unknown"
+	if [ -r /etc/openwrt_release ] ; then
+		AGENTENV=$( \
+			. /etc/openwrt_release
+			echo "$DISTRIB_DESCRIPTION $DISTRIB_TARGET $DISTRIB_ARCH" | tr -s ' '
+		) || true
+	fi
+	[ -z "$AGENTENV" ] && AGENTENV="unknown"
+	AGENTENV="$AGENTENV; $(uname -srm)" || AGENTENV="$AGENTENV; unknown"
+	echo "$AGENTVERSION (SIMETBOX/$BOXVERSION; $AGENTENV)" | tr -dc ' A-Za-z0-9(),.;:/+~^_-'
+)
+
+# sets environment variables that match the environment
+simet2_agentinfo() {
+	SIMET2_AGENT_FAMILY="embedded"
+	SIMET2_AGENT_ENVNAME=$(sed -nE -e "/DISTRIB_DESCRIPTION/ { s/[^=]+=// ; s/^[\'\"]// ; s/[\'\"]$// ; p }" /etc/openwrt_release)
+	SIMET2_AGENT_ENVVERSION=$(cat /etc/openwrt_version)
+}
+
+:
