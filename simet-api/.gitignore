@@ -3,7 +3,14 @@ Makefile.in
 agent-version.txt
 conf/simet-ma.conf
 config.d/simet-ma_base-config.json
+config.d/simet-ma_tasklet-config.json
 registry.d/simet-ma_base-registry.json
+registry.d/simet-ma_tasklet-registry.json
 simet*_register_ma.sh
 simet-ma_periodic.sh
 simet*_lmap-fetch-schedule.sh
+simet*_lmap-create-report.sh
+simet*_lmap-send-report.sh
+simet*_lmap-stdout-wrapper.sh
+simet_lib.sh*
+lmap-tasks/*.sh

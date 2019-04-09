@@ -1,9 +1,22 @@
 {"ietf-lmap-control:lmap":{
-"agent":{"report-agent-id":true},
 "tasks":{"task":[
-  { "name":"simet.nic.br-reschedule", "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
-  { "name":"simet.nic.br-basic_tests", "program":"@BINDIR@/simet-ma_run.sh" },
-  { "name":"simet.nic.br-internet_availability", "program":"@BINDIR@/inetupc" },
-  { "name":"simet.nic.br-nop", "program":"/bin/true" },
-  { "name":"simet.nic.br-err", "program":"/bin/false" }
+  { "name":"simet.nic.br_agent-info",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:simet2-agent-info"],
+    "program":"@LMAPBINDIR@/simet2-agent-info.sh" },
+  { "name":"simet.nic.br_report",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:simet_lmap-send-report"],
+    "program":"@BINDIR@/simet_lmap-send-report.sh" },
+  { "name":"simet.nic.br_reschedule",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:@SBPREFIX@_lmap-fetch-schedule"],
+    "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
+  { "name":"simet.nic.br_basic-tests",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:simet-ma_run"],
+    "program":"@BINDIR@/simet-ma_run.sh" },
+  { "name":"simet.nic.br_internet-availability",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:inetupc" ],
+    "program":"@BINDIR@/inetupc" },
+  { "name":"simet.nic.br_nop", "program":"/bin/true",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:true"] },
+  { "name":"simet.nic.br_err", "program":"/bin/false",
+    "tag":["simet-engine:@SIMET_ENGINE_NAME@","task-version:@PACKAGEVERSION@","task-program:false"] }
 ]}}}

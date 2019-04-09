@@ -1,0 +1,88 @@
+#!/bin/bash
+# Send a LMAP report to a SIMET2 report collector
+# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+# This program is supposed to be run from a simet-lmapd task, and expects the
+# environment and directories to be correct for a simet-lmapd task. simet-lmapd
+# runs us in a task workspace, the schedule processing queue will be in the
+# parent directory, and we can be sure it is stable.
+
+# Command line: list of URLs of collectors to use.  If none are given, the one
+# from the hardcoded configuration will be used.
+
+set -e
+set -o pipefail
+
+abend() {
+	logger -s -t simet-ma -p daemon.err "$*"
+	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+	exit 1
+}
+
+. @SIMETLIBDIR@/simet_lib.sh
+
+# Do nothing when there are no input data files, otherwise lmapctl would
+# log errors.  Note: some versions of OpenWRT "find" lack -quit
+[ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
+
+COLLECTORS=
+while [ $# -gt 0 ] ; do
+	COLLECTORS="$COLLECTORS $1"
+	shift
+done
+
+AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
+AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
+LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
+
+[ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
+[ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
+
+USERAGENT=$(get_http_useragent)
+CURLOPT="--proto =https -q -s -m 15"
+CURLOPT2="--retry 10 --retry-max-time 3600"
+
+# parameters: list of possible collectors to try to send to
+send_report_to_collector() {
+    while [ $# -gt 0 ] ; do
+	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" --post301 --post302 --post303 \
+		--data-binary "@$OUTFILE" -f -L -j \
+		-H "Authorization: Bearer $OLDAT" \
+		-H "Content-Type: application/yang.data+json" \
+		"$1" \
+	&& return 0
+	shift
+    done
+    return 1
+}
+
+OLDAT=
+OLDAID=
+[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
+[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+
+# We *require* an agent-id and agent token to submit reports
+if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] || [ ! -r "$LMAP_AGENT_FILE" ] ; then
+	abend "MA not registered yet, cannot submit reports"
+fi
+
+OUTFILE=$(mktemp -q -t simet-report.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
+(cd .. && $LMAPCTL -i json -j report) > $OUTFILE || abend "failed to render report"
+send_report_to_collector $COLLECTORS || abend "failed to submit report to collector"
+
+rm -f "$OUTFILE"
+OUTFILE=
+:

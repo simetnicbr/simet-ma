@@ -83,7 +83,7 @@ LABEL description="SIMET2 Measurement Agent"
 LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install sudo
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install sudo procps rsyslog logrotate
 
 COPY --from=0 /tmp/debs/ /tmp/debs/
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; DEBIAN_FRONTEND=noninteractive apt-get -y -f install
@@ -93,7 +93,7 @@ COPY docker/*.sh /opt/simet/bin/
 # We want to make sure these will not be reused unless persisted,
 # i.e. it must not be present in the image... but the deb package
 # might have created them when it was installed.
-RUN rm -f /opt/simet/etc/simet/agent-id /opt/simet/etc/simet/agent.jwt
+RUN rm -f /opt/simet/etc/simet/agent-id /opt/simet/etc/simet/agent.jwt /opt/simet/etc/simet/lmap/agent-id.json /opt/simet/etc/simet/lmap/group-id.json
 VOLUME /opt/simet/etc/simet
 
 ##

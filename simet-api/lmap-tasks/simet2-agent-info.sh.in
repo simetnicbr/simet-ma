@@ -1,0 +1,26 @@
+#!/bin/sh
+# SIMET2 agent-info ambient metric
+# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+set -e
+. @SIMETLIBDIR@/simet_lib.sh
+simet2_agentinfo || exit 1
+cat << EOF1AGITEMPLATE
+{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_AgentInfo__Multiple_Singleton"}],
+"column":["engine_name","engine_version","agent_family","agent_environment_name","agent_environment_version"],
+"row":[{"value":["@SIMET_ENGINE_NAME@","@PACKAGEVERSION@","$SIMET2_AGENT_FAMILY","$SIMET2_AGENT_ENVNAME","$SIMET2_AGENT_ENVVERSION"]}] }
+EOF1AGITEMPLATE
+:

@@ -40,8 +40,8 @@ DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
 
 # not called by default init-d-script reload/restart
 do_start_prepare() {
-	# --name doesn't matter, as long as it doesn't match
-	start-stop-daemon -c "$USER" --start --name simet_register --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
+	# --name doesn't matter, as long as it doesn't match, and not too long
+	start-stop-daemon -c "$USER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	:
 }
 

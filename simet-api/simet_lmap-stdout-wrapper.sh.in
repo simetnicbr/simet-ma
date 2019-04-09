@@ -1,0 +1,67 @@
+#!/bin/bash
+# Encapsulate stdout output of a program into a LMAP result
+# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+# stdin: the input
+# stout: the output  (should be discarded on exit status non-zero)
+# stderr: any errors (will be empty on exit status zero)
+
+# no parameters - direct filter
+# $1: exec
+#      $2 - tool name to execute (searches path)
+#      $3 - tool commands to get a version string out of it
+#      $4.. - tool parameters
+# $1: wrap
+#      $2 - tool name that was executed and its version
+#      $3.. - tool parameters used when the tool was executed
+
+set -e
+set -o pipefail
+
+abend() {
+    echo "$0: error: $*" >&2
+    exit 1
+}
+
+do_wrap() {
+    cat <<- "PROLOGEOF"
+	{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_stdout-output__Multiple_Raw"}],
+	 "column":["output_line"],"row":[
+	PROLOGEOF
+    { [ $# -gt 0 ] && { echo "$1" ; shift ; echo "$*" ; } ; cat ; } |
+	sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/^/{"value":["/' -e '$ s/$/"]}/' -e '$! s/$/"]},/' -e 's/[[:cntrl:]]*//g'
+    cat <<- "EPILOGEOF"
+	]}
+	EPILOGEOF
+    :
+}
+
+if [ "$1" = "exec" ] ; then
+    shift ; TOOL=$(command -pv $1) || abend "command $1 not found"
+    shift ; TOOLVER=
+    [ $# -gt 0 ] && { TOOLVER=$( { command -p $TOOL $1 2>&1 || true ; } | sed -e '/^[[:blank:]]*$/ d' | sed -n -e '1 p' ) ; shift ; }
+    RC=0
+    command -p $TOOL "$@" | do_wrap "$TOOL ($TOOLVER)" "$*" || RC=$?
+    exit $RC
+fi
+
+if [ $# -ge 2 ] && [ "$1" = "wrap" ] ; then
+    shift
+elif [ $# -ne 0 ] ; then
+    abend "bad command line arguments"
+fi
+
+do_wrap "$@"
