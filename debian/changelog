@@ -1,3 +1,10 @@
+simet-ma (0.13.1) unstable; urgency=medium
+
+  * simet-ma version 0.13.1
+  * Sync debian/copyright with COPYING
+
+ -- SIMET <medicoes@simet.nic.br>  Thu, 11 Apr 2019 16:15:20 -0300
+
 simet-ma (0.13.0) unstable; urgency=medium
 
   * simet-ma version 0.13.0
