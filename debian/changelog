@@ -1,5 +1,6 @@
-simet-ma (0.9.3) unstable; urgency=medium
+simet-ma (0.9.4) unstable; urgency=medium
 
-  * simet-ma version 0.9.3
+  * simet-ma version 0.9.4
+  * Update package license
 
- -- SIMET <medicoes@simet.nic.br>  Fri, 15 Mar 2019 13:43:07 -0300
+ -- SIMET <medicoes@simet.nic.br>  Thu, 11 Apr 2019 15:57:40 -0300
