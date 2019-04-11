@@ -1,2 +1,2 @@
 # NIC.br SIMET Measurement Agent
-deb [ signed-by=/etc/apt/nicbr-simet.apt.key.gpg pdiffs=no ] http://download.simet.nic.br/simet-ma/linux/apt/@distro@ @codename@ main
+deb [ signed-by=/etc/apt/nicbr-simet.apt.key.gpg pdiffs=no ] http://download.simet.nic.br/medidores/simet-ma/linux/apt/@distro@ @codename@ main
