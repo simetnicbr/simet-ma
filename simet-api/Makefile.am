@@ -30,6 +30,8 @@ jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 endif
 
+dist_bin_SCRIPTS += simet_geolocation.sh
+
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
@@ -44,7 +46,7 @@ endif
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
-EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in simet-ma_periodic.sh.in
+EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in simet-ma_periodic.sh.in simet_geolocation.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
 # Ensures the empty directories we don't create at runtime do exist
