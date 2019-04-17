@@ -15,6 +15,9 @@ TEMPLATE_DIR=@SIMETLIBDIR@
 
 SIMET_INETUP_SERVER=simet-monitor-inetup.simet.nic.br
 
+API_SIMET_GEO=https://api.simet.nic.br/geolocation
+GEOLOC_CACHE=@LOCALSTATEDIR@/run/simet/geoloc-cache.txt
+
 LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_AGENT_TOKEN=https://api.simet.nic.br/measurement/jwt
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
