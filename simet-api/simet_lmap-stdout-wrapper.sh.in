@@ -31,6 +31,9 @@
 set -e
 set -o pipefail
 
+PATH="/sbin:/bin:/usr/sbin:/usr/bin:$PATH"
+export PATH
+
 abend() {
     echo "$0: error: $*" >&2
     exit 1
@@ -50,11 +53,11 @@ do_wrap() {
 }
 
 if [ "$1" = "exec" ] ; then
-    shift ; TOOL=$(command -pv $1) || abend "command $1 not found"
+    shift ; TOOL=$(command -v $1) || abend "command $1 not found in PATH $PATH"
     shift ; TOOLVER=
-    [ $# -gt 0 ] && { TOOLVER=$( { command -p $TOOL $1 2>&1 || true ; } | sed -e '/^[[:blank:]]*$/ d' | sed -n -e '1 p' ) ; shift ; }
+    [ $# -gt 0 ] && { TOOLVER=$( { $TOOL $1 2>&1 || true ; } | sed -e '/^[[:blank:]]*$/ d' | sed -e '1 q' ) ; shift ; }
     RC=0
-    command -p $TOOL "$@" | do_wrap "$TOOL ($TOOLVER)" "$*" || RC=$?
+    $TOOL "$@" | do_wrap "$TOOL ($TOOLVER)" "$*" || RC=$?
     exit $RC
 fi
 
