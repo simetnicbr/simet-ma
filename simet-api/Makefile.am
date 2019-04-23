@@ -117,7 +117,7 @@ install-data-local:
 
 # Creates tasklet symlinks
 install-exec-hook:
-	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlmapbindir)"
+	$(MKDIR_P) -m 0751 -- "$(DESTDIR)$(simetlmapbindir)"
 	cd "$(DESTDIR)$(simetlmapbindir)" && \
 		for i in $(tasklets_ln) ; do \
 			ln -sf lmap-wrapper.sh "$$i" ; \
