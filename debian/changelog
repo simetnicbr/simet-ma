@@ -1,3 +1,11 @@
+simet-ma (0.13.2) unstable; urgency=medium
+
+  * simet-ma version 0.13.2
+  * New simet_geolocation.sh, simet.nic.br_geolocation LMAP handling
+  * Several fixes to the generic stdout LMAP tasklets
+
+ -- SIMET <medicoes@simet.nic.br>  Thu, 25 Apr 2019 11:48:11 -0300
+
 simet-ma (0.13.1) unstable; urgency=medium
 
   * simet-ma version 0.13.1
