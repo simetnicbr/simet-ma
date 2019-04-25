@@ -12,5 +12,6 @@ simet*_lmap-fetch-schedule.sh
 simet*_lmap-create-report.sh
 simet*_lmap-send-report.sh
 simet*_lmap-stdout-wrapper.sh
+simet*_geolocation.sh
 simet_lib.sh*
 lmap-tasks/*.sh

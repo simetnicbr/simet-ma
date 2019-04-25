@@ -24,7 +24,7 @@ case "$1" in
         deluser --quiet --system nicbr-simet >/dev/null || true
         deluser --quiet --system --group nicbr-simet >/dev/null || true
         rm -f /etc/cron.d/simet-ma /etc/cron.daily/simet-ma
-	rm -fr /var/run/lmapd/ /var/spool/lmapd/ /opt/simet/
+	rm -fr /var/run/lmapd/ /var/spool/lmapd/ /opt/simet/ /var/run/simet/
     ;;
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
     ;;

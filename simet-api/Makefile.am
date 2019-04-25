@@ -37,7 +37,7 @@ jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 endif
 
-dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
+dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh simet_geolocation.sh
 
 # LMAP wrapped tasklet links we want to create
 if SIMETBOX_BUILD
@@ -105,7 +105,7 @@ config.d/simet-ma_tasklet-config.json :
 EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
 EXTRA_DIST += simet-ma_periodic.sh.in
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
-EXTRA_DIST += simet_lmap-create-report.sh.in simet_lmap-send-report.sh.in
+EXTRA_DIST += simet_lmap-create-report.sh.in simet_lmap-send-report.sh.in simet_geolocation.sh.in
 EXTRA_DIST += simet_lmap-stdout-wrapper.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
@@ -117,7 +117,7 @@ install-data-local:
 
 # Creates tasklet symlinks
 install-exec-hook:
-	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlmapbindir)"
+	$(MKDIR_P) -m 0751 -- "$(DESTDIR)$(simetlmapbindir)"
 	cd "$(DESTDIR)$(simetlmapbindir)" && \
 		for i in $(tasklets_ln) ; do \
 			ln -sf lmap-wrapper.sh "$$i" ; \
