@@ -1,3 +1,10 @@
+simet-ma (0.9.6) unstable; urgency=medium
+
+  * simet-ma version 0.9.6
+  * Backport geolocation updates from master (simet-ma 0.13.2)
+
+ -- SIMET <medicoes@simet.nic.br>  Thu, 25 Apr 2019 12:15:46 -0300
+
 simet-ma (0.9.5) unstable; urgency=medium
 
   * simet-ma version 0.9.5
