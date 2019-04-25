@@ -200,28 +200,28 @@
 
 ## Geolocation
 
-  Right now, only the openwrt (SIMETBox) version of simet-ma has any
-  geolocation capabilities, and the related functionality is not hosted
-  or implemented in simet-ma.
-
-  The geolocation API is:
+  The simet-ma geolocation API is:
   simet\_geolocation.sh
-     returns in stdout the geolocation information
+     returns in stdout the geolocation information, as an LMAP metric
+       result
      returns in stderr relevant error or progress messages
      returns in exit status 0 (ok), non-zero (error)
 
-  stdout format:
-     <unix time of measurement, seconds>
-     <latitude> <longitude> <precision in meters>
+  The time the geolocation was carried out is informed in seconds since
+  1900-01-01T00:00:00Z (NTP epoch).  Assume a 64-bit integer type for
+  y2038k safety.
 
-     Unix time is a large positive integer:
-       * Number of seconds since 1970-01-01 00:00:00 UTC
-       * y2038-safe: assume a 64-bit integer type
-     Latitude and longitude are in degrees, floating point.
-       * As defined by ISO C for printf of floats (double)
-       * Negative is South/West, positive is North/East.
+  Latitude and longitude are in degrees, floating point.  Negative is
+  South/West, positive is North/East.
 
-  Caching, query limits, and sideband REST API access to persist agent
-  geolocation and other such sidechannels are not specified, but they do
-  exist.
+  simet-ma's simet\_geolocation.sh requires root access to work, unless
+  returning data from cache (--from-cache command line option), in which
+  case it just requires read access to the geolocation cache file.
 
+  The simet-ma packaging must arrange for simet\_geolocation.sh to be
+  run as root periodically.
+
+  There is a simet\_geolocation\_legado.sh that is used to feed the
+  legacy SIMET API with gelocation data.  It will be phased out and
+  removed when we disable the legacy API.  The legacy script uses
+  simet\_geolocation.sh to do the real work.
