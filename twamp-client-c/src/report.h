@@ -37,7 +37,7 @@ typedef struct twamp_result {
 
 typedef struct twamp_report {
     char *device_id;
-    
+
     char *host;
     char *address;
     unsigned int serverPort;

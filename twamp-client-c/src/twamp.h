@@ -21,12 +21,12 @@
 
 #include "report.h"
 
-#ifdef  HAVE_JSON_C_JSON_H  
+#ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
-#elif HAVE_JSON_JSON_H   
+#elif HAVE_JSON_JSON_H
 #include <json/json.h>
 #elif HAVE_JSON_H
-#include <json.h>  
+#include <json.h>
 #endif
 
 /* TWAMP parameters struct */

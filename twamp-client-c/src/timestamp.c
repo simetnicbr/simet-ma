@@ -21,7 +21,7 @@
 #include <inttypes.h>
 
 #include <arpa/inet.h>
- 
+
 Timestamp timeval_to_timestamp(const struct timeval *tv) {
     Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
 

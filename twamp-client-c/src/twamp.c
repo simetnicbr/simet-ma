@@ -57,7 +57,7 @@ int twamp_run_client(TWAMPParameters param) {
     // Create TWAMPReport
     TWAMPReport * report = twamp_report_init();
     if (!report)
-    return SEXIT_OUTOFRESOURCE;
+        return SEXIT_OUTOFRESOURCE;
     report->device_id = param.device_id ? param.device_id : "(unknown)";
     report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_count);
     report->family = param.family;
@@ -70,28 +70,28 @@ int twamp_run_client(TWAMPParameters param) {
     ServerGreeting *srvGreetings = malloc(SERVER_GREETINGS_SIZE);
     SetupResponse *stpResponse = malloc(SETUP_RESPONSE_SIZE);
     if (!srvGreetings || !stpResponse)
-    return SEXIT_OUTOFRESOURCE;
+        return SEXIT_OUTOFRESOURCE;
     memset(stpResponse, 0 , SETUP_RESPONSE_SIZE);
     ServerStart *srvStart = malloc(SERVER_START_SIZE);
     if (!srvStart)
-    return SEXIT_OUTOFRESOURCE;
-    
+        return SEXIT_OUTOFRESOURCE;
+
     RequestSession *rqtSession = malloc(REQUEST_SESSION_SIZE);
     if (!rqtSession)
-    return SEXIT_OUTOFRESOURCE;
+        return SEXIT_OUTOFRESOURCE;
     memset(rqtSession, 0 , REQUEST_SESSION_SIZE);
     AcceptSession *actSession = malloc(ACCEPT_SESSION_SIZE);
     StartSessions *strSession = malloc(START_SESSIONS_SIZE);
     if (!actSession || !strSession)
-    return SEXIT_OUTOFRESOURCE;
+        return SEXIT_OUTOFRESOURCE;
     memset(strSession, 0 , START_SESSIONS_SIZE);
     StartAck *strAck = malloc(START_ACK_SIZE);
     if (!strAck)
-    return SEXIT_OUTOFRESOURCE;
+        return SEXIT_OUTOFRESOURCE;
 
     StopSessions *stpSessions = malloc(sizeof(StopSessions));
     if (!stpSessions)
-    return SEXIT_OUTOFRESOURCE;
+        return SEXIT_OUTOFRESOURCE;
     memset(stpSessions, 0 , sizeof(StopSessions));
 
     int rc;
@@ -268,8 +268,8 @@ int twamp_run_client(TWAMPParameters param) {
 
     testPort = malloc(sizeof(char) * 6);
     if (!testPort) {
-    rc = SEXIT_OUTOFRESOURCE;
-    goto TEST_CLOSE;
+        rc = SEXIT_OUTOFRESOURCE;
+        goto TEST_CLOSE;
     }
     snprintf(testPort, 6, "%u", receiver_port);
 
@@ -312,7 +312,7 @@ int twamp_run_client(TWAMPParameters param) {
         print_err("message_start_ack problem");
         goto TEST_CLOSE;
     }
-    
+
     if (strAck->Accept == 0) {
         print_msg(MSG_NORMAL, "measurement starting...");
         t_param.test_socket = fd_test;
@@ -376,12 +376,13 @@ MEM_FREE:
 }
 
 static int convert_family(int family) {
-    if (family == 4)
+    if (family == 4) {
         return USOCK_IPV4ONLY;
-    else if (family == 6)
+    } else if (family == 6) {
         return USOCK_IPV6ONLY;
-    else
+    } else {
         return 0;
+    }
 }
 
 static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
@@ -494,7 +495,7 @@ static int twamp_test(TestParameters test_param) {
     while (counter < test_param.param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter++);
-    
+
         // Set packet timestamp
         Timestamp ts = timeval_to_timestamp(&tv_cur);
         encode_be_timestamp(&ts);

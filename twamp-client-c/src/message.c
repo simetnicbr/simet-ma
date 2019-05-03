@@ -310,7 +310,7 @@ int message_send(int socket, int timeout, void *message, size_t len) {
 
     tv_timeo.tv_sec = timeout;
     tv_timeo.tv_usec = 0;
-    
+
     do {
         memcpy(&wset, &wset_master, sizeof(wset_master));
 
@@ -337,7 +337,7 @@ int message_send(int socket, int timeout, void *message, size_t len) {
             }
         }
     } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
-    
+
     return -1;
 }
 
@@ -368,7 +368,7 @@ int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *s
 
 int message_format_request_session(int ipvn, uint16_t sender_port, RequestSession *rqtSession) {
     rqtSession->Type = 5;
-    
+
     // Set 0 as default
     rqtSession->ConfSender = 0;
     rqtSession->ConfReceiver = 0;
