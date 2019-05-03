@@ -338,7 +338,9 @@ int twamp_run_client(TWAMPParameters param) {
             t_param.report->result->packets_sent, t_param.report->result->packets_received,
             t_param.report->result->packets_dropped_timeout);
 
-    rc = SEXIT_SUCCESS;
+    /* SEXIT_OUTOFRESOURCE if we got way too many duplicates, othetwise SEXIT_SUCCESS */
+    rc = (t_param.report->result->packets_received < t_param.param.packets_max) ?
+        SEXIT_SUCCESS : SEXIT_OUTOFRESOURCE;
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
