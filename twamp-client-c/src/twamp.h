@@ -37,6 +37,7 @@ typedef struct twamp_parameters {
     int family;
     int connect_timeout;
     unsigned int packets_count;
+    unsigned int packets_max;
     long int packets_interval_us;
     long int packets_timeout_us;
 } TWAMPParameters;

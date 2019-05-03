@@ -33,6 +33,8 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 
+#include <assert.h>
+
 #include "simet_err.h"
 #include "logger.h"
 #include "report.h"
@@ -54,12 +56,14 @@ int twamp_run_client(TWAMPParameters param) {
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
 
+    assert(param.packets_count < param.packets_max);
+
     // Create TWAMPReport
     TWAMPReport * report = twamp_report_init();
     if (!report)
         return SEXIT_OUTOFRESOURCE;
     report->device_id = param.device_id ? param.device_id : "(unknown)";
-    report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_count);
+    report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_max);
     report->family = param.family;
     report->host = param.host;
 
@@ -452,7 +456,7 @@ static void *twamp_callback_thread(void *p) {
     gettimeofday(&tv_cur, NULL);
     timeradd(&tv_cur, &to, &tv_stop);
 
-    while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_count)) {
+    while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_max)) {
         // Read message
         bytes_recv = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket);
 
