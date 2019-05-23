@@ -62,8 +62,8 @@ JSONFILTER=${JSONFILTER:-jsonfilter}
 [ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="-q -s -m 15 --max-filesize 4000"
-CURLOPT2="--retry 10 --retry-max-time 3600"
+CURLOPT="$CURL_APIOPT --max-filesize 4000"
+CURLOPT2=
 
 case "$1" in
 	--boot)
@@ -76,7 +76,7 @@ esac
 #overridable
 simet_reginfo_api_call() {
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-X POST -f -L -j -o "$OUTFILE" \
+		-X POST -f -o "$OUTFILE" \
 		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
 		"$API_AGENT_TOKEN"
 }

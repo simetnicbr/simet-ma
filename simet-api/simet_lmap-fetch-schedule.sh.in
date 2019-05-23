@@ -67,8 +67,8 @@ LMAPCTL=@BINDIR@/lmapctl
 [ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="-q -s -m 15 --max-filesize 1000000"
-CURLOPT2="--retry 10 --retry-max-time 3600"
+CURLOPT="$CURL_APIOPT --max-filesize 1000000"
+CURLOPT2=
 
 case "$1" in
 	--boot)
@@ -80,8 +80,8 @@ esac
 
 # overridable
 simet_api_lmapputstate() {
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" --post301 --post302 --post303 \
-		-T - -f -L -j -o "$OUTFILE" \
+	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+		-T - -f -o "$OUTFILE" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/reported-state"
 }
@@ -96,7 +96,7 @@ simet_lmap_sendstate() {
 # FIXME add etag support
 simet_api_lmapgetsched() {
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-X GET -f -L -j -o "$OUTFILE" \
+		-X GET -f -o "$OUTFILE" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config"
 }
