@@ -83,13 +83,11 @@ while [ $# -gt 0 ] ; do
 done
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="-q -s -m 15 --max-filesize 1000000"
-CURLOPT2="--retry 3 --retry-max-time 30"
+CURLOPT="$CURL_APIOPT --max-filesize 10000"
 
 simet_get_geoloc_provider() {
-  LSK=$(curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-       -X GET -f -L -j \
-       -H "Authorization: Bearer $OLDAT" \
+  LSK=$(curl $CURLOPT -A "$USERAGENT" \
+       -X GET -f -H "Authorization: Bearer $OLDAT" \
        "${API_SIMET_GEO}/v1/geolocation_providers?agent_id=$OLDAID;type=googlelocationservice_v1") \
      || RC=22 abend "could not fetch geolocation credentials"
   [ -z "$LSK" ] && exit 0
@@ -265,7 +263,7 @@ EOF2GOPB
 # Returns:
 # <stdout> : API result
 gmls_api_call() {
-  curl -q -s -f -d @- -H "Content-type: application/json" -i "$LS_URI" ||
+  curl $CURLOPT -f -d @- -H "Content-type: application/json" -i "$LS_URI" ||
     RC=24 soft_abend "could not contact location services API"
   :
 }

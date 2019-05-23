@@ -32,11 +32,11 @@ SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma restart}
 JSONFILTER=${JSONFILTER:-jsonfilter}
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="-q -s -m 15 --max-filesize 4000 --retry 10 --retry-max-time 3600"
+CURLOPT="$CURL_APIOPT --max-filesize 4000"
 
 apicall() {
 	until curl $CURLOPT -A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
-		-X POST -f -L -j -o "$OUTFILE" \
+		-X POST -f -o "$OUTFILE" \
 		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
 		"$API_AGENT_TOKEN" ; do
 			sleep 14400

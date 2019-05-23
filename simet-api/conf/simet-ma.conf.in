@@ -1,3 +1,5 @@
+CURL_APIOPT="--max-time 30 --connect-timeout 15 --retry 8 --location --post301 --post302 --proto =https -s"
+
 AGENT_ID_FILE=@SIMETCONFDIR@/agent-id
 AGENT_TOKEN_FILE=@SIMETCONFDIR@/agent.jwt
 AGENT_TOKEN_LOCK=@LOCALSTATEDIR@/lock/simet-agent-token.lock
