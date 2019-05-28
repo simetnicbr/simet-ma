@@ -27,16 +27,7 @@ abend() {
 
 . @SIMETLIBDIR@/simet_lib.sh
 
-AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
-AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
-JSONFILTER=${JSONFILTER:-jsonfilter}
-
-LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-@SIMETCONFDIR@/lmap/agent-id.json}
-LMAP_CHANNEL_URL=${LMAP_CHANNEL_URL:-https://api.simet.nic.br/controller}
-LMAP_SCHEDULE_FILE=${LMAP_SCHEDULE_FILE:-@LOCALSTATEDIR@/lmap/lmap-schedule.json}
 LMAP_RECONFIG=${LMAP_RECONFIG:=/etc/init.d/simet-lmapd reload}
-
 LMAPD=@BINDIR@/lmapd
 LMAPCTL=@BINDIR@/lmapctl
 
@@ -65,16 +56,31 @@ simet_lmap_sendstate() {
 }
 
 # FIXME add etag support
+# APIRES = 204 -> revert to default schedule
+# APIRES = 304 -> keep current schedule (may happen even without e-tags)
 simet_api_lmapgetsched() {
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-X GET -f -o "$OUTFILE" \
+	APIRES=$( curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+		-X GET -f -o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
-		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config"
+		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config" ) || return 1
+	:
 }
 
+#note: symlinks *must* have absolute paths as target
 simet_lmap_download_schedule() {
 	simet_lmap_sendstate || true
 	simet_api_lmapgetsched || return $?
+	case "$APIRES" in
+	204)
+		ln -sf "@SIMETLIBDIR@/lmap-default-schedule.json" "$OUTFILE"
+		;;
+	304)
+		ln -sf "$LMAP_SCHEDULE_FILE" "$OUTFILE"
+		;;
+	4*|5*)
+		return 1
+		;;
+	esac
 	:
 }
 
@@ -114,7 +120,9 @@ activateschedule() {
 			return 1
 		}
 
-		chmod 0644 "$OUTFILE" || return 1
+		[ -L "$OUTFILE" ] || {
+			chmod 0644 "$OUTFILE" || return 1
+		}
 		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
 		simet_lmap_reload_config || return 1
 		logger -s -t simet-ma -p daemon.notice "SIMET: schedule has changed"
