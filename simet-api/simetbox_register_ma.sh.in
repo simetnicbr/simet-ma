@@ -156,8 +156,10 @@ gettoken() {
 	fi
 
 	# pairing
-	if [ "$PAIRED" != "true" ] ; then
-		simet_register_vlabel.sh || true
+	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+		@BINDIR@/simet_register_vlabel.sh || true
+	else
+		simet_log simet-ma daemon.notice "SIMET: this MA is paired to a participant in the SIMET2 web portal"
 	fi
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
