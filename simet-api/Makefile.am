@@ -45,6 +45,14 @@ dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh simet
 EXTRA_DIST += simet_lmap-send-report.sh.in simet_geolocation.sh.in
 EXTRA_DIST += simet_lmap-stdout-wrapper.sh.in
 
+simet_create_vlabel.sh.in : simet_create_vlabel.$(sbprefix).sh.in
+	ln -sf "$^" "$@"
+
+dist_bin_SCRIPTS += simet_read_vlabel.sh simet_create_vlabel.sh simet_register_vlabel.sh
+EXTRA_DIST += simet_read_vlabel.sh.in simet_register_vlabel.sh.in
+EXTRA_DIST += simet_create_vlabel.simetbox.sh.in simet_create_vlabel.simet.sh.in
+CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
+
 # LMAP wrapped tasklet links we want to create
 if SIMETBOX_BUILD
 tasklets = v_fping -help_traceroute -help_traceroute6 -help_ping -help_ping6 -help_nslookup v_drill v_dig

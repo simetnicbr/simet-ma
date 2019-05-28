@@ -15,34 +15,88 @@
 # General Public License and the COPYING file in the program Source
 # for details.
 
+set -e
+set -o pipefail
+
+RC=1
 OUTFILE=
 abend() {
-	simet_log simet-ma auth.err "$*"
+	simet_log simet-ma auth.err "error: $*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-	exit 1
+	exit "$RC"
+}
+clean_exit() {
+	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+	exit 0
 }
 
 . @SIMETLIBDIR@/simet_lib.sh
 
-AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
-AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
-API_AGENT_TOKEN=${API_AGENT_TOKEN:-https://api.simet.nic.br/measurement/jwt}
+# FIXME: We can and should remove this after the "point of no return"
+# of support for downgrading without MA measurement continuity loss.
+V1_AGENT_ID_FILE="@SIMETCONFDIR@/agent-id"
+V1_AGENT_TOKEN_FILE="@SIMETCONFDIR@/agent.jwt"
 
-LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-@SIMETCONFDIR@/lmap/agent-id.json}
 SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
-JSONFILTER=${JSONFILTER:-jsonfilter}
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 4000"
 
-apicall() {
-	until curl $CURLOPT -A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
-		-X POST -f -o "$OUTFILE" \
-		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
-		"$API_AGENT_TOKEN" ; do
-			sleep 14400
-	done
+simet_refresh_agent_status() {
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
+		-H "Authorization: Bearer $OLDAT" \
+		-X GET -f -o "$OUTFILE" -w "%{http_code}" \
+		"${API_SIMET_AGENT_REG}/v2/agents/$OLDAID" ) || return 1
+	case "$APIRES" in
+	204)
+		#FIXME heal this, if it perdures for a while
+		abend "server doesn't know about us, need a registration reset!"
+		;;
+	403|401)
+		#FIXME heal this, if it perdures for a while
+		abend "registration too old, need a registration reset!"
+		;;
+	200)
+		return 0
+		;;
+	304)
+		clean_exit
+		;;
+	500|400)
+		abend "SIMET2 agent registry service unavailable"
+		;;
+        esac
+	return 1
+}
+
+__simet_create_agent_apicall() {
+	cat <<- EOFSCAG | \
+	  curl $CURLOPT --retry 30 --retry-max-time 300 \
+		-A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
+		-H "Content-type: application/json" \
+		-f -X POST -o "$OUTFILE" -d @- -w "%{http_code}" \
+		"$API_SIMET_AGENT_REG/v2/agents" \
+	  || return 1
+	{ $*
+	  "engine_name":"@SIMET_ENGINE_NAME@",
+	  "engine_version":"@PACKAGEVERSION@",
+	  "agent_family":"$SIMET2_AGENT_FAMILY",
+	  "waiting_for_pairing":false }
+	EOFSCAG
+	:
+}
+simet_create_agent() {
+	V1AID=
+	V1AT=
+	V1JSON=
+	[ -r "$V1_AGENT_ID_FILE" ] && V1AID=$(cat "$V1_AGENT_ID_FILE")
+	[ -r "$V1_AGENT_TOKEN_FILE" ] && V1AT=$(cat "$V1_AGENT_TOKEN_FILE")
+	[ -n "$V1AID" ] && [ -n "$V1AT" ] && V1JSON="\"agent_id\":\"$V1AID\",\"agent_token\":\"$V1AT\","
+
+	# FIXME add healing strategy
+	APIRES=$(__simet_create_agent_apicall "$V1JSON") || return 1
+	[ "$APIRES" -eq 201 ] || return 1
+	:
 }
 
 gethash() {
@@ -77,8 +131,16 @@ gettoken() {
 	[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
-	apicall || abend "failed to contact agent-token service"
-	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agentId" -e "AT=@.token") || abend "illegal response from agent-token service"
+
+	if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
+		simet_create_agent || abend "could not register measurement agent"
+	else
+		simet_refresh_agent_status || abend "could not update registration"
+	fi
+
+	PAIRED=0
+	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agent_id" -e "AT=@.agent_token" -e "PAIRED=@.has_pairing") \
+		|| abend "illegal response from agent-registry service"
 	eval "$SID" || abend "internal error"
 
 	[ x"$AID" != x"$OLDAID" ] && echo "$AID" > "$AGENT_ID_FILE"
@@ -91,6 +153,11 @@ gettoken() {
 
 	if [ ! -r "$AGENT_ID_FILE" ] || [ -z "$AID" ] || [ ! -r "$AGENT_TOKEN_FILE" ] || [ -z "$AT" ] ; then
 		abend "failed to register, please retry later"
+	fi
+
+	# pairing
+	if [ "$PAIRED" != "true" ] ; then
+		simet_register_vlabel.sh || true
 	fi
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
