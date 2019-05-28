@@ -82,18 +82,23 @@ FROM $DISTRO
 LABEL description="SIMET2 Measurement Agent"
 LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install sudo procps rsyslog logrotate
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade ; \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install sudo procps rsyslog logrotate
 
+# We need to run this snippet under a policy-rc.d that refuses service
+# starts, we don't want the simet-ma initscript/unit to run!
 COPY --from=0 /tmp/debs/ /tmp/debs/
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; DEBIAN_FRONTEND=noninteractive apt-get -y -f install
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; \
+    DEBIAN_FRONTEND=noninteractive apt-get -y -f install
 RUN rm -fr /tmp/debs /usr/sbin/policy-rc.d
 COPY docker/*.sh /opt/simet/bin/
 
 # We want to make sure these will not be reused unless persisted,
 # i.e. it must not be present in the image... but the deb package
 # might have created them when it was installed.
-RUN rm -f /opt/simet/etc/simet/agent-id /opt/simet/etc/simet/agent.jwt /opt/simet/etc/simet/lmap/agent-id.json /opt/simet/etc/simet/lmap/group-id.json
+RUN rm -f /opt/simet/etc/simet/agent-id* /opt/simet/etc/simet/agent*.jwt \
+    /opt/simet/etc/simet/agent-vlabel \
+    /opt/simet/etc/simet/lmap/agent-id.json /opt/simet/etc/simet/lmap/group-id.json
 VOLUME /opt/simet/etc/simet
 
 ##
