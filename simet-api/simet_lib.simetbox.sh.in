@@ -14,6 +14,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License and the COPYING file in the program Source
 # for details.
+#
+# depends:
+# OpenWRT + openwrt-simetbox-*, tr, uname, sed
+
+# preseed some variables
+SIMET2_AGENT_FAMILY="embedded"
 
 [ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
@@ -36,13 +42,14 @@ get_http_useragent()
 	[ -z "$AGENTENV" ] && AGENTENV="unknown"
 	AGENTENV="$AGENTENV; $(uname -srm)" || AGENTENV="$AGENTENV; unknown"
 	echo "$AGENTVERSION (SIMETBOX/$BOXVERSION; $AGENTENV)" | tr -dc ' A-Za-z0-9(),.;:/+~^_-'
+	:
 )
 
 # sets environment variables that match the environment
 simet2_agentinfo() {
-	SIMET2_AGENT_FAMILY="embedded"
 	SIMET2_AGENT_ENVNAME=$(sed -nE -e "/DISTRIB_DESCRIPTION/ { s/[^=]+=// ; s/^[\'\"]// ; s/[\'\"]$// ; p }" /etc/openwrt_release)
 	SIMET2_AGENT_ENVVERSION=$(cat /etc/openwrt_version)
+	:
 }
 
 # logs to stderr and syslog, deals with eventual "logger" oddities
