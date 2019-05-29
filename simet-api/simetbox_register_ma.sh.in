@@ -17,7 +17,7 @@
 
 OUTFILE=
 abend() {
-	logger -s -t simet-ma -p auth.err "$*"
+	simet_log simet-ma auth.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
@@ -62,11 +62,11 @@ gettoken() {
 	fi
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
-		logger -s -t simet-ma -p auth.notice "SIMET: agent-id or authorization token has changed"
+		simet_log simet-ma auth.notice "SIMET: agent-id or authorization token has changed"
 		$SIMETMA_RECONFIG || true
 	fi
 
-	logger -s -t simet-ma -p auth.info "SIMET: LMAP measurement agent id: $AID"
+	simet_log simet-ma auth.info "SIMET: LMAP measurement agent id: $AID"
 	:
 }
 
