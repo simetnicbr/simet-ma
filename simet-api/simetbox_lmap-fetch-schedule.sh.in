@@ -20,7 +20,7 @@
 
 OUTFILE=
 abend() {
-	logger -s -t simet-lmapd -p daemon.err "$*"
+	simet_log simet-lmapd daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
@@ -116,7 +116,7 @@ activateschedule() {
 	NEWSCHED_HASH=$(gethash "$OUTFILE")
 	[ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] && {
 		simet_lmap_verifyconfig $LMAP_CONFIG_PATH "$OUTFILE" || {
-			logger -s -t simet-lmapd -p daemon.err "illegal schedule received from controller"
+			simet_log simet-lmapd daemon.err "illegal schedule received from controller"
 			return 1
 		}
 
@@ -125,7 +125,7 @@ activateschedule() {
 		}
 		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
 		simet_lmap_reload_config || return 1
-		logger -s -t simet-ma -p daemon.notice "SIMET: schedule has changed"
+		simet_log simet-ma daemon.notice "SIMET: schedule has changed"
 	}
 	:
 }
@@ -169,7 +169,7 @@ getschedule() {
 		|| abend "failed to download schedule from controller"
 
 	activateschedule \
-		|| logger -s -t simet-lmapd -p daemon.err "failed to load/activate new schedule"
+		|| simet_log simet-lmapd daemon.err "failed to load/activate new schedule"
 
 	# always try to send state after downloading a schedule
 	simet_lmap_sendstate \

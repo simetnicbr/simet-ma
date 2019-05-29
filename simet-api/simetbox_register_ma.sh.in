@@ -17,7 +17,7 @@
 
 OUTFILE=
 abend() {
-	logger -s -t simet-ma -p auth.err "$*"
+	simet_log simet-ma auth.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
@@ -58,7 +58,7 @@ gethash() {
 write_lmap_agent() {
 	if [ -z "$1" ] ; then
 		rm -f  "$LMAP_AGENT_FILE"
-		logger -s -t simet-ma -p daemon.notice "SIMET: removed LMAP agent-id"
+		simet_log simet-ma daemon.notice "SIMET: removed LMAP agent-id"
 	else
 		cat <<- LMAPAGENTEOF >"$OUTFILE" || return 1
 			{"ietf-lmap-control:lmap":{"agent":{"agent-id":"$1","report-agent-id":true}}}
@@ -94,11 +94,11 @@ gettoken() {
 	fi
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
-		logger -s -t simet-ma -p auth.notice "SIMET: agent-id or authorization token has changed"
+		simet_log simet-ma auth.notice "SIMET: agent-id or authorization token has changed"
 		$SIMETMA_RECONFIG || true
 	fi
 
-	logger -s -t simet-ma -p auth.info "SIMET: LMAP measurement agent id: $AID"
+	simet_log simet-ma auth.info "SIMET: LMAP measurement agent id: $AID"
 	:
 }
 

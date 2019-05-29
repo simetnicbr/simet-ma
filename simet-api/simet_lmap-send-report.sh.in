@@ -27,7 +27,7 @@ set -e
 set -o pipefail
 
 abend() {
-	logger -s -t simet-ma -p daemon.err "$*"
+	simet_log simet-ma daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
