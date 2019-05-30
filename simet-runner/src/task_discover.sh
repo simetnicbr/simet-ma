@@ -57,7 +57,7 @@ discover_init() {
     log_debug "Overriding services.json by command line request"
     return    
   fi
-  curl -s "$API_SERVICE_DISCOVERY" > $BASEDIR/services.json
+  curl -L -s "$API_SERVICE_DISCOVERY" > $BASEDIR/services.json
 }
 
 discover_next_peer() {

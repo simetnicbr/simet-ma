@@ -45,4 +45,16 @@ simet2_agentinfo() {
 	SIMET2_AGENT_ENVVERSION=$(cat /etc/openwrt_version)
 }
 
+# logs to stderr and syslog, deals with eventual "logger" oddities
+# $1 - simet subsystem (simet-lmapd, simet-ma)
+# $2 - syslog facility.level (daemon.info, etc)
+# $3... message
+simet_log() {
+	P1="$1"
+	P2="$2"
+	shift 2
+	logger -s -t "$P1" -p "$P2" -- "$@" || true
+	:
+}
+
 :

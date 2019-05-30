@@ -27,7 +27,7 @@ set -e
 set -o pipefail
 
 abend() {
-	logger -s -t simet-ma -p daemon.err "$*"
+	simet_log simet-ma daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
@@ -52,14 +52,13 @@ LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
 [ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="--proto =https -q -s -m 15"
-CURLOPT2="--retry 10 --retry-max-time 3600"
+CURLOPT="$CURL_APIOPT"
 
 # parameters: list of possible collectors to try to send to
 send_report_to_collector() {
     while [ $# -gt 0 ] ; do
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" --post301 --post302 --post303 \
-		--data-binary "@$OUTFILE" -f -L -j \
+	curl $CURLOPT -A "$USERAGENT" \
+		--data-binary "@$OUTFILE" -f \
 		-H "Authorization: Bearer $OLDAT" \
 		-H "Content-Type: application/yang.data+json" \
 		"$1" \

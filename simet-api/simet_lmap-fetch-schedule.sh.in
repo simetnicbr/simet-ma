@@ -20,45 +20,36 @@
 
 OUTFILE=
 abend() {
-	logger -s -t simet-lmapd -p daemon.err "$*"
+	simet_log simet-lmapd daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
 
 is_call_implemented() {
-	command -V $1 > /dev/null 2>&1
+	command -V "$1" > /dev/null 2>&1
 }
 
 call() {
 	cmd="$1"
 	shift
-	if is_call_implemented ${cmd}_override ; then
-		${cmd}_override "$@"
+	if is_call_implemented "${cmd}_override" ; then
+		"${cmd}_override" "$@"
         else
-		${cmd} "$@"
+		"${cmd}" "$@"
 	fi
 }
 
 call_hook() {
 	cmd="$1"
 	shift
-	if is_call_implemented ${cmd} ; then
-		${cmd} "$@"
+	if is_call_implemented "${cmd}" ; then
+		"${cmd}" "$@"
 	fi
 }
 
 . @SIMETLIBDIR@/simet_lib.sh
 
-AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
-AGENT_TOKEN_LOCK=${AGENT_TOKEN_LOCK:-@LOCALSTATEDIR@/lock/simet-agent-token.lock}
-JSONFILTER=${JSONFILTER:-jsonfilter}
-
-LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-@SIMETCONFDIR@/lmap/agent-id.json}
-LMAP_CHANNEL_URL=${LMAP_CHANNEL_URL:-https://api.simet.nic.br/controller}
-LMAP_SCHEDULE_FILE=${LMAP_SCHEDULE_FILE:-@LOCALSTATEDIR@/lmap/lmap-schedule.json}
 LMAP_RECONFIG=${LMAP_RECONFIG:=/etc/init.d/simet-lmapd reload}
-
 LMAPD=@BINDIR@/lmapd
 LMAPCTL=@BINDIR@/lmapctl
 
@@ -67,8 +58,8 @@ LMAPCTL=@BINDIR@/lmapctl
 [ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="-q -s -m 15 --max-filesize 1000000"
-CURLOPT2="--retry 10 --retry-max-time 3600"
+CURLOPT="$CURL_APIOPT --max-filesize 1000000"
+CURLOPT2=
 
 case "$1" in
 	--boot)
@@ -80,8 +71,8 @@ esac
 
 # overridable
 simet_api_lmapputstate() {
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" --post301 --post302 --post303 \
-		-T - -f -L -j -o "$OUTFILE" \
+	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+		-T - -f -o "$OUTFILE" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/reported-state"
 }
@@ -94,17 +85,32 @@ simet_lmap_sendstate() {
 
 # overridable
 # FIXME add etag support
+# APIRES = 204 -> revert to default schedule
+# APIRES = 304 -> keep current schedule (may happen even without e-tags)
 simet_api_lmapgetsched() {
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-X GET -f -L -j -o "$OUTFILE" \
+	APIRES=$( curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+		-X GET -f -o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
-		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config"
+		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config" ) || return 1
+	:
 }
 
 #overridable
+#note: symlinks *must* have absolute paths as target
 simet_lmap_download_schedule() {
 	call simet_lmap_sendstate || true
 	call simet_api_lmapgetsched || return $?
+	case "$APIRES" in
+	204)
+		ln -sf "@SIMETLIBDIR@/lmap-default-schedule.json" "$OUTFILE"
+		;;
+	304)
+		ln -sf "$LMAP_SCHEDULE_FILE" "$OUTFILE"
+		;;
+	4*|5*)
+		return 1
+		;;
+	esac
 	:
 }
 
@@ -142,14 +148,16 @@ activateschedule() {
 	NEWSCHED_HASH=$(gethash "$OUTFILE")
 	[ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] && {
 		call simet_lmap_verifyconfig $LMAP_CONFIG_PATH "$OUTFILE" || {
-			logger -s -t simet-lmapd -p daemon.err "illegal schedule received from controller"
+			simet_log simet-lmapd daemon.err "illegal schedule received from controller"
 			return 1
 		}
 
-		chmod 0644 "$OUTFILE" || return 1
+		[ -L "$OUTFILE" ] || {
+			chmod 0644 "$OUTFILE" || return 1
+		}
 		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
 		call simet_lmap_reload_config || return 1
-		logger -s -t simet-ma -p daemon.notice "SIMET: schedule has changed"
+		simet_log simet-ma daemon.notice "SIMET: schedule has changed"
 	}
 	:
 }
@@ -193,7 +201,7 @@ getschedule() {
 		|| abend "failed to download schedule from controller"
 
 	activateschedule \
-		|| logger -s -t simet-lmapd -p daemon.err "failed to load/activate new schedule"
+		|| simet_log simet-lmapd daemon.err "failed to load/activate new schedule"
 
 	# always try to send state after downloading a schedule
 	call simet_lmap_sendstate \

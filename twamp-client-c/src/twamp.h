@@ -21,12 +21,12 @@
 
 #include "report.h"
 
-#ifdef  HAVE_JSON_C_JSON_H  
+#ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
-#elif HAVE_JSON_JSON_H   
+#elif HAVE_JSON_JSON_H
 #include <json/json.h>
 #elif HAVE_JSON_H
-#include <json.h>  
+#include <json.h>
 #endif
 
 /* TWAMP parameters struct */
@@ -37,6 +37,7 @@ typedef struct twamp_parameters {
     int family;
     int connect_timeout;
     unsigned int packets_count;
+    unsigned int packets_max;
     long int packets_interval_us;
     long int packets_timeout_us;
 } TWAMPParameters;

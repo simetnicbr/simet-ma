@@ -363,7 +363,7 @@ TWAMPReport * twamp_report_init(void)
     struct twamp_report_private *rp = NULL;
     TWAMPResult *tr = NULL;
     TWAMPReport *r = NULL;
-    
+
     tr = malloc(sizeof(TWAMPResult));
     if (!tr)
         goto err_exit;

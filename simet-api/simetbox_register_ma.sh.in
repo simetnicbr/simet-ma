@@ -17,7 +17,7 @@
 
 OUTFILE=
 abend() {
-	logger -s -t simet-ma -p auth.err "$*"
+	simet_log simet-ma auth.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
@@ -34,11 +34,11 @@ SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
 JSONFILTER=${JSONFILTER:-jsonfilter}
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="-q -s -m 15 --max-filesize 4000 --retry 10 --retry-max-time 3600"
+CURLOPT="$CURL_APIOPT --max-filesize 4000"
 
 apicall() {
 	until curl $CURLOPT -A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
-		-X POST -f -L -j -o "$OUTFILE" \
+		-X POST -f -o "$OUTFILE" \
 		-d simetAT="$OLDAT" -d "deviceInfo=$USERAGENT" \
 		"$API_AGENT_TOKEN" ; do
 			sleep 14400
@@ -58,7 +58,7 @@ gethash() {
 write_lmap_agent() {
 	if [ -z "$1" ] ; then
 		rm -f  "$LMAP_AGENT_FILE"
-		logger -s -t simet-ma -p daemon.notice "SIMET: removed LMAP agent-id"
+		simet_log simet-ma daemon.notice "SIMET: removed LMAP agent-id"
 	else
 		cat <<- LMAPAGENTEOF >"$OUTFILE" || return 1
 			{"ietf-lmap-control:lmap":{"agent":{"agent-id":"$1","report-agent-id":true}}}
@@ -94,11 +94,11 @@ gettoken() {
 	fi
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
-		logger -s -t simet-ma -p auth.notice "SIMET: agent-id or authorization token has changed"
+		simet_log simet-ma auth.notice "SIMET: agent-id or authorization token has changed"
 		$SIMETMA_RECONFIG || true
 	fi
 
-	logger -s -t simet-ma -p auth.info "SIMET: LMAP measurement agent id: $AID"
+	simet_log simet-ma auth.info "SIMET: LMAP measurement agent id: $AID"
 	:
 }
 
