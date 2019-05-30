@@ -7,6 +7,6 @@
   { "name":"ma-local_simet-runner","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet-ma_run.sh" },
   { "name":"simet.nic.br_internet-availability","version":"@PACKAGEVERSION@","program":"@BINDIR@/inetupc" },
   { "name":"simet.nic.br_report","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_lmap-send-report.sh" },
-  { "name":"simet.nic.br_nop","program":"/bin/true" },
-  { "name":"simet.nic.br_err","program":"/bin/false" }
+  { "name":"simet.nic.br_nop","version":"@PACKAGEVERSION@","program":"/bin/true" },
+  { "name":"simet.nic.br_err","version":"@PACKAGEVERSION@","program":"/bin/false" }
 ]}}}}
