@@ -464,6 +464,9 @@ static void *twamp_callback_thread(void *p) {
 
         gettimeofday(&tv_recv, NULL);
 
+        if (bytes_recv == -1)
+            break; /* timed out */
+
         if (bytes_recv != sizeof(UnauthReflectedPacket)) {
             // Somthing is wrong
             print_warn("unexpected message size. bytes_recv(%d) != sizeof(UnauthReflectedPacket)", bytes_recv);
