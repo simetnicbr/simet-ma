@@ -327,29 +327,3 @@ simet_output_geoloc_metric "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC" "$GEO_P
 persist_geoloc_RAM "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC" "$GEO_PROVIDER"
 
 exit 0
-
-TMPGEO=$(mktemp -t simetgeoloc.$$.XXXXXX) && TMPGEOD=$(mktemp -t simetgeoloc_d.$$.XXXXXX)
-
-if [ -z "$TMPGEO" ] || [ -z "$TMPGEOD" ] ; then
-	[ -n "$TMPGEO" ] && rm -f "$TMPGEO"
-	[ -n "$TMPGEOD" ] && rm -f "$TMPGEOD"
-	exit 3
-fi
-
-generate_simetws_device  $saida_geoloc > "$TMPGEOD"
-envia_geolocation_d=$(simet_ws -p "https://$cf_host/$cf_simet_web_persistence_optional/geolocation-device" -f "$TMPGEOD")
-
-if [ -n "$hash_measure" ] ; then
-	generate_simetws_measure $saida_geoloc > "$TMPGEO"
-	envia_geolocation=$(simet_ws -p "https://$cf_host/$cf_simet_web_persistence/geolocation" -f "$TMPGEO")
-else
-	envia_geolocation="(skipped, hash_measure was not specificed)"
-fi
-
-rm -f "$TMPGEO"
-rm -f "$TMPGEOD"
-
-echo "SIMET geoapi: measurement location result: $envia_geolocation" >&2
-echo "SIMET geoapi: device location result: $envia_geolocation_d" >&2
-
-exit 0
