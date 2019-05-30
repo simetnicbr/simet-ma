@@ -16,7 +16,7 @@
     "action":[ { "name":"simet.nic.br_report","task":"simet.nic.br_report" } ]
   }
 ]},"events":{"event":[
-  { "name":"immediate","immediate":[null]},
+  { "name":"immediate","immediate":[null] },
   { "name":"every-minute","random-spread":5,"periodic":{"interval":60} },
   { "name":"every-hour","random-spread":300,"periodic":{"interval":3600} },
   { "name":"every-three-hours","random-spread":300,"periodic":{"interval":10800} },
