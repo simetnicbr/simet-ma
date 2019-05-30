@@ -1,0 +1,63 @@
+#!/bin/bash
+## simet_create_vlabel.sh - creates and stores the SIMET2 virtual label
+## OpenWRT/SIMETBOX version
+## Copyright (c) 2019 NIC.br
+##
+## If a virtual label is not present in the persistent storage, create one
+## and return on stdout.
+##
+## Otherwise, return the existing virtual label on stdout.
+
+# If we already have it, output it and exit
+@BINDIR@/simet_read_vlabel.sh 2>/dev/null && exit 0
+
+set -e
+set -o pipefail
+
+OUTFILE=
+abend() {
+  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+  echo "$0: error: $*" >&2
+  exit "$RC"
+}
+
+
+openwrt_read_invariant_seed() {
+  # This is a hack, it is not perfect, and not that secure.
+  # Use unknown sources of variance (if we're lucky, the
+  # serial number and the -- unused by openwrt/simetbox --
+  # default vendor firmware wifi password) to have a
+  # per-device secret seed.
+
+  # note: this can be quite expensive in CPU and wall time
+
+  P=$( sed -En -e '/^mtd[0-9]/! d' -e '/rootfs|firmware|kernel/ d' -e 's#(mtd[^:]+).*#/dev/\1ro# ; p' < /proc/mtd ) \
+    || RC=3 abend "failed to parse /proc/mtd"
+  [ -z "$P" ] \
+    && RC=3 abend "no useful partitions in /proc/mtd to generate a stable secret"
+  SBXSEED=$( set -o pipefail ; { echo "NIC VLABEL IV 0132457869" ; cat -- $P ; } | md5sum - ) \
+    || RC=3 abend "failed to generate stable secret from /dev/mtd"
+  [ -z "$SBXSEED" ] \
+    && RC=3 abend "md5sum empty?!"
+  # FIXME: compress to base64, an md5sum becomes 8 characters
+  echo $SBXSEED | tr -dc 0-9a-zA-Z
+  :
+}
+
+openwrt_generate_vlabel() {
+  # Replace with retrieval from flash of the vlabel secret when possible
+  IVS=$(openwrt_read_invariant_seed) || return $?
+  echo "NIC1$IVS"
+  :
+}
+
+. @SIMETLIBDIR@/simet_lib.sh
+[ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
+
+SIMET2_VLABEL=$(openwrt_generate_vlabel)
+[ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA could not create its virtual label"
+echo "$SIMET2_VLABEL" > "$AGENT_VLABEL_FILE" \
+  || RC=1 abend "Could not write virtual label to persistent storage"
+
+echo "$SIMET2_VLABEL"
+:

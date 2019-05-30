@@ -37,7 +37,21 @@ jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 endif
 
+EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
+EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
+EXTRA_DIST += simet-ma_periodic.sh.in
+
 dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh simet_geolocation.sh
+EXTRA_DIST += simet_lmap-send-report.sh.in simet_geolocation.sh.in
+EXTRA_DIST += simet_lmap-stdout-wrapper.sh.in
+
+simet_create_vlabel.sh.in : simet_create_vlabel.$(sbprefix).sh.in
+	ln -sf "$^" "$@"
+
+dist_bin_SCRIPTS += simet_read_vlabel.sh simet_create_vlabel.sh simet_register_vlabel.sh
+EXTRA_DIST += simet_read_vlabel.sh.in simet_register_vlabel.sh.in
+EXTRA_DIST += simet_create_vlabel.simetbox.sh.in simet_create_vlabel.simet.sh.in
+CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 
 # LMAP wrapped tasklet links we want to create
 if SIMETBOX_BUILD
@@ -102,11 +116,7 @@ config.d/simet-ma_tasklet-config.json :
 	    "$^" > "$@"
 
 # _SCRIPT "sources" need to go in EXTRA_DIST, and the scripts themselves in CLEANFILES
-EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
-EXTRA_DIST += simet-ma_periodic.sh.in
-EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
-EXTRA_DIST += simet_lmap-create-report.sh.in simet_lmap-send-report.sh.in simet_geolocation.sh.in
-EXTRA_DIST += simet_lmap-stdout-wrapper.sh.in
+EXTRA_DIST += simet_lmap-create-report.sh.in
 CLEANFILES += $(dist_bin_SCRIPTS)
 
 # Ensures the empty directories we don't create at runtime do exist

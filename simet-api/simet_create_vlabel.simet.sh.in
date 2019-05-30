@@ -1,0 +1,42 @@
+#!/bin/bash
+## simet_create_vlabel.sh - creates and stores the SIMET2 virtual label
+## Copyright (c) 2019 NIC.br
+##
+## If a virtual label is not present in the persistent storage, create one
+## and return on stdout.
+##
+## Otherwise, return the existing virtual label on stdout.
+
+# If we already have it, output it and exit
+@BINDIR@/simet_read_vlabel.sh 2>/dev/null && exit 0
+
+set -e
+set -o pipefail
+
+OUTFILE=
+abend() {
+  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+  echo "$0: error: $*" >&2
+  exit "$RC"
+}
+
+. @SIMETLIBDIR@/simet_lib.sh
+[ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
+
+if [ -z "$SIMET2_VLABEL" ] ; then
+  RDATA=$( set -o pipefail ; dd if=/dev/urandom bs=128 count=1 2>/dev/null | md5sum - | tr -dc 0-9a-fA-F | tr A-F a-f ) \
+    || RC=1 abend "failed to read /dev/urandom"
+  [ -z "$RDATA" ] && RC=1 abend "md5sum empty ?!"
+  [ "$RDATA" = "d41d8cd98f00b204e9800998ecf8427e" ] && RC=1 abend "got the md5sum of an empty file !"
+  SIMET2_VLABEL="NIC2${RDATA}"
+  :
+else
+  SIMET2_VLABEL="NIC0${SIMET2_VLABEL}"
+fi
+
+[ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA could not create its virtual label"
+echo "$SIMET2_VLABEL" > "$AGENT_VLABEL_FILE" \
+  || RC=1 abend "Could not write virtual label to persistent storage"
+
+echo "$SIMET2_VLABEL"
+:

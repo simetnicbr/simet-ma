@@ -1,0 +1,99 @@
+#!/bin/bash
+## simet_register_vlabel.sh - propose vlabel for pairing
+## Copyright (c) 2019 NIC.br
+##
+## If a virtual label is not present, or if the MA is already paired,
+## do nothing.  Otherwise, call the SIMET2 APIs to offer the MA up for
+## pairing through the SIMET2 portal.
+
+set -e
+set -o pipefail
+
+OUTFILE=
+abend() {
+  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+  simet_log simet-ma daemon.err "error: $*"
+  exit "$RC"
+}
+clean_exit() {
+  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+  exit 0
+}
+
+SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || RC=1 abend "MA has no virtual label"
+[ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA has an empty virtual label!"
+
+. @SIMETLIBDIR@/simet_lib.sh
+
+# We *require* an agent-id and agent token to get an API key
+OLDAT=
+OLDAID=
+[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
+[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
+  RC=20 abend "MA not registered yet"
+fi
+
+USERAGENT=$(get_http_useragent)
+CURLOPT="$CURL_APIOPT -s --max-filesize 10000"
+CURLOPT2="--retry 3 --retry-max-time 30"
+
+#FIXME: we could store the output since it will be an error
+#message from the server, and that could be useful to display on
+#error...
+__simet_agentreg_apicall() {
+  if [ -z "$1" ] || [ "$1" = "DISABLED" ] ; then
+    WP=false
+    SC=
+  else
+    WP=true
+    SC="\"secret\":\"$1\","
+  fi
+  cat <<- EOFSRAP | \
+    curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+	   -X PUT -T - -f -H "Content-type: application/json" \
+	   -H "Authorization: Bearer $OLDAT" \
+	   -o "$OUTFILE" -w "%{http_code}" \
+	   "${API_SIMET_AGENT_REG}/v2/agents/$OLDAID" || return $?
+	{
+	  $SC
+	  "engine_name":"@SIMET_ENGINE_NAME@",
+	  "engine_version":"@PACKAGEVERSION@",
+	  "agent_family":"$SIMET2_AGENT_FAMILY",
+	  "waiting_for_pairing":$WP
+	}
+	EOFSRAP
+  :
+}
+
+OUTFILE=$(mktemp -q -t simet-vlabel-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
+
+APIRES=$(__simet_agentreg_apicall "$SIMET2_VLABEL") \
+  || RC=23 abend "failure while trying to contact SIMET2 AGENT_REG API"
+case "$APIRES" in
+  2[0-9][0-9])
+    ;;
+  401|403)
+    #FIXME: heal if persistent problem? how?
+    RC=23 abend "MA operating on outdated agent-id or expired token"
+    ;;
+  *)
+    RC=23 abend "SIMET2 AGENT_REG API refused pairing request"
+esac
+
+ISPAIRED=
+WPAIRING=
+SID=$( $JSONFILTER -i "$OUTFILE" -e "ISPAIRED=@.has_pairing" -e "WPAIRING=@.waiting_for_pairing" ) \
+  || abend "illegal response from agent-registry service"
+eval "$SID" || abend "internal error"
+
+if [ "$WPAIRING" = true ] || [ "$WPAIRING" = 1 ] ; then
+  simet_log simet-ma daemon.notice "SIMET: MA is available for pairing, virtual label: $SIMET2_VLABEL"
+else
+  simet_log simet-ma daemon.notice "SIMET: MA is unavailable for pairing: virtual label unavailable or disabled"
+fi
+if [ "$ISPAIRED" = true ] || [ "$ISPAIRED" = 1 ] ; then
+  simet_log simet-ma daemon.info "SIMET: MA has been paired to a participant in the SIMET2 web portal"
+fi
+
+clean_exit

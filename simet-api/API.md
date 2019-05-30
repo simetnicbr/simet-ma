@@ -1,5 +1,8 @@
 # SIMET MA API
 
+This documents the internal API of simet-ma, although it does go
+into some details of the SIMET2 web API.
+
 ## System-wide config
 
   <libdir>/simet/simet-ma.conf
@@ -17,16 +20,17 @@
   the SIMET suite (unless it is running as root, which is also not
   advised).
 
-
 ## API version
 
   The full agent version (e.g. simet-ma/<version>) is available
-  at $AGENT\_VERSION\_FILE.
+  by reading file $AGENT\_VERSION\_FILE.
 
+  The simet-ma build may also hardcode the version wherever required
+  as a build-time constant.
 
 ## TOKEN and LMAP AGENT-ID API
 
-  The agent token, required to authorize with SIMET-2 services, will
+  The agent token, required to authorize with SIMET2 services, will
   be retrieved and refreshed by {simet,simetbox}\_register\_ma.sh.
 
   *  The agent token will be stored in $AGENT\_TOKEN\_FILE
@@ -42,6 +46,108 @@
   Beware of file system permission issues if you call these scripts as
   different users (e.g. "root" and "nicbr-simet").
 
+## Virtual Label API, agent pairing
+
+  Each MA should have a virtual label that is used to help the user give
+  "proof of possession" of a MA to the SIMET2 portal, in a procedure we
+  call "MA and participant pairing" (or "pairing" for short).
+
+  For this to work safely, it must be impossible for anyone not in
+  possession of a device to calculate or otherwise obtain its virtual
+  label.  This includes anyone sniffing wireless traffic or network
+  traffic (of *any sort*) of that device.
+
+  Virtual labels must not be used for anything else than the attachment
+  participant, and they must not allow someone to calculate the factory
+  default passwords and credentials from the contents of the virtual
+  label.
+
+  The virtual label *must* be unique, much like MAC addresses, but it must
+  not be a function of a MAC address that can be derived from the MAC
+  address of any radios, or from any other remotely accessible
+  information.
+
+  Users will be informed they are being denied pairing funcionality due to
+  a device defect should they attempt to pair to a blacklisted device.  We
+  may blacklist all devices of a vendor that share the same SIMET2 engine
+  when we are made aware of a violation of the SIMET2 requirements for MAs
+  or any such rules.  The vendor must contact us to get the blacklisting
+  reduced to the exact set of affected devices, and we only accepted a
+  device as fixed for unblacklisting purposes, after a *proper*,
+  permantent fix is deployed.  The vendor will have to fully disclose the
+  fix to us.
+
+  On dedicated MA devices like a SIMETBOX, the SIMET virtual label will
+  often be printed on a physical label attached to the device, to allow
+  no-device-interaction setup.  In this case, the virtual label *must not
+  change* from what is printed on the physical label -- often requiring a
+  vital product data area in FLASH that does not get changed by firmware
+  updates, and factory-resets, where the virtual label will be stored
+  at manufacture/label printing time.
+
+  Some MA devices can easily expose the virtual label to the user through
+  an LCD display or some other UI that the user is forced to go through
+  for the device to be usable in the first place (i.e. it cannot work "out
+  of the box" without the user accessing its UI, due to factors completely
+  unrelated to the virtual label).  In that case the virtual label can
+  change with firmware updates and when the device is subject to a factory
+  reset, and the user should get its contents through that UI -- but there
+  should be no physical label with its content in this case, since it can
+  change.
+
+  * The agent will "cache" its virtual label in $AGENT\_VLABEL\_FILE
+
+  The simet\_create\_vlabel.sh script takes care of generating a virtual
+  label with the required persistence (e.g. by retrieving it from FLASH)
+  and storing it in the "cache" file.  It must not never change a virtual
+  label.
+
+  The simet\_read\_vlabel.sh script outputs the virtual label to stdout.
+
+### Pairing flow
+
+  1. The device must be in an "unpaired" state to attempt pairing.
+     Already paired devices are not to attempt pairing (it will be
+     rejected).
+
+  2. The device will offer itself up for pairing only if unpaired,
+     typically when it is registering for the first time, or updating
+     its registration information.
+
+     The MA may withdraw its availability for pairing at any time, as
+     long as it is still unpaired.  It may also request itself to be
+     detached from any pairings.
+
+     The MA may have an UI trigger a pairing attempt (it just needs to
+     trigger an registration information update); to request to be
+     detached from any pairing; to display pairing information; and to
+     toggle whether it is available for pairing on the SIMET2 portal, or
+     not.
+
+  3. Pairing happens as soon as both an MA and a participant with
+     matching virtual labels (augmented by the SIMET2 engine name) are
+     available for pairing at the same time.
+
+  4. When a SIMET2 participant requests that a MA with a matching virtual
+     label and SIMET engine be paired with it, the pairing will happen if
+     the MA has already announced itself as available for pairing.
+
+     Accordingly, an MA may be immediately paired to a participant if the
+     participant had already requested the pairing, and the MA announces
+     itself as available for pairing.
+
+  Note: both the MA and the participant may remove a pending pairing
+  offer/request.  On the MA side, this is an optional feature.
+
+  Note: pairing requests and pairing offers remain open for a long time,
+  typically three months, unless explicitly removed.
+
+  On simet-ma, one has to call "simet\_create\_vlabel.sh" once when the
+  software is installed (or after a factory reset).  To render the MA
+  unavailable for pairing, set the virtual label to DISABLED (all caps).
+
+  To update the virtual label and pairing availability, run
+  "simet\_register\_ma.sh".
 
 ## LMAP scheduler API
 
@@ -126,8 +232,8 @@
 
   - system-ipv4-capable -- system has IPv4 enabled in its IP stack
   - system-ipv6-capable -- system has IPv6 enabled in its IP stack
-  - simet.nic.br_engine-name:< registered simet engine id >
-  - simet.nic.br_engine-version:< simet engine version >
+  - simet.nic.br\_engine-name:< registered simet engine id >
+  - simet.nic.br\_engine-version:< simet engine version >
 
   All hardcoded and default tasks must have their "name", "version" and
   "program" fields set to meaningful values.  They are _not_ to be
@@ -154,6 +260,7 @@
   There are a few SIMET2 tags that should be set on the hardcoded and
   default tasks.
 
+  FIXME: update this
   - simet-engine:< registered simet engine id >
   - task-version:< version of the program/package that executes the task >
     (this is usually the same as the SIMET engine version)
@@ -222,6 +329,6 @@
   run as root periodically.
 
   There is a simet\_geolocation\_legado.sh that is used to feed the
-  legacy SIMET API with gelocation data.  It will be phased out and
+  legacy SIMET API with geolocation data.  It will be phased out and
   removed when we disable the legacy API.  The legacy script uses
   simet\_geolocation.sh to do the real work.

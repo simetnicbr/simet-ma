@@ -13,5 +13,8 @@ simet*_lmap-create-report.sh
 simet*_lmap-send-report.sh
 simet*_lmap-stdout-wrapper.sh
 simet*_geolocation.sh
+simet*_read_vlabel.sh
+simet*_register_vlabel.sh
+simet_create_vlabel.sh*
 simet_lib.sh*
 lmap-tasks/*.sh
