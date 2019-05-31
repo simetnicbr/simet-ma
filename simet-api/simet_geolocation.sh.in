@@ -156,20 +156,19 @@ iwphy_scan() {
 # $2 - latitude: degrees (float), positive=north
 # $3 - longitude: degrees (float), positive=east
 # $4 - accuracy: meters
-# $5 - metric field for geolocationprovider
 #
 # The timestamp is converted to NTP epoch (1900-01-01T00:00:00Z)
 # in a simple, straightforward way.
 #
 # FIXME: add noise if accuracy is better than 150m
 simet_output_geoloc_metric() {
-  if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ] ; then
+  if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] ; then
     RC=3 abend "internal error: simet_output_geoloc_metric() paremeter went MIA!"
   fi
   # This is likely not y2038k-safe due to 32-bit shell math
   GEO_NTIME=$(($1 + 2208988800))
-  echo "{\"function\":[{\"uri\":\"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_IEEE80211-BSSID-IPaddress-$5-MaxAccuracyM150__Multiple_Singleton\"}],\"column\":[\"timestamp\",\"latitude\",\"longitude\",\"accuracy\"],\"row\":["
-  echo "{\"value\":[\"$GEO_NTIME\",\"$2\",\"$3\",\"$4\"]}"
+  echo "{\"function\":[{\"uri\":\"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_Geolocation-MaxAccuracyM150__Multiple_Singleton\"}],\"column\":[\"timestamp\",\"source\",\"source_other\",\"latitude\",\"longitude\",\"accuracy\"],\"row\":["
+  echo "{\"value\":[\"$GEO_NTIME\",\"BSSID-IP-MAP\",\"\",\"$2\",\"$3\",\"$4\"]}"
   echo "]}"
 }
 
@@ -182,11 +181,11 @@ simet_output_geoloc_metric() {
 #
 # NOTE: This is ABI with simet_geolocation_legado.sh.
 persist_geoloc_RAM() {
-  if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ] ; then
+  if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] ; then
     RC=3 abend "internal error: persist_geoloc_RAM() parameter went MIA!"
   fi
   rm -f "${GEOLOC_CACHE}"
-  ( echo "$1" ; echo "$2" "$3" "$4" ; echo "$5" ) > "${GEOLOC_CACHE}"
+  ( echo "$1" ; echo "$2" "$3" "$4" ) > "${GEOLOC_CACHE}"
   :
 }
 
@@ -203,8 +202,6 @@ _read_cache() {
   [ -z "$GEO_LNG" ] && return 1
   GEO_ACC=$(sed -n -e '2 {s/^ *[^ ]\+ \+[^ ]\+ *// ; p ; q}' "${GEOLOC_CACHE}")
   [ -z "$GEO_ACC" ] && return 1
-  GEO_PROVIDER=$(sed -n -e '3 { p ; q }' "$GEOLOC_CACHE") || return 1
-  [ -z "$GEO_PROVIDER" ] && return 1
   :
 }
 
@@ -212,7 +209,7 @@ _read_cache() {
 # simet_read_geo_cache() - reads data from cache if valid
 #
 # invalidates cache if corrupted or too old
-# returns status 0 and valid data on GEO_UTIME/LAT/LNG/ACC/PROVIDER
+# returns status 0 and valid data on GEO_UTIME/LAT/LNG/ACC
 #         status NZ if cache invalid/old/empty
 simet_read_geo_cache() {
   _read_cache && return 0
@@ -288,7 +285,6 @@ _geolocate() {
       /"lat"/      { lat=$2 ; n++ }
       /"lng"/	 { lng=$2 ; n++ }
       END { if (n == 2 && code == 200) print lat "\n" lng "\n" accuracy }' || return 1
-  echo "$LS_NAME"
   :
 }
 
@@ -301,8 +297,6 @@ geolocate() {
   [ -z "$GEO_LNG" ] && return 1
   GEO_ACC=$(echo "$geo" | sed -E -n -e '3 { s/^[[:blank:]]+// ; s/[[:blank:]]+$// ; p ; q }')
   [ -z "$GEO_ACC" ] && return 1
-  GEO_PROVIDER=$(echo "$geo" | sed -E -n -e '4 { s/^[[:blank:]]+// ; s/[[:blank:]]+$// ; p ; q }')
-  [ -z "$GEO_PROVIDER" ] && return 1
   simet_log simet-ma daemon.info "geolocation: location updated"
   :
 }
@@ -315,7 +309,7 @@ simet_read_geo_cache || {
   [ -n "$CACHE_ONLY" ] && RC=1 soft_abend "No valid geolocation cached data found"
   geolocate || exit 1
 }
-simet_output_geoloc_metric "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC" "$GEO_PROVIDER"
-persist_geoloc_RAM "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC" "$GEO_PROVIDER"
+simet_output_geoloc_metric "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
+persist_geoloc_RAM "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
 
 exit 0
