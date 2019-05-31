@@ -20,7 +20,8 @@
 ##
 
 ## Docker build arguments
-##    distro:    (debian:stretch), debian:jessie, ubuntu:bionic, ubuntu:xenial
+##    distro:    debian:buster, (debian:stretch), debian:jessie,
+##               ubuntu:disco, ubuntu:bionic, ubuntu:xenial
 ##    BUILD_DIR: /usr/src/simet
 ##    SIMET_LMAPD: https://github.com/simetnicbr/simet-lmapd/archive/master.tar.gz
 ##    DEB_BUILD_OPTIONS: "noautodbgsym nodoc terse hardening=+all"
