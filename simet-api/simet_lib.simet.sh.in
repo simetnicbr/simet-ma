@@ -47,9 +47,8 @@ simet_log() {
 	P1="$1"
 	P2="$2"
 	shift 2
-	# assumes util-linux's "logger"
-	logger --no-act -s -t "$P1" -p "$P2" -- "$@" || true
-	logger -t "$P1" -p "$P2" -- "$@" 2>/dev/null || true
+	echo "$P1: $*" >&2 || :
+	logger -t "$P1" -p "$P2" -- "$@" 2>/dev/null || :
 	:
 }
 
