@@ -20,7 +20,8 @@
 ##
 
 ## Docker build arguments
-##    distro:    (debian:stretch), debian:jessie, ubuntu:bionic, ubuntu:xenial
+##    distro:    debian:buster, (debian:stretch), debian:jessie,
+##               ubuntu:disco, ubuntu:bionic, ubuntu:xenial
 ##    BUILD_DIR: /usr/src/simet
 ##    SIMET_LMAPD: https://github.com/simetnicbr/simet-lmapd/archive/master.tar.gz
 ##    DEB_BUILD_OPTIONS: "noautodbgsym nodoc terse hardening=+all"
@@ -46,6 +47,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --install-recommends \
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --install-recommends \
       libjson-c-dev libxml2-dev libevent-dev check
 
+# distro-specific build-depends (e.g. due to hardening=+all em DEB_BUILD_OPTIONS)
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install --install-recommends \
+      hardening-wrapper || true
+
 RUN echo "umask 022" > /etc/profile.d/safe-umask && \
     adduser --disabled-password --uid 100000 --gecos "Docker Builder,,," --home "/usr/src/simet" --shell /bin/bash builder
 
@@ -68,7 +73,7 @@ ARG DEB_BUILD_OPTIONS="noautodbgsym nodoc terse hardening=+all"
 
 RUN tar zxf simet-lmapd.tar.gz && rm -f simet-lmapd.tar.gz
 RUN find . -maxdepth 1 -type d '!' -name ".*" | while read -r i ; do echo $i ; \
-	( cd "$i" && dpkg-buildpackage --build=binary -uc -us -rfakeroot ) ; \
+	( cd "$i" && dpkg-buildpackage -b -uc -us -rfakeroot ) ; \
     done
 RUN mkdir /tmp/debs && mv *deb /tmp/debs/
 
@@ -82,14 +87,24 @@ FROM $DISTRO
 LABEL description="SIMET2 Measurement Agent"
 LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y dist-upgrade ; \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade ; \
     DEBIAN_FRONTEND=noninteractive apt-get -y install sudo procps rsyslog logrotate
 
 # We need to run this snippet under a policy-rc.d that refuses service
 # starts, we don't want the simet-ma initscript/unit to run!
+#
+# Also, Debian jessie apt-get knows not how to install from files, one must
+# use the dpkg -i <packages> ; apt-get -f install ; dpkg -i <packages> sequence.
 COPY --from=0 /tmp/debs/ /tmp/debs/
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; \
-    DEBIAN_FRONTEND=noninteractive apt-get -y -f install
+RUN if DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; then \
+        DEBIAN_FRONTEND=noninteractive apt-get -y -f install ; \
+    else \
+        DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/debs/*deb ; \
+        DEBIAN_FRONTEND=noninteractive apt-get -y -f install ; \
+        DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/debs/*deb ; \
+    fi
+
 RUN rm -fr /tmp/debs /usr/sbin/policy-rc.d
 COPY docker/*.sh /opt/simet/bin/
 
