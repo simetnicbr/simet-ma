@@ -184,8 +184,7 @@ persist_geoloc_RAM() {
   if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] ; then
     RC=3 abend "internal error: persist_geoloc_RAM() parameter went MIA!"
   fi
-  rm -f "${GEOLOC_CACHE}"
-  ( echo "$1" ; echo "$2" "$3" "$4" ) > "${GEOLOC_CACHE}"
+  rm -f "${GEOLOC_CACHE}" 2>/dev/null && ( echo "$1" ; echo "$2" "$3" "$4" ) > "${GEOLOC_CACHE}"
   :
 }
 
@@ -308,8 +307,8 @@ geolocate() {
 simet_read_geo_cache || {
   [ -n "$CACHE_ONLY" ] && RC=1 soft_abend "No valid geolocation cached data found"
   geolocate || exit 1
+  persist_geoloc_RAM "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
 }
 simet_output_geoloc_metric "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
-persist_geoloc_RAM "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
 
 exit 0
