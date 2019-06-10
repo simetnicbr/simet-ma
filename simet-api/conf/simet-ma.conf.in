@@ -26,7 +26,7 @@ GEOLOC_CACHE=@LOCALSTATEDIR@/run/simet/geoloc-cache.txt
 LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
 LMAP_SCHEDULE="anatel-resolution-574"
-LMAP_TASK_NAME_PREFIX="simet2_simet-ma_"
+LMAP_TASK_NAME_PREFIX="simet.nic.br_"
 TWAMPC=@BINDIR@/twampc
 TCPBWC=@BINDIR@/tcpbwc
 JSONFILTER=@JSONFILTER@
