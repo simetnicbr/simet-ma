@@ -177,7 +177,7 @@ haspipefail(){
 
 _task_environment(){
   log_info "Start task agent environment"
-  export _task_name="${LMAP_TASK_NAME_PREFIX}${PACKAGE_NAME}_report_context_short"
+  export _task_name="${LMAP_TASK_NAME_PREFIX}agent-info"
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/0metadata"
   export _task_action="report_context"
@@ -198,7 +198,7 @@ _task_environment(){
 
 _task_geolocation(){
   log_info "Start task geolocation"
-  export _task_name="${LMAP_TASK_NAME_PREFIX}${PACKAGE_NAME}_simet_geolocation"
+  export _task_name="${LMAP_TASK_NAME_PREFIX}geolocation"
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/geolocation"
   export _task_action="geolocation_https_bssids"
@@ -233,7 +233,7 @@ _task_twamp(){
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
   set -f && set -- $_about && set +f
-  export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " twampc 1.2.3-ABC " => "twampc"
+  export _task_name="${LMAP_TASK_NAME_PREFIX}twamp" # " twampc 1.2.3-ABC " => "twampc"
   export _task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
   export _task_action="packettrain_udp_ipv${_af}_to_nearest_available_peer"
@@ -279,7 +279,7 @@ _task_tcpbw(){
   local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
   local _about=$( $TCPBWC -V | head -n1)
   set -f && set -- $_about && set +f
-  export _task_name="$LMAP_TASK_NAME_PREFIX$1" # " tcpbw 1.2.3-ABC " => "tcpbw"
+  export _task_name="${LMAP_TASK_NAME_PREFIX}tcp-bandwidth" # " tcpbw 1.2.3-ABC " => "tcpbw"
   export _task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
   export _task_action="bandwidth_tcp_ipv${_af}_to_nearest_available_peer"

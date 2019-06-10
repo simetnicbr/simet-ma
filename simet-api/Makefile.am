@@ -73,7 +73,7 @@ registry.d/simet-ma_tasklet-registry.json :
 	{ echo '{"ietf-lmap-control:lmap":{"capabilities":{' ; \
 	echo ' "tasks":{"task":[' ; \
 	{ for i in $(tasklets) ; do \
-		tn="$${i#*_}" ; \
+		tn="simet.nic.br_tool_$${i#*_}" ; \
 		pn="lmap-task-$${i}" ; \
 		echo "  {\"name\":\"$${tn}\",\"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
 	done ; } | sed -e '$$ s/,$$//' ; \
@@ -83,7 +83,7 @@ registry.d/simet-ma_tasklet-registry.json :
 config.d/simet-ma_tasklet-config.json :
 	{ echo '{"ietf-lmap-control:lmap":{"tasks":{"task":[' ; \
 	{ for i in $(tasklets) ; do \
-		tn="$${i#*_}" ; \
+		tn="simet.nic.br_tool_$${i#*_}" ; \
 		pn="lmap-task-$${i}" ; \
 		echo "  {\"name\":\"$${tn}\",\"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
 	done ; } | sed -e '$$ s/,$$//' ; \
