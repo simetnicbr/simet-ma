@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
     char *agent_id = NULL;
     char *control_url = NULL;
     char *token = NULL;
-    int family = 4;
+    int family = 6;
     int timeout_test = 30;
     int test_lenght = 11;
     int numstreams = 5;
