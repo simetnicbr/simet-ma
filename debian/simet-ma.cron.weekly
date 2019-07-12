@@ -5,6 +5,8 @@
 # Distributed under the GPLv3+ license with additional terms and permissions
 # Refer to the COPYING file on the program source for details
 
+SIMET_PACKAGES="simet-ma simet-lmapd"
+
 # Attempt to auto-update if unattended-upgrades are not explicitly disabled.
 # We also configure unattended-upgrades just in case this one fails, but that
 # won't work if we had to change the initscripts or other stuff in /etc.
@@ -23,9 +25,9 @@ test -f /opt/simet/bin/simet_register_ma.sh && {
 		sleep $TIME
 		apt-get update -qq || true
 		UCF_FORCE_CONFFNEW=1 DEBIAN_FRONTEND=noninteractive \
-		    apt-get install -qq -f --install-recommends -y \
+		    apt-get install -qq --install-recommends -y \
 			-o Dpkg::Options::=--force-confmiss -o Dpkg::Options::=--force-confnew \
-			simet-ma
+			$SIMET_PACKAGES
 	}
 }
 :
