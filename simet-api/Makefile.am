@@ -26,30 +26,30 @@ CLEANFILES=
 simetenginename=nic_simet2_simet-ma
 
 if SIMETBOX_BUILD
-dist_bin_SCRIPTS = simetbox_register_ma.sh simetbox_lmap-fetch-schedule.sh
+dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh
 sbprefix = simetbox
 jsonfilter=jsonfilter
 theshell=/bin/sh
 else
-dist_bin_SCRIPTS = simet_register_ma.sh simet-ma_periodic.sh simet_lmap-fetch-schedule.sh
+dist_bin_SCRIPTS = simet-ma_periodic.sh simet_lmap-fetch-schedule.sh
 sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 endif
 
-EXTRA_DIST += simetbox_register_ma.sh.in simet_register_ma.sh.in
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
 EXTRA_DIST += simet-ma_periodic.sh.in
 
-dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh simet_geolocation.sh
-EXTRA_DIST += simet_lmap-send-report.sh.in simet_geolocation.sh.in
-EXTRA_DIST += simet_lmap-stdout-wrapper.sh.in
+dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh
+EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in
+dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
+EXTRA_DIST += simet_lmap-send-report.sh.in simet_lmap-stdout-wrapper.sh.in
 
 simet_create_vlabel.sh.in : simet_create_vlabel.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
 
-dist_bin_SCRIPTS += simet_read_vlabel.sh simet_create_vlabel.sh simet_register_vlabel.sh
-EXTRA_DIST += simet_read_vlabel.sh.in simet_register_vlabel.sh.in
+dist_bin_SCRIPTS += simet_read_vlabel.sh simet_create_vlabel.sh
+EXTRA_DIST += simet_read_vlabel.sh.in
 EXTRA_DIST += simet_create_vlabel.simetbox.sh.in simet_create_vlabel.simet.sh.in
 CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 

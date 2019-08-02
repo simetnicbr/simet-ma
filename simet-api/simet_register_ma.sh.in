@@ -1,5 +1,5 @@
 #!/bin/sh
-# Refreshes SIMET SIMET MA agent-id and auth token (generic)
+# SIMET2 MA - register and refresh agent registry information
 # Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,9 @@
 
 # parameters:
 #   --boot   (optional) shorten wait times and not restart the service
+#
+# Pairing is disabled by having an empty virtual label (empty
+# contents inside the file referenced by $AGENT_VLABEL_FILE)
 
 set -e
 set -o pipefail
@@ -31,28 +34,6 @@ abend() {
 clean_exit() {
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 0
-}
-
-is_call_implemented() {
-	command -V "$1" > /dev/null 2>&1
-}
-
-call() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}_override" ; then
-		"${cmd}_override" "$@"
-        else
-		"${cmd}" "$@"
-	fi
-}
-
-call_hook() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}" ; then
-		"${cmd}" "$@"
-	fi
 }
 
 . @SIMETLIBDIR@/simet_lib.sh
@@ -75,81 +56,21 @@ CURLOPT2=
 case "$1" in
 	--boot)
 		shift
-		CURLOPT2="--retry 3 --retry-max-time 30"
+		CURLOPT2="$CURLOPT --retry 3 --retry-max-time 30"
 		SIMETMA_RECONFIG=
 	;;
 esac
-
 CURLOPT="$CURLOPT $CURLOPT2"
-CURLOPT2=
 
-#overridable
-simet_reginfo_restart_services() {
+#overidable
+simet_restart_services() {
 	if [ -n "$SIMETMA_RECONFIG" ] ; then
 		$SIMETMA_RECONFIG || true
 	fi
-}
-
-#overridable
-simet_refresh_agent_status() {
-	APIRES=$( curl $CURLOPT -A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
-		-H "Authorization: Bearer $OLDAT" \
-		-X GET -f -o "$OUTFILE" -w "%{http_code}" \
-		"${API_SIMET_AGENT_REG}/v2/agents/$OLDAID" ) || return 1
-	case "$APIRES" in
-	204)
-		#FIXME heal this, if it perdures for a while
-		abend "server doesn't know about us, need a registration reset!"
-		;;
-	403|401)
-		#FIXME heal this, if it perdures for a while
-		abend "registration too old, need a registration reset!"
-		;;
-	200)
-		return 0
-		;;
-	304)
-		clean_exit
-		;;
-	500|400)
-		abend "SIMET2 agent registry service unavailable"
-		;;
-        esac
-	return 1
-}
-
-__simet_create_agent_apicall() {
-	cat <<- EOFSCAG | \
-	  curl $CURLOPT \
-		-A "$USERAGENT" -H "X-SIMETBOX-ID: $BOXID" \
-		-H "Content-type: application/json" \
-		-f -X POST -o "$OUTFILE" -d @- -w "%{http_code}" \
-		"$API_SIMET_AGENT_REG/v2/agents" \
-	  || return 1
-	{ $*
-	  "engine_name":"@SIMET_ENGINE_NAME@",
-	  "engine_version":"@PACKAGEVERSION@",
-	  "agent_family":"$SIMET2_AGENT_FAMILY",
-	  "waiting_for_pairing":false }
-	EOFSCAG
-	:
-}
-#overridable
-simet_create_agent() {
-	V1AID=
-	V1AT=
-	V1JSON=
-	[ -r "$V1_AGENT_ID_FILE" ] && V1AID=$(cat "$V1_AGENT_ID_FILE")
-	[ -r "$V1_AGENT_TOKEN_FILE" ] && V1AT=$(cat "$V1_AGENT_TOKEN_FILE")
-	[ -n "$V1AID" ] && [ -n "$V1AT" ] && V1JSON="\"agent_id\":\"$V1AID\",\"agent_token\":\"$V1AT\","
-
-	# FIXME add healing strategy
-	APIRES=$(__simet_create_agent_apicall "$V1JSON") || return 1
-	[ "$APIRES" -eq 201 ] || return 1
 	:
 }
 
-gethash() {
+__gethash() {
 	# $1 - file to hash
 	[ -r "$1" ] || {
 		echo ""
@@ -158,7 +79,7 @@ gethash() {
 	sha256sum "$1" | sed -n '1 { s/[[:blank:]].*// ; p }'
 	return 0
 }
-
+#overidable
 write_lmap_agent() {
 	if [ -z "$1" ] ; then
 		rm -f  "$LMAP_AGENT_FILE"
@@ -167,11 +88,239 @@ write_lmap_agent() {
 		cat <<- LMAPAGENTEOF >"$OUTFILE" || return 1
 			{"ietf-lmap-control:lmap":{"agent":{"agent-id":"$1","report-agent-id":true}}}
 		LMAPAGENTEOF
-		HASHOLD=$(gethash "$LMAP_AGENT_FILE") || HASHOLD=
-		HASHNEW=$(gethash "$OUTFILE") || return 1
-		[ x"$HASHOLD" != x"$HASHNEW" ] && mv -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
+		HASHOLD=$(__gethash "$LMAP_AGENT_FILE") || HASHOLD=
+		HASHNEW=$(__gethash "$OUTFILE") || return 1
+		[ x"$HASHOLD" != x"$HASHNEW" ] && cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
 	fi
 	:
+}
+
+#must not change pairing data cache
+__simet_consume_api_output() {
+	AT=
+	AID=
+	PAIRED=0
+	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agent_id" -e "AT=@.agent_token" -e "PAIRED=@.has_pairing") \
+		|| abend "illegal response from agent-registry service"
+	eval "$SID" || abend "internal error"
+	PAIREDTO=$($JSONFILTER -i "$OUTFILE" -e "@.participant_id") || PAIREDTO=
+
+	[ x"$AID" != x"$OLDAID" ] && {
+		echo "$AID" > "$AGENT_ID_FILE"
+		write_lmap_agent "$AID"
+		# OUTFILE not valid anymore!
+	}
+	[ x"$AT"  != x"$OLDAT"  ] && echo "$AT" > "$AGENT_TOKEN_FILE"
+
+	: > "$OUTFILE"
+	:
+}
+
+__simet_create_agent_apicall() {
+	cat <<- EOFSCAG | \
+	  curl $CURLOPT --retry 30 --retry-max-time 300 \
+		-A "$USERAGENT" \
+		-H "Content-type: application/json" \
+		-f -X POST -o "$OUTFILE" -d @- -w "%{http_code}" \
+		"$API_SIMET_AGENT_REG/v2/agents" \
+	  || return 1
+	{ $*
+	  "engine_name":"@SIMET_ENGINE_NAME@",
+	  "engine_version":"@PACKAGEVERSION@",
+	  "agent_family":"$SIMET2_AGENT_FAMILY" }
+	EOFSCAG
+	:
+}
+__simet_create_agent_common() {
+	APIRES=$(__simet_create_agent_apicall "$@") || return 1
+	[ "$APIRES" -eq 201 ] || return 1
+	:
+}
+
+__simet_modify_agent_apicall() {
+	if [ -z "$1" ] || [ "$1" = "DISABLED" ] ; then
+		WP=false
+		SC=
+	else
+		WP=true
+		SC="\"secret\":\"$1\","
+	fi
+	cat <<- EOFSRAP | \
+	  curl $CURLOPT --retry 3 --retry-max-time 30 \
+	     -A "$USERAGENT" \
+	     -X PUT -T - -f -H "Content-type: application/json" \
+	     -H "Authorization: Bearer $AT" \
+	     -o "$OUTFILE" -w "%{http_code}" \
+	     "${API_SIMET_AGENT_REG}/v2/agents/$AID" \
+	  || return 1
+	{
+	  $SC
+	  "engine_name":"@SIMET_ENGINE_NAME@",
+	  "engine_version":"@PACKAGEVERSION@",
+	  "agent_family":"$SIMET2_AGENT_FAMILY",
+	  "waiting_for_pairing":$WP
+	}
+	EOFSRAP
+	:
+}
+#overidable
+simet_register_vlabel() {
+	APIRES=$(__simet_modify_agent_apicall "$SIMET2_VLABEL") || {
+		simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
+		return 1
+	}
+	[ "$APIRES" -eq 200 ] || {
+		simet_log simet-ma daemon.err "SIMET2 Agent Register API reported error $APIRES"
+		return 1
+	}
+
+	__simet_consume_api_output
+	:
+}
+
+# used only for *first* register, not for recovery
+#overidable
+simet_create_agent() {
+	V1AID=
+	V1AT=
+	V1JSON=
+	[ -r "$V1_AGENT_ID_FILE" ] && V1AID=$(cat "$V1_AGENT_ID_FILE")
+	[ -r "$V1_AGENT_TOKEN_FILE" ] && V1AT=$(cat "$V1_AGENT_TOKEN_FILE")
+	[ -n "$V1AID" ] && [ -n "$V1AT" ] && V1JSON="\"agent_id\":\"$V1AID\",\"agent_token\":\"$V1AT\","
+
+	__simet_create_agent_common "$V1JSON" || return $?
+
+	[ -n "$AGENT_PAIRBKP_FILE" ] && rm -f "$AGENT_PAIRBKP_FILE"
+	[ -n "$AGENT_PAIR_FILE" ] && rm -f "$AGENT_PAIR_FILE"
+
+	__simet_consume_api_output
+}
+# used only for recovery into an anonymous MA
+#overidable
+simet_create_agent_for_recovery() {
+	simet_log simet-ma daemon.crit "self-healing required, registering as a new measurement agent"
+	__simet_create_agent_common || return $?
+	__simet_consume_api_output
+	:
+}
+
+#overidable
+simet_save_pairing_recovery() {
+	[ -n "$AGENT_PAIRBKP_FILE" ] && {
+		if [ ! -r "$AGENT_PAIRBKP_FILE" ] ; then
+			[ -r "$AGENT_PAIR_FILE" ] && {
+				mv -f "$AGENT_PAIR_FILE" "$AGENT_PAIRBKP_FILE"
+				simet_log simet-ma daemon.notice "pairing recovery information saved"
+			}
+		else
+			simet_log simet-ma daemon.err "warning: pairing recovery info already present, using it"
+			rm -f "$AGENT_PAIR_FILE"
+		fi
+	}
+	:
+}
+
+#overidable
+simet_refresh_agent_status() {
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
+		-H "Authorization: Bearer $AT" \
+		-X GET -o "$OUTFILE" -w "%{http_code}" \
+		"${API_SIMET_AGENT_REG}/v2/agents/$AID" ) || return 1
+	case "$APIRES" in
+	204)
+		simet_log simet-ma daemon.err "server doesn't know our agent-id!"
+		;;
+	401)
+		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
+		;;
+	403)
+		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
+		;;
+	200)
+		__simet_consume_api_output
+		return 0
+		;;
+	304)
+		clean_exit
+		;;
+	500|400|404)
+		abend "SIMET2 agent registry service unavailable"
+		;;
+        esac
+
+	call simet_create_agent_for_recovery || abend "failed to create new identity for recovery"
+	call simet_save_pairing_recovery
+	return 0
+}
+
+__simet_pairing_recovery_apicall() {
+	cat <<- EOFSPRC | \
+	  curl $CURLOPT --retry 30 --retry-max-time 300 \
+		-A "$USERAGENT" \
+		-H "Authorization: Bearer $AT" \
+		-H "Content-type: application/json" \
+		-f -X POST -o "$OUTFILE" -d @- -w "%{http_code}" \
+		"$API_SIMET_AGENT_REG/v2/agent-recovery/$AID" \
+	  || return 1
+	{ "engine_name":"@SIMET_ENGINE_NAME@",
+	  "participant_id":"$1",
+	  "secret":"$2" }
+	EOFSPRC
+	:
+}
+__simet_attempt_pairing_recovery() {
+	APIRES=$(__simet_pairing_recovery_apicall "$1" "$2") || return 1
+	[ "$APIRES" -eq 200 ] || return 1
+	:
+}
+#overidable
+simet_attempt_pairing_recovery() {
+	OLDPAIR=$(cat "$AGENT_PAIRBKP_FILE" 2>/dev/null) || return 1
+
+	RMOLD=$(find "$AGENT_PAIRBKP_FILE" -type f -mtime +14) || RMOLD=
+	[ -n "$RMOLD" ] && rm -f "$AGENT_PAIRBKP_FILE"
+
+	[ -z "$OLDPAIR" ] && return 1
+	[ -z "$SIMET2_VLABEL" ] && return 1
+	__simet_attempt_pairing_recovery "$OLDPAIR" "$SIMET2_VLABEL" || return 1
+	SID2=$($JSONFILTER -i "$OUTFILE" -e "PAIRED=@.recovered") || return 1
+	eval "$SID2" || return 1
+
+	[ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] && return 1
+
+	rm -f "$AGENT_PAIRBKP_FILE"
+	simet_log simet-ma daemon.notice "SIMET: pairing recovered"
+	:
+}
+
+#overidable
+simet_pairing_flow() {
+	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL=
+	[ "$SIMET2_VLABEL" = "DISABLED" ] && SIMET2_VLABEL=
+	[ -z "$SIMET2_VLABEL" ] && {
+		# register as not available for pairing
+		call simet_register_vlabel || true
+		rm -f "$AGENT_PAIRBKP_FILE"
+		return 0
+	}
+
+	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+		call simet_attempt_pairing_recovery && call simet_refresh_agent_status
+	fi
+	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+		call simet_register_vlabel || true
+	fi
+
+	if [ "$PAIRED" = "true" ] || [ "$PAIRED" = 1 ] ; then
+		simet_log simet-ma daemon.notice "SIMET: this MA is paired to a participant in the SIMET2 web portal"
+		[ -n "$AGENT_PAIRBKP_FILE" ] && rm -f "$AGENT_PAIRBKP_FILE"
+		[ -n "$AGENT_PAIR_FILE" ] && {
+			OLDPAIR=
+			[ -r "$AGENT_PAIR_FILE" ] && OLDPAIR=$(cat "$AGENT_PAIR_FILE")
+			[ x"$OLDPAIR" != x"$PAIREDTO" ] && echo "$PAIREDTO" > "$AGENT_PAIR_FILE"
+		}
+		call_hook pairing_paired
+	fi
 }
 
 gettoken() {
@@ -179,58 +328,37 @@ gettoken() {
 	OLDAID=
 	[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
 	[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+	AID=$OLDAID
+	AT=$OLDAT
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
 
-	call_hook before_reginfo_api_call
+	call_hook before_reginfo
+
 	if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
 		call simet_create_agent || abend "could not register measurement agent"
 	else
 		call simet_refresh_agent_status || abend "could not update registration"
 	fi
 
-	PAIRED=0
-	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agent_id" -e "AT=@.agent_token" -e "PAIRED=@.has_pairing") \
-		|| abend "illegal response from agent-registry service"
-	eval "$SID" || abend "internal error"
-
-	call_hook before_reginfo_replace
-
-	[ x"$AID" != x"$OLDAID" ] && echo "$AID" > "$AGENT_ID_FILE"
-	[ x"$AT"  != x"$OLDAT"  ] && echo "$AT" > "$AGENT_TOKEN_FILE"
-
-	if [ -n "$LMAP_AGENT_FILE" ] ; then
-		LMAP_AGENT_DIR=$(dirname "$LMAP_AGENT_FILE")
-		[ -d "$LMAP_AGENT_DIR" ] || {
-			mkdir -m 0755 -p "$LMAP_AGENT_DIR"
-		}
-
-		write_lmap_agent "$AID"
-	fi
-
-	call_hook after_reginfo_replace
-
-	rm -f "$OUTFILE"
-	OUTFILE=
+	call_hook after_reginfo
 
 	if [ ! -r "$AGENT_ID_FILE" ] || [ -z "$AID" ] || [ ! -r "$AGENT_TOKEN_FILE" ] || [ -z "$AT" ] ; then
 		call_hook failed_to_register
 		abend "failed to register, please retry later"
 	fi
 
-	# pairing
-	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ]; then
-		@BINDIR@/simet_create_vlabel.sh >/dev/null && @BINDIR@/simet_register_vlabel.sh || true
-	else
-		simet_log simet-ma daemon.notice "SIMET: this MA is paired to a participant in the SIMET2 web portal"
-	fi
+	call simet_pairing_flow
+
+	rm -f "$OUTFILE"
+	OUTFILE=
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
 		simet_log simet-ma daemon.notice "SIMET: agent-id or authorization token has changed"
-		call simet_reginfo_restart_services
-		call_hook registered_changed
+		call simet_restart_services
+		call_hook reginfo_changed
 	else
-		call_hook registered_nochanges
+		call_hook reginfo_unchanged
 	fi
 
 	simet_log simet-ma daemon.info "SIMET: LMAP measurement agent id: $AID"

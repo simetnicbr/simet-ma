@@ -46,6 +46,38 @@ into some details of the SIMET2 web API.
   Beware of file system permission issues if you call these scripts as
   different users (e.g. "root" and "nicbr-simet").
 
+### MA pairing recovery mode
+
+  The SIMET2 API might, for several reasons, refuse the current
+  registration credentials of the MA, such as:
+
+  1. MA has corrupted, outdated, or blacklisted credentials
+
+  2. Software bug in the MA side rendered the credentials invalid somehow
+
+  3. SIMET2 server-side issues are not allowing the web API to properly
+     validate the credentials (potentially creating a fleet-wide issue)
+
+  When that happens, the MA will attempt to create a new identity for
+  itself, as an automated healing strategy.  This new identity will be
+  "anonymous" (not paired to any participant in the web portal).  But it
+  will be an unpaired new identity, so all new measurements made won't be
+  visible to any participant [until it gets paired].
+
+  The MA can then resume all measurements using the new identity /
+  credentials.  Should its new identity/credentials be paired, all such
+  measurements become visible to the participant that paired with the MA.
+
+  If the MA was in a paired state when it got its credentials refused, it
+  should enter identity recovery mode for two weeks, or until it gets
+  paired to a participant, whichever happens first.  Recovery mode
+  consists into an extra API call that offers information useful for
+  automated re-pairing, but it is expected to succeed only if the SIMET
+  team has deployed an strategy for disaster recovery due to an issue on
+  the server-side.
+
+  Pairing recovery mode is automatically handled by <>\_register\ma.sh.
+
 ## Virtual Label API, agent pairing
 
   Each MA should have a virtual label that is used to help the user give
@@ -144,7 +176,8 @@ into some details of the SIMET2 web API.
 
   On simet-ma, one has to call "simet\_create\_vlabel.sh" once when the
   software is installed (or after a factory reset).  To render the MA
-  unavailable for pairing, set the virtual label to DISABLED (all caps).
+  unavailable for pairing, set the virtual label to DISABLED (all caps)
+  or to an empty value.
 
   To update the virtual label and pairing availability, run
   "simet\_register\_ma.sh".
