@@ -1,3 +1,19 @@
+simet-ma (0.14.0) unstable; urgency=medium
+
+  * simet-ma version 0.14.0
+  * switch to the new agent register API
+  * add support for virtual labels
+  * auto-update: update all simet packages (e.g. simet-lmapd)
+  * tcpbw: default to IPv6
+  * twamp: handle (a limited number of) dup packets without aborting
+  * several lmap metadata updates
+  * recommend diagnostic tools extended tests might use
+    fping, traceroute, ping, nslookup, dig/drill
+  * recommend iw, iproute2 for geolocation using wifi
+  * handle Debian Jessie's lack of logger --no-act
+
+ -- SIMET <medicoes@simet.nic.br>  Thu, 01 Aug 2019 16:20:23 -0300
+
 simet-ma (0.13.2) unstable; urgency=medium
 
   * simet-ma version 0.13.2
