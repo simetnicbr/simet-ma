@@ -90,7 +90,11 @@ write_lmap_agent() {
 		LMAPAGENTEOF
 		HASHOLD=$(__gethash "$LMAP_AGENT_FILE") || HASHOLD=
 		HASHNEW=$(__gethash "$OUTFILE") || return 1
-		[ x"$HASHOLD" != x"$HASHNEW" ] && cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
+		[ x"$HASHOLD" != x"$HASHNEW" ] && {
+			LMAP_AGENT_DIR=$(dirname "$LMAP_AGENT_FILE")
+			[ -d "$LMAP_AGENT_DIR" ] || mkdir -m 0755 -p "$LMAP_AGENT_DIR"
+			cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
+		}
 	fi
 	:
 }
