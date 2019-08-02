@@ -234,7 +234,7 @@ simet_refresh_agent_status() {
 		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
 		;;
 	403)
-		simet_log simet-ma daemon.err "agent token has expired sometime ago"
+		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
 		;;
 	200)
 		__simet_consume_api_output
