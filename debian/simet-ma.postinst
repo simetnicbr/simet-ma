@@ -50,6 +50,14 @@ case "$1" in
 	chgrp nicbr-simet /opt/simet/etc/simet/lmap
 	chmod 02770 /opt/simet/etc/simet/lmap
 
+	# Create virtual label if one does not exist.  If you want to
+	# disable it, use an empty file or one containing DISABLED
+	VLABEL=$(/opt/simet/bin/simet_create_vlabel.sh) || VLABEL=
+	[ -n "$VLABEL" ] && {
+		echo "SIMET-MA: agent virtual label is: $VLABEL" >&2
+		logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
+	}
+
 	# Remove any downloaded schedule
 	( [ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf ;
 	  [ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf ;
