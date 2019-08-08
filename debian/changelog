@@ -1,3 +1,12 @@
+simet-ma (0.14.2) unstable; urgency=medium
+
+  * simet-ma version 0.14.2
+  * postinst: call simet_create_vlabel.sh to generate the MA
+    virtual label when one does not exist yet, and log it to
+    stderr and syslog (via "logger")
+
+ -- SIMET <medicoes@simet.nic.br>  Thu, 08 Aug 2019 15:37:28 -0300
+
 simet-ma (0.14.1) unstable; urgency=medium
 
   * simet-ma version 0.14.1
