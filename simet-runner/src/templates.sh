@@ -38,7 +38,9 @@ task_template(){
   "option": $_task_options,
   "conflict": [],
   "tag": [
-    "task-version:$_task_version"${REPORT_MAC_ADDRESS_TAG_ENTRY}
+    "simet.nic.br_engine-name:${SIMET_ENGINE_NAME}",
+    "simet.nic.br_engine-version:$_task_version",
+    "simet.nic.br_task-version:$_task_version"${REPORT_MAC_ADDRESS_TAG_ENTRY}
   ],
   "event": "$REPORT_EVENT",
   "start": "$_task_start",
