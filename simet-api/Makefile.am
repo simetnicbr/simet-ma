@@ -88,7 +88,7 @@ config.d/simet-ma_tasklet-config.json :
 		echo "  {\"name\":\"$${tn}\"," ; \
 		echo "   \"tag\":[\"simet.nic.br_engine-name:$(simetenginename)\"," ; \
 		echo "          \"simet.nic.br_engine-version:$(PACKAGE_VERSION)\"," ; \
-		echo "          \"simet.nic.br_task-version:$(PACKAGE_VERSION)\"]}," ; \
+		echo "          \"simet.nic.br_task-version:$(PACKAGE_VERSION)\"]," ; \
 		echo "   \"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
 	done ; } | sed -e '$$ s/,$$//' ; \
 	echo ']}}}' ; \
