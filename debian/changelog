@@ -1,3 +1,11 @@
+simet-ma (0.14.3) unstable; urgency=medium
+
+  * simet-ma version 0.14.3
+  * simet-api, simet-runner: add some lmap metadata tags in
+    reports that were missing (engine-name,version;task-version)
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 13 Aug 2019 11:33:06 -0300
+
 simet-ma (0.14.2) unstable; urgency=medium
 
   * simet-ma version 0.14.2
