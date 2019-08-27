@@ -97,7 +97,7 @@ gethash() {
 		echo ""
 		return 0
 	}
-	sha256sum "$1" | sed -n '1 { s/[[:blank:]].*// ; p }'
+	md5sum "$1" | sed -n '1 { s/[[:blank:]].*// ; p }'
 	return 0
 }
 
