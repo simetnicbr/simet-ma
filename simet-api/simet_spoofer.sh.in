@@ -193,31 +193,39 @@ spoof_targets() {
   N=0
   for i in "${TARGETS[@]}" ; do for j in $(get_spoofed_sources "$i") ; do
     N=$((N+1))
-    OUTFILE=$(start_subtest spoof_packets $N "send spoofed from $j to $i")
-    R=0
-    snping -c5 -S "$j" "$i" >"$OUTFILE" || R=$?
-    end_subtest spoof_packets $N "$j" "$i" "$OUTFILE" "$R"
+    (
+      OUTFILE=$(start_subtest spoof_packets $N "send spoofed from $j to $i")
+      R=0
+      snping -c5 -S "$j" "$i" >"$OUTFILE" || R=$?
+      end_subtest spoof_packets $N "$j" "$i" "$OUTFILE" "$R"
+    )& sleep 1
   done ; done
+  wait
   end_test
 }
 
 tracefilter_targets() {
-  local OUTFILE N sip dip dist
+  local OUTFILE N sip dip dist i
 
   start_test tracefilter "modified nping-based tracefilter to targets"
   dist="$1"
   [ -z "$dist" ] && dist=10
   N=0
   for sip in "${TARGETS[@]}" ; do
-    N=$((N+1))
     dip="$sip"
     [ $TARGETXOR -ne 0 ] && dip=$(echo "$sip" | xor_lsb)
 
-    OUTFILE=$(start_subtest tracefilter $N "nping traceroute from $sip to $dip, dist=$dist")
-    R=0
-    snping -c$dist -tr -S "$sip" "$dip" "$dip" "$dip" >"$OUTFILE" || R=$?
-    end_subtest tracefilter $N "$sip" "$dip" "$OUTFILE" "$R"
+    for i in 1 2 3 ; do
+      N=$((N+1))
+      (
+        OUTFILE=$(start_subtest tracefilter $N "nping traceroute from $sip to $dip, dist=$dist")
+        R=0
+        snping -c$dist -tr -S "$sip" "$dip" >"$OUTFILE" || R=$?
+        end_subtest tracefilter $N "$sip" "$dip" "$OUTFILE" "$R"
+      )& sleep 1
+    done
   done
+  wait
   end_test
 }
 
@@ -228,11 +236,14 @@ traceroute_targets() {
   N=0
   for i in "${TARGETS[@]}" ; do
     N=$((N+1))
-    OUTFILE=$(start_subtest traceroute $N "target $i")
-    R=0
-    straceroute "$i" >"$OUTFILE" || R=$?
-    end_subtest traceroute $N "" "$i" "$OUTFILE" "$R"
+    (
+      OUTFILE=$(start_subtest traceroute $N "target $i")
+      R=0
+      straceroute "$i" >"$OUTFILE" || R=$?
+      end_subtest traceroute $N "" "$i" "$OUTFILE" "$R"
+    )& sleep 1
   done
+  wait
   end_test
 }
 
