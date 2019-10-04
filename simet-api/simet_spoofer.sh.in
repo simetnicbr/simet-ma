@@ -148,16 +148,6 @@ snping() (
   exec simet-nping --echo-client "$KEY" --udp "$@"
 )
 
-# Returns selection of sources for spoofing
-# $1 - destination
-get_spoofed_sources() {
-  echo 192.168.34.99
-  echo 10.233.211.199
-  echo 172.31.23.11
-  echo 200.160.2.3
-  echo "$i"
-}
-
 xor_lsb() {
   # Invert the least significant bit of an IPv4 or IPv6 address
   # IPv6 regex can be quite loose because ':' is forbidden in hostnames
@@ -167,6 +157,17 @@ xor_lsb() {
              s/(.*)(.)$/\2/;y/0123456789abcdefABCDEF/1032547698badcfeBADCFE/;H;
              x;s/\n//
           }'
+}
+
+# Returns selection of sources for spoofing
+# $1 - destination
+get_spoofed_sources() {
+  echo 192.168.34.99
+  echo 10.233.211.199
+  echo 172.31.23.11
+  echo 200.160.2.3
+  echo "$i"
+  echo "$i" | xor_lsb
 }
 
 probe_targets() {
