@@ -83,18 +83,14 @@ OUTDIR=$(mktemp -q -t -d simet-spoofer.$$.XXXXXXXXXX) \
   || abend "could not create work directory"
 [ -d "$OUTDIR" ] || RC=3 abend "weirdness while creating work directory"
 
-open_json() {
-  OUTFILEJSON="$OUTDIR/output.json"
-  cat <<- EOFJH1 > "$OUTFILEJSON" || abend "could not create output file: $OUTFILEJSON"
+output_json() {
+  cat <<- EOFJH1
 	{
 		"function":[{"uri":"urn:ietf:metrics:perf:TBD"}],
 		"column":["test_id","source","destination","raw_output","exit_status"],
 		"row":[
 EOFJH1
-  :
-}
-close_json_and_output() {
-  sed -e '$ s/},$/}]}/' "$OUTFILEJSON" || abend "failed to close json subtest output"
+  sed -e '$ s/},$/}]}/' "$OUTDIR"/*.json || abend "failed to render json output"
 }
 
 start_test() {
@@ -103,26 +99,36 @@ start_test() {
   echo "TEST: $TESTID: $*" >&2
 }
 start_subtest() {
+  local OUTFILE
+
   SUBTESTID="$1"
-  SUBTEST1="$2"
-  SUBTEST2="$3"
-  shift 3 || RC=3 abend "missing tags in subtest"
-  echo "SUBTEST: $SUBTESTID: $*" >&2
-  OUTFILE="$OUTDIR/$TESTID.$SUBTESTID.out"
-  : > "$OUTFILE" || abend "could not create temporary output file $OUTFILE"
+  SUBTESTNUM="$2"
+  shift 2 || RC=3 abend "missing tags in subtest"
+  echo "SUBTEST: $SUBTESTID $SUBTESTNUM: $*" >&2
+  OUTFILE=$(mktemp -q -t -p "$OUTDIR" simet-spoofer."$TESTID"."$SUBTESTID"."$SUBTESTNUM".XXXXXXXXXX) \
+    || abend "could not create temporary output file $OUTFILE"
+  echo "$OUTFILE"
 }
 end_subtest() {
-  [ -w "$OUTFILEJSON" ] || RC=3 abend "no output json file to append to!"
+  local OUTFILE R
+
+  SUBTESTID="$1"
+  SUBTESTNUM="$2"
+  shift 2 || RC=3 abend "missing tags in subtest"
+  SUBTEST1="$1"
+  SUBTEST2="$2"
+  OUTFILE="$3"
+  R="$4"
+  [ "$R" -ge 0 ] || RC=3 abend "not a valid return status"
   [ -r "$OUTFILE" ] || RC=3 abend "no tool output file to process"
   {
     echo "{\"value\":[\"$TESTID\",\"$SUBTEST1\",\"$SUBTEST2\","
     sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/$/\\n/' \
         -e '1 s/^/"/' -e '$ s/$/",/' -e 's/[[:cntrl:]]*//g' "$OUTFILE" | tr -d '\n\r'
-    echo "\"$1\"]},"
-  } >> "$OUTFILEJSON" || abend "failed to append json subtest output"
+    echo "\"$R\"]},"
+  } > "$OUTFILE.json" || abend "failed to write json subtest output"
   rm "$OUTFILE" || true
-  OUTFILE=
-  echo "ENDSUBTEST: $SUBTESTID" >&2
+  echo "ENDSUBTEST: $SUBTESTID $SUBTESTNUM" >&2
 }
 end_test() {
   echo "ENDTEST: $TESTID" >&2
@@ -164,61 +170,72 @@ xor_lsb() {
 }
 
 probe_targets() {
+  local ONESUCCESS OUTFILE N i
+
   ONESUCCESS=
-  start_test probe_packets "send non-spoofed packets"
+  start_test probe_targets "send non-spoofed packets"
+  N=0
   for i in "${TARGETS[@]}" ; do
-    start_subtest probe_packets "" "$i" "send to $i"
+    N=$((N+1))
+    OUTFILE=$(start_subtest probe_targets $N "send to $i")
     R=0
     snping -c5 "$i" >"$OUTFILE" && ONESUCCESS=1 || R=$?
-    end_subtest "$R"
+    end_subtest probe_targets $N "" "$i" "$OUTFILE" "$R"
   done
   [ -z "$ONESUCCESS" ] && fail_all
   end_test
 }
 
 spoof_targets() {
+  local OUTFILE N i
+
   start_test spoof_packets "send spoofed packets"
+  N=0
   for i in "${TARGETS[@]}" ; do for j in $(get_spoofed_sources "$i") ; do
-    start_subtest spoof_packets "$j" "$i" "send spoofed from $j to $i"
+    N=$((N+1))
+    OUTFILE=$(start_subtest spoof_packets $N "send spoofed from $j to $i")
     R=0
     snping -c5 -S "$j" "$i" >"$OUTFILE" || R=$?
-    end_subtest "$R"
+    end_subtest spoof_packets $N "$j" "$i" "$OUTFILE" "$R"
   done ; done
   end_test
 }
 
 tracefilter_targets() {
+  local OUTFILE N sip dip dist
+
   start_test tracefilter "modified nping-based tracefilter to targets"
   dist="$1"
   [ -z "$dist" ] && dist=10
-  i=0
+  N=0
   for sip in "${TARGETS[@]}" ; do
+    N=$((N+1))
     dip="$sip"
     [ $TARGETXOR -ne 0 ] && dip=$(echo "$sip" | xor_lsb)
 
-    start_subtest tracefilter "$sip" "$dip" "nping traceroute from $sip to $dip, dist=$dist"
+    OUTFILE=$(start_subtest tracefilter $N "nping traceroute from $sip to $dip, dist=$dist")
     R=0
     snping -c$dist -tr -S "$sip" "$dip" "$dip" "$dip" >"$OUTFILE" || R=$?
-    end_subtest "$R"
-
-    i=$((i+1))
+    end_subtest tracefilter $N "$sip" "$dip" "$OUTFILE" "$R"
   done
   end_test
 }
 
 traceroute_targets() {
+  local OUTFILE N i
+
   start_test traceroute "standard traceroute to targets"
+  N=0
   for i in "${TARGETS[@]}" ; do
-    start_subtest traceroute "" "$i" "target $i"
+    N=$((N+1))
+    OUTFILE=$(start_subtest traceroute $N "target $i")
     R=0
     straceroute "$i" >"$OUTFILE" || R=$?
-    end_subtest "$R"
+    end_subtest traceroute $N "" "$i" "$OUTFILE" "$R"
   done
   end_test
 }
 
-
-open_json
 
 probe_targets
 spoof_targets
@@ -226,7 +243,7 @@ tracefilter_targets "$TFDIST"
 traceroute_targets
 probe_targets
 
-close_json_and_output
+output_json
 
 [ -n "$OUTDIR" ] && [ -d "$OUTDIR" ] && rm -fr "$OUTDIR" 2>/dev/null
 :
