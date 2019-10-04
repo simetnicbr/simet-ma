@@ -173,7 +173,7 @@ probe_targets() {
   local ONESUCCESS OUTFILE N i
 
   ONESUCCESS=
-  start_test probe_targets "send non-spoofed packets"
+  start_test "probe_targets_$1" "send non-spoofed packets"
   N=0
   for i in "${TARGETS[@]}" ; do
     N=$((N+1))
@@ -232,7 +232,7 @@ tracefilter_targets() {
 traceroute_targets() {
   local OUTFILE N i
 
-  start_test traceroute "standard traceroute to targets"
+  start_test "traceroute_$1" "standard traceroute to targets"
   N=0
   for i in "${TARGETS[@]}" ; do
     N=$((N+1))
@@ -248,11 +248,12 @@ traceroute_targets() {
 }
 
 
-probe_targets
+probe_targets before
+traceroute_targets before
 spoof_targets
 tracefilter_targets "$TFDIST"
-traceroute_targets
-probe_targets
+traceroute_targets after
+probe_targets after
 
 output_json
 
