@@ -41,7 +41,7 @@
 
 #include "libubox/usock.h"
 
-static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen);
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen);
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
@@ -391,7 +391,7 @@ static int convert_family(int family) {
     }
 }
 
-static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen)
 {
     switch(sa->ss_family) {
         case AF_INET:

@@ -31,9 +31,9 @@
 
 /* TWAMP parameters struct */
 typedef struct twamp_parameters {
-    char *device_id;
-    char *host;
-    char *port;
+    const char *device_id;
+    const char *host;
+    const char *port;
     int family;
     int connect_timeout;
     unsigned int packets_count;
