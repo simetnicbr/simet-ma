@@ -59,7 +59,7 @@ void decode_be_timestamp(Timestamp *ts) {
 }
 
 uint64_t timeval_to_microsec(const struct timeval *tv) {
-    uint64_t ret_microsec = tv->tv_sec * (1000000);
+    uint64_t ret_microsec = (uint64_t)tv->tv_sec * 1000000U;
     ret_microsec += tv->tv_usec;
 
     return ret_microsec;
