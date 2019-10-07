@@ -38,8 +38,8 @@ typedef struct twamp_parameters {
     int connect_timeout;
     unsigned int packets_count;
     unsigned int packets_max;
-    long int packets_interval_us;
-    long int packets_timeout_us;
+    unsigned long int packets_interval_us;
+    unsigned long int packets_timeout_us;
 } TWAMPParameters;
 
 typedef struct twamp_test_parameters {

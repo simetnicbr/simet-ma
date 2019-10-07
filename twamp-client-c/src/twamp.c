@@ -450,10 +450,13 @@ static void *twamp_callback_thread(void *p) {
     memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket)); /* FIXME */
 
     /* we wait for (number of packets * inter-packet interval) + per-packet timeout */
-    long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
+    unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
 			  + t_param->param.packets_timeout_us;
-    to.tv_sec = tt_us / 1000000;
-    to.tv_usec = tt_us - (to.tv_sec * 1000000);
+    /* clamp to 10 minutes */
+    if (tt_us > 600000000UL)
+        tt_us = 600000000UL;
+    to.tv_sec = tt_us / 1000000U;
+    to.tv_usec = tt_us - (to.tv_sec * 1000000U);
 
     gettimeofday(&tv_cur, NULL);
     timeradd(&tv_cur, &to, &tv_stop);

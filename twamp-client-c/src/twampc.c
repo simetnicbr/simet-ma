@@ -193,8 +193,8 @@ int main(int argc, char **argv)
     param.connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout;
     param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count);
     param.packets_max = param.packets_count * 2;
-    param.packets_interval_us = packet_interval_us;
-    param.packets_timeout_us = packet_timeout_us;
+    param.packets_interval_us = (packet_interval_us > 0) ? (unsigned long int) packet_interval_us : 30000U;
+    param.packets_timeout_us = (packet_timeout_us > 0) ? (unsigned long int) packet_timeout_us : 100000U;
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 

@@ -235,7 +235,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
     snprintf(metric_name, sizeof(metric_name),
         "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
-        "LossThresholdUs%ld-IntervalDurationUs%ld-"
+        "LossThresholdUs%lu-IntervalDurationUs%lu-"
         "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
         param->packets_timeout_us, param->packets_interval_us,
         param->packets_count, TST_PKT_SIZE);
