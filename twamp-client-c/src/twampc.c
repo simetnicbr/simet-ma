@@ -145,43 +145,43 @@ int main(int argc, char **argv)
             else
                 log_level = 0;
             break;
-    case '4':
-        family = 4;
-        break;
-    case '6':
-        family = 6;
-        break;
-    case 'p':
-        port = optarg;
-        break;
-    case 't':
-        connect_timeout = atoi(optarg);
-        break;
-    case 'c':
-        packet_count = atoi(optarg);
-        break;
-    case 'i':
-        packet_interval_us = atol(optarg);
-        break;
-    case 'T':
-	packet_timeout_us = atol(optarg);
-	break;
-    case 'd':
-        device_id = optarg;
-        break;
-    case 'h':
-        print_usage(argv[0], 1);
-        /* fall-through */ /* silence bogus warning */
-    case 'V':
-        print_version();
-        /* fall-through */ /* silence bogus warning */
-    default:
-        print_usage(argv[0], 0);
+        case '4':
+            family = 4;
+            break;
+        case '6':
+            family = 6;
+            break;
+        case 'p':
+            port = optarg;
+            break;
+        case 't':
+            connect_timeout = atoi(optarg);
+            break;
+        case 'c':
+            packet_count = atoi(optarg);
+            break;
+        case 'i':
+            packet_interval_us = atol(optarg);
+            break;
+        case 'T':
+            packet_timeout_us = atol(optarg);
+            break;
+        case 'd':
+            device_id = optarg;
+            break;
+        case 'h':
+            print_usage(argv[0], 1);
+            /* fall-through */ /* silence bogus warning */
+        case 'V':
+            print_version();
+            /* fall-through */ /* silence bogus warning */
+        default:
+            print_usage(argv[0], 0);
         }
     }
 
     if (optind >= argc || argc - optind != 1)
-    print_usage(argv[0], 0);
+        print_usage(argv[0], 0);
 
     host = argv[optind];
 
