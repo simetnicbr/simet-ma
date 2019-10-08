@@ -204,7 +204,7 @@ err_exit:
     return rc;
 }
 
-static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
+static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
 {
     char buf[32];
 
@@ -284,10 +284,10 @@ static json_object *createReport(json_object *jresults,
         assert(jrow);
 
         /* WARNING: keep the same order as in the columns list! */
-        xx_json_object_array_add_uin64_as_str(jrow, i + 1);
-        xx_json_object_array_add_uin64_as_str(jrow, downloadRes[i].bytes * 8U);
-        xx_json_object_array_add_uin64_as_str(jrow, downloadRes[i].nstreams);
-        xx_json_object_array_add_uin64_as_str(jrow, (uint64_t)downloadRes[i].interval / 1000UL);
+        xx_json_object_array_add_uint64_as_str(jrow, i + 1);
+        xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].bytes * 8U);
+        xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].nstreams);
+        xx_json_object_array_add_uint64_as_str(jrow, (uint64_t)downloadRes[i].interval / 1000UL);
         json_object_array_add(jrow, json_object_new_string("download"));
 
         /* add row to list of rows */

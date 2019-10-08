@@ -177,7 +177,7 @@ if test "x${GCC}${enable_cflags_setting}" = "xyesyes" ; then
          -Wformat-signedness -Wformat-overflow=2 -Wformat-truncation=2 dnl
          -Wtrampolines -Wcast-align -Wsign-conversion -Wnull-dereference dnl
          -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations dnl
-         -Wredundant-decls -Wstrict-overflow -Winit-self -Wshadow dnl
+         -Wredundant-decls -Wstrict-overflow -Wconversion -Winit-self -Wshadow dnl
          -Wrestrict -Wpointer-arith -Wlogical-op -Wbad-function-cast dnl
          -Wwrite-strings -Wduplicated-branches -Wduplicated-cond dnl
          -Walloca -Wvla -Walloc-zero -Walloc-size-larger-than=10240000],

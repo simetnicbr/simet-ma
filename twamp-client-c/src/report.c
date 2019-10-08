@@ -64,7 +64,7 @@ struct twamp_report_private {
     json_object *root;
 }; /* TWAMPReport->privdata */
 
-static void xx_json_object_array_add_uin64_as_str(json_object *j, uint64_t v)
+static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
 {
     char buf[32];
     snprintf(buf, sizeof(buf), "%" PRIu64, v);
@@ -235,7 +235,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
     snprintf(metric_name, sizeof(metric_name),
         "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
-        "LossThresholdUs%ld-IntervalDurationUs%ld-"
+        "LossThresholdUs%lu-IntervalDurationUs%lu-"
         "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
         param->packets_timeout_us, param->packets_interval_us,
         param->packets_count, TST_PKT_SIZE);
@@ -310,14 +310,14 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
         json_object * jcurrow = json_object_new_array();
 
         /* WARNING: keep the same insert order as in twamp_report_col_names[] ! */
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.senderSeqNumber);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.reflectorSeqNumber);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.receiverSeqNumber);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.senderTime_us);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.reflectorRecvTime_us);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.reflectorSendTime_us);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.receiverTime_us);
-        xx_json_object_array_add_uin64_as_str(jcurrow, pkg.rtt_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.senderSeqNumber);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.reflectorSeqNumber);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.receiverSeqNumber);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.senderTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.reflectorRecvTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.reflectorSendTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.receiverTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.rtt_us);
 
         /* add row to list of rows */
         jo = json_object_new_object();

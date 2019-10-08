@@ -41,7 +41,7 @@
 
 #include "libubox/usock.h"
 
-static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen);
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen);
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
@@ -391,7 +391,7 @@ static int convert_family(int family) {
     }
 }
 
-static char *get_ip_str(const struct sockaddr_storage *sa, char *s, size_t maxlen)
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen)
 {
     switch(sa->ss_family) {
         case AF_INET:
@@ -450,10 +450,13 @@ static void *twamp_callback_thread(void *p) {
     memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket)); /* FIXME */
 
     /* we wait for (number of packets * inter-packet interval) + per-packet timeout */
-    long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
+    unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
 			  + t_param->param.packets_timeout_us;
-    to.tv_sec = tt_us / 1000000;
-    to.tv_usec = tt_us - (to.tv_sec * 1000000);
+    /* clamp to 10 minutes */
+    if (tt_us > 600000000UL)
+        tt_us = 600000000UL;
+    to.tv_sec = tt_us / 1000000U;
+    to.tv_usec = tt_us - (to.tv_sec * 1000000U);
 
     gettimeofday(&tv_cur, NULL);
     timeradd(&tv_cur, &to, &tv_stop);

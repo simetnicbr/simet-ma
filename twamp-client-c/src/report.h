@@ -36,10 +36,10 @@ typedef struct twamp_result {
 } TWAMPResult;
 
 typedef struct twamp_report {
-    char *device_id;
+    const char *device_id;
 
-    char *host;
-    char *address;
+    const char *host;
+    const char *address;
     unsigned int serverPort;
     int family;
 
@@ -52,12 +52,12 @@ typedef struct report_packet {
     unsigned int reflectorSeqNumber;
     unsigned int receiverSeqNumber;
 
-    unsigned int senderTime_us;
-    unsigned int reflectorRecvTime_us;
-    unsigned int reflectorSendTime_us;
-    unsigned int receiverTime_us;
+    uint64_t senderTime_us;
+    uint64_t reflectorRecvTime_us;
+    uint64_t reflectorSendTime_us;
+    uint64_t receiverTime_us;
 
-    unsigned int rtt_us;
+    uint64_t rtt_us;
 } ReportPacket;
 
 #endif /* REPORT_H_ */

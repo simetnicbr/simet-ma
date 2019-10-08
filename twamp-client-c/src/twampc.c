@@ -145,43 +145,43 @@ int main(int argc, char **argv)
             else
                 log_level = 0;
             break;
-    case '4':
-        family = 4;
-        break;
-    case '6':
-        family = 6;
-        break;
-    case 'p':
-        port = optarg;
-        break;
-    case 't':
-        connect_timeout = atoi(optarg);
-        break;
-    case 'c':
-        packet_count = atoi(optarg);
-        break;
-    case 'i':
-        packet_interval_us = atol(optarg);
-        break;
-    case 'T':
-	packet_timeout_us = atol(optarg);
-	break;
-    case 'd':
-        device_id = optarg;
-        break;
-    case 'h':
-        print_usage(argv[0], 1);
-        /* fall-through */ /* silence bogus warning */
-    case 'V':
-        print_version();
-        /* fall-through */ /* silence bogus warning */
-    default:
-        print_usage(argv[0], 0);
+        case '4':
+            family = 4;
+            break;
+        case '6':
+            family = 6;
+            break;
+        case 'p':
+            port = optarg;
+            break;
+        case 't':
+            connect_timeout = atoi(optarg);
+            break;
+        case 'c':
+            packet_count = atoi(optarg);
+            break;
+        case 'i':
+            packet_interval_us = atol(optarg);
+            break;
+        case 'T':
+            packet_timeout_us = atol(optarg);
+            break;
+        case 'd':
+            device_id = optarg;
+            break;
+        case 'h':
+            print_usage(argv[0], 1);
+            /* fall-through */ /* silence bogus warning */
+        case 'V':
+            print_version();
+            /* fall-through */ /* silence bogus warning */
+        default:
+            print_usage(argv[0], 0);
         }
     }
 
     if (optind >= argc || argc - optind != 1)
-    print_usage(argv[0], 0);
+        print_usage(argv[0], 0);
 
     host = argv[optind];
 
@@ -193,8 +193,8 @@ int main(int argc, char **argv)
     param.connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout;
     param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count);
     param.packets_max = param.packets_count * 2;
-    param.packets_interval_us = packet_interval_us;
-    param.packets_timeout_us = packet_timeout_us;
+    param.packets_interval_us = (packet_interval_us > 0) ? (unsigned long int) packet_interval_us : 30000U;
+    param.packets_timeout_us = (packet_timeout_us > 0) ? (unsigned long int) packet_timeout_us : 100000U;
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
