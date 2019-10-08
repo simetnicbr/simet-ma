@@ -1,3 +1,13 @@
+simet-ma (0.14.5) unstable; urgency=medium
+
+  * simet-ma version 0.14.5
+  * fix TWAMP reports which were returning truncated timestamp data
+  * (openwrt-only): use md5sum to compare files instead of sha256sum,
+    this is cheaper and does not require busybox config changes in
+    older openwrt.
+
+ -- SIMET <medicoes@simet.nic.br>  Mon, 07 Oct 2019 13:56:13 -0300
+
 simet-ma (0.14.4) unstable; urgency=medium
 
   * simet-ma version 0.14.3, 0.14.4
