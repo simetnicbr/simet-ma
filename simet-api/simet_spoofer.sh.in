@@ -159,6 +159,13 @@ xor_lsb() {
           }'
 }
 
+findsrc() {
+  [ -n "$1" ] && {
+    ip route get "$1" | sed -n -e '/[[:blank:]]src[[:blank:]]/ { s#.*[[:blank:]]src[[:blank:]]\+\([^[:blank:]]\+\).*#\1# ; p ; q }' || true
+  }
+  :
+}
+
 # Returns selection of sources for spoofing
 # $1 - destination
 get_spoofed_sources() {
@@ -180,8 +187,9 @@ probe_targets() {
     N=$((N+1))
     OUTFILE=$(start_subtest probe_targets $N "send to $i")
     R=0
+    S=$(findsrc "$i")
     snping -c5 "$i" >"$OUTFILE" && ONESUCCESS=1 || R=$?
-    end_subtest probe_targets $N "" "$i" "$OUTFILE" "$R"
+    end_subtest probe_targets $N "$S" "$i" "$OUTFILE" "$R"
   done
   [ -z "$ONESUCCESS" ] && fail_all
   end_test
@@ -240,8 +248,9 @@ traceroute_targets() {
     (
       OUTFILE=$(start_subtest traceroute $N "target $i")
       R=0
+      S=$(findsrc "$i")
       straceroute "$i" >"$OUTFILE" || R=$?
-      end_subtest traceroute $N "" "$i" "$OUTFILE" "$R"
+      end_subtest traceroute $N "$S" "$i" "$OUTFILE" "$R"
     )& sleep 1
   done
   wait
