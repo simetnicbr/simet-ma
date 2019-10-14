@@ -35,7 +35,7 @@ RC=1
 KEY="simet982411 testtest"
 
 TARGETXOR=1
-TARGETS=()
+TARGETS=
 TFDIST=10
 
 usage() {
@@ -71,7 +71,7 @@ while [ $# -gt 0 ] ; do
       RC=2 abend "Unknown command line option $1"
       ;;
     *)
-      TARGETS+=("$1")
+      TARGETS="$TARGETS $1"
       ;;
   esac
   shift
@@ -183,7 +183,7 @@ probe_targets() {
   ONESUCCESS=
   start_test "probe_targets_$1" "send non-spoofed packets"
   N=0
-  for i in "${TARGETS[@]}" ; do
+  for i in $TARGETS ; do
     N=$((N+1))
     OUTFILE=$(start_subtest probe_targets $N "send to $i")
     R=0
@@ -200,7 +200,7 @@ spoof_targets() {
 
   start_test spoof_packets "send spoofed packets"
   N=0
-  for i in "${TARGETS[@]}" ; do for j in $(get_spoofed_sources "$i") ; do
+  for i in $TARGETS ; do for j in $(get_spoofed_sources "$i") ; do
     N=$((N+1))
     (
       OUTFILE=$(start_subtest spoof_packets $N "send spoofed from $j to $i")
@@ -220,7 +220,7 @@ tracefilter_targets() {
   dist="$1"
   [ -z "$dist" ] && dist=10
   N=0
-  for sip in "${TARGETS[@]}" ; do
+  for sip in $TARGETS ; do
     dip="$sip"
     [ $TARGETXOR -ne 0 ] && dip=$(echo "$sip" | xor_lsb)
 
@@ -243,7 +243,7 @@ traceroute_targets() {
 
   start_test "traceroute_$1" "standard traceroute to targets"
   N=0
-  for i in "${TARGETS[@]}" ; do
+  for i in $TARGETS ; do
     N=$((N+1))
     (
       OUTFILE=$(start_subtest traceroute $N "target $i")
