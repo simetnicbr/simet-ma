@@ -123,8 +123,12 @@ end_subtest() {
   [ -r "$OUTFILE" ] || RC=3 abend "no tool output file to process"
   {
     echo "{\"value\":[\"$TESTID\",\"$SUBTEST1\",\"$SUBTEST2\","
-    sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/$/\\n/' \
-        -e '1 s/^/"/' -e '$ s/$/",/' -e 's/[[:cntrl:]]*//g' "$OUTFILE" | tr -d '\n\r'
+    if [ -s "$OUTFILE" ] ; then
+      sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/$/\\n/' \
+          -e '1 s/^/"/' -e '$ s/$/",/' -e 's/[[:cntrl:]]*//g' "$OUTFILE" | tr -d '\n\r'
+    else
+      echo '"",'
+    fi
     echo "\"$R\"]},"
   } > "$OUTFILE.json" || abend "failed to write json subtest output"
   rm "$OUTFILE" || true
