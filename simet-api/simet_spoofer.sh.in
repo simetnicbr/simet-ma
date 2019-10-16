@@ -87,7 +87,7 @@ output_json() {
   cat <<- EOFJH1
 	{
 		"function":[{"uri":"urn:ietf:metrics:perf:TBD"}],
-		"column":["test_id","source","destination","raw_output","exit_status"],
+		"column":["test_id","subtest_id","source","destination","raw_output","exit_status"],
 		"row":[
 EOFJH1
   sed -e '$ s/},$/}]}/' "$OUTDIR"/*.json || abend "failed to render json output"
@@ -101,20 +101,22 @@ start_test() {
 start_subtest() {
   local OUTFILE
 
-  SUBTESTID="$1"
-  SUBTESTNUM="$2"
-  shift 2 || RC=3 abend "missing tags in subtest"
-  echo "SUBTEST: $SUBTESTID $SUBTESTNUM: $*" >&2
-  OUTFILE=$(mktemp -q -t -p "$OUTDIR" simet-spoofer."$TESTID"."$SUBTESTID"."$SUBTESTNUM".XXXXXXXXXX) \
+  SUBTESTNAME="$1"
+  SUBTESTID="$2"
+  SUBTESTNUM="$3"
+  shift 3 || RC=3 abend "missing tags in subtest"
+  echo "SUBTEST: $SUBTESTNAME $SUBTESTID $SUBTESTNUM: $*" >&2
+  OUTFILE=$(mktemp -q -t -p "$OUTDIR" simet-spoofer."$TESTID"."$SUBTESTNAME"."$SUBTESTNUM".XXXXXXXXXX) \
     || abend "could not create temporary output file $OUTFILE"
   echo "$OUTFILE"
 }
 end_subtest() {
   local OUTFILE R
 
-  SUBTESTID="$1"
-  SUBTESTNUM="$2"
-  shift 2 || RC=3 abend "missing tags in subtest"
+  SUBTESTNAME="$1"
+  SUBTESTID="$2"
+  SUBTESTNUM="$3"
+  shift 3 || RC=3 abend "missing tags in subtest"
   SUBTEST1="$1"
   SUBTEST2="$2"
   OUTFILE="$3"
@@ -122,7 +124,7 @@ end_subtest() {
   [ "$R" -ge 0 ] || RC=3 abend "not a valid return status"
   [ -r "$OUTFILE" ] || RC=3 abend "no tool output file to process"
   {
-    echo "{\"value\":[\"$TESTID\",\"$SUBTEST1\",\"$SUBTEST2\","
+    echo "{\"value\":[\"$TESTID\",\"$SUBTESTID\",\"$SUBTEST1\",\"$SUBTEST2\","
     if [ -s "$OUTFILE" ] ; then
       sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/$/\\n/' \
           -e '1 s/^/"/' -e '$ s/$/",/' -e 's/[[:cntrl:]]*//g' "$OUTFILE" | tr -d '\n\r'
@@ -132,7 +134,7 @@ end_subtest() {
     echo "\"$R\"]},"
   } > "$OUTFILE.json" || abend "failed to write json subtest output"
   rm "$OUTFILE" || true
-  echo "ENDSUBTEST: $SUBTESTID $SUBTESTNUM" >&2
+  echo "ENDSUBTEST: $SUBTESTNAME $SUBTESTID $SUBTESTNUM" >&2
 }
 end_test() {
   echo "ENDTEST: $TESTID" >&2
@@ -171,30 +173,32 @@ findsrc() {
   :
 }
 
-# Returns selection of sources for spoofing
+# Returns selection of sources for spoofing and subtest id
 # $1 - destination
 get_spoofed_sources() {
-  echo 192.168.34.99
-  echo 10.233.211.199
-  echo 172.31.23.11
-  echo 200.160.2.3
-  echo "$i"
-  echo "$i" | xor_lsb
+  echo 192.168.34.99 private
+  echo 10.233.211.199 private
+  echo 172.31.23.11 private
+  echo 200.160.2.3 public_other-as
+  echo "$1" target_ip
+  echo "$( echo "$1" | xor_lsb | tr -d '\n' )" target_ip
 }
 
 probe_targets() {
   local ONESUCCESS OUTFILE N i
+  local kind
 
+  kind="$1"
   ONESUCCESS=
-  start_test "probe_targets_$1" "send non-spoofed packets"
+  start_test "probe_targets" "send non-spoofed packets"
   N=0
   for i in $TARGETS ; do
     N=$((N+1))
-    OUTFILE=$(start_subtest probe_targets $N "send to $i")
+    OUTFILE=$(start_subtest probe_targets "$kind" $N "send to $i")
     R=0
     S=$(findsrc "$i")
     snping -c5 "$i" >"$OUTFILE" && ONESUCCESS=1 || R=$?
-    end_subtest probe_targets $N "$S" "$i" "$OUTFILE" "$R"
+    end_subtest probe_targets "$kind" $N "$S" "$i" "$OUTFILE" "$R"
   done
   [ -z "$ONESUCCESS" ] && fail_all
   end_test
@@ -205,13 +209,13 @@ spoof_targets() {
 
   start_test spoof_packets "send spoofed packets"
   N=0
-  for i in $TARGETS ; do for j in $(get_spoofed_sources "$i") ; do
+  for i in $TARGETS ; do get_spoofed_sources "$i" | while read -r j j_id ; do
     N=$((N+1))
     (
-      OUTFILE=$(start_subtest spoof_packets $N "send spoofed from $j to $i")
+      OUTFILE=$(start_subtest spoof_packets "$j_id" $N "send spoofed from $j to $i")
       R=0
       snping -c5 -S "$j" "$i" >"$OUTFILE" || R=$?
-      end_subtest spoof_packets $N "$j" "$i" "$OUTFILE" "$R"
+      end_subtest spoof_packets "$j_id" $N "$j" "$i" "$OUTFILE" "$R"
     )& sleep 1
   done ; done
   wait
@@ -232,10 +236,10 @@ tracefilter_targets() {
     for i in 1 2 3 ; do
       N=$((N+1))
       (
-        OUTFILE=$(start_subtest tracefilter $N "nping traceroute from $sip to $dip, dist=$dist")
+        OUTFILE=$(start_subtest tracefilter "$dist" $N "nping traceroute from $sip to $dip, dist=$dist")
         R=0
         snping -c$dist -tr -S "$sip" "$dip" >"$OUTFILE" || R=$?
-        end_subtest tracefilter $N "$sip" "$dip" "$OUTFILE" "$R"
+        end_subtest tracefilter "$dist" $N "$sip" "$dip" "$OUTFILE" "$R"
       )& sleep 1
     done
   done
@@ -244,18 +248,19 @@ tracefilter_targets() {
 }
 
 traceroute_targets() {
-  local OUTFILE N i
+  local OUTFILE N i kind
 
-  start_test "traceroute_$1" "standard traceroute to targets"
+  kind="$1"
+  start_test "traceroute" "standard traceroute to targets"
   N=0
   for i in $TARGETS ; do
     N=$((N+1))
     (
-      OUTFILE=$(start_subtest traceroute $N "target $i")
+      OUTFILE=$(start_subtest traceroute "$kind" $N "target $i")
       R=0
       S=$(findsrc "$i")
       straceroute "$i" >"$OUTFILE" || R=$?
-      end_subtest traceroute $N "$S" "$i" "$OUTFILE" "$R"
+      end_subtest traceroute "$kind" $N "$S" "$i" "$OUTFILE" "$R"
     )& sleep 1
   done
   wait
