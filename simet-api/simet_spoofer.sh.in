@@ -37,9 +37,10 @@ KEY="simet982411 testtest"
 TARGETXOR=1
 TARGETS=
 TFDIST=10
+SYNCMODE=@SMALLMEMORY@
 
 usage() {
-  echo "$0 [--help][-h] [--fail-silently] [--key <key>] [--tracefilter-same-source] [--tracefilter-distance <distance>] <target>..." >&2
+  echo "$0 [--help][-h] [--single-threaded | --multi-threaded] [--fail-silently] [--key <key>] [--tracefilter-same-source] [--tracefilter-distance <distance>] <target>..." >&2
   exit 0
 }
 
@@ -66,6 +67,12 @@ while [ $# -gt 0 ] ; do
       shift
       TFDIST="$1"
       [ "$TFDIST" -gt 0 ] || RC=2 abend "--tracefilter distance must be a number higher than zero"
+      ;;
+    --single-threaded)
+      SYNCMODE=1
+      ;;
+    --multi-threaded)
+      SYNCMODE=0
       ;;
     --*)
       RC=2 abend "Unknown command line option $1"
@@ -173,6 +180,15 @@ findsrc() {
   :
 }
 
+condwait() {
+  if [ $SYNCMODE -ne 0 ] ; then
+    wait || return $?
+  else
+    sleep 1
+  fi
+  :
+}
+
 # Returns selection of sources for spoofing and subtest id
 # $1 - destination
 get_spoofed_sources() {
@@ -216,7 +232,7 @@ spoof_targets() {
       R=0
       snping -c5 -S "$j" "$i" >"$OUTFILE" || R=$?
       end_subtest spoof_packets "$j_id" $N "$j" "$i" "$OUTFILE" "$R"
-    )& sleep 1
+    )& condwait
   done ; done
   wait
   end_test
@@ -240,7 +256,7 @@ tracefilter_targets() {
         R=0
         snping -c$dist -tr -S "$sip" "$dip" >"$OUTFILE" || R=$?
         end_subtest tracefilter "$dist" $N "$sip" "$dip" "$OUTFILE" "$R"
-      )& sleep 1
+      )& condwait
     done
   done
   wait
@@ -261,7 +277,7 @@ traceroute_targets() {
       S=$(findsrc "$i")
       straceroute "$i" >"$OUTFILE" || R=$?
       end_subtest traceroute "$kind" $N "$S" "$i" "$OUTFILE" "$R"
-    )& sleep 1
+    )& condwait
   done
   wait
   end_test
