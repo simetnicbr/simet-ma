@@ -4,17 +4,26 @@ SIMET-MA Docker instructions/examples
 The toplevel Makefile.am may have "docker*" targets that are examples of
 how to use simet-ma with docker.
 
+docker/Dockerfile:
+    A simple example of how to *build* from source
+
+docker/Dockerfile.reference-container:
+    The SIMET-MA container for a SIMET-MA measurement node hosted
+    in a docker container.  It auto-updates itself, and uses reference
+    production packages from NIC.br instead of building new ones.
+
 
 To build simet-ma:
-docker build -t simet-ma:local -f docker/Dockerfile .
+docker build -t simet-ma:devel -f docker/Dockerfile .
+docker build -t simet-ma:local -f docker/Dockerfile.reference-container .
 
-This will create a simet-ma:local image with simet-ma installed inside.
-Some environment variables may be set to create images with an specific
-purpose, please refer to the Dockerfile for details.
+* Note that you must give the container some sort of network access for it to
+  work (it downloads the build environment) so you might need to add "--network
+  host" or other network access configurantion to the docker line.
 
-Note that you must give the container some sort of network access for it
-to work (it downloads the build environment) so you might need to add
---network host or other network access configurantion to the docker line.
+This will create a simet-ma:local (or simet-ma:devel) image with simet-ma
+installed inside.  Some environment variables may be set to create images with
+an specific purpose, please refer to the Dockerfiles for details.
 
 
 To run the full simet-ma agent, with identity (agent-id, group-id, vlabel)
@@ -39,8 +48,8 @@ docker exec -u nicbr-simet:nicbr-simet -it <simet-ma:local container> \
             /opt/simet/bin/simet-ma_periodic.sh <options>
 
 
-CALIBRATION SETUP
-=================
+CALIBRATION SETUP (internal)
+============================
 
 Using simet-runner/test/services-example.json, prepare a services.json
 file that points to the local measurement peer behind the calibration rig.
@@ -55,8 +64,8 @@ examples above, so that means one should add a services.json and
 simet-ma.conf to the root of that volume.
 
 
-VIRTUAL LABEL SETUP
-===================
+VIRTUAL LABEL SETUP (internal)
+==============================
 
 It is possible to force a virtual label for testing purposes when
 initially creating a simet-ma container.  This is generally unsafe, do not

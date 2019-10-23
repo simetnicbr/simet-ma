@@ -32,6 +32,22 @@
 
 
 set -e
+export DEBIAN_FRONTEND=noninteractive
+
+# update the system packages at start-up
+# (security updates and SIMET engine updates, only)
+#
+# get a full container update to fix issues with the
+# container scripts themselves!
+echo "SIMET-MA: checking for engine and security updates..."
+apt-get -qq update && unattended-upgrades || true
+
+# create virtual label for this instance
+VLABEL=$(/opt/simet/bin/simet_create_vlabel.sh) || VLABEL=
+[ -n "$VLABEL" ] && {
+	echo "SIMET-MA: agent virtual label is: $VLABEL" >&2
+	logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
+}
 
 INETUP=/opt/simet/bin/inetupc
 REGISTER=/opt/simet/bin/simet_register_ma.sh
@@ -50,9 +66,15 @@ BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 # first, ensure MA is registered
 [ "$SIMET_REFRESH_AGENTID" = "true" ] && \
 	rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE"
-sudo -u $USER -g $USER -H -n $REGISTER --boot
+
+echo "SIMET-MA: attempting agent registration..."
+while [ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] ; do
+	sudo -u $USER -g $USER -H -n $REGISTER || {
+		echo "SIMET-MA: agent registration failed, will retry in 120 seconds"
+		sleep 120
+	}
+done
 echo "SIMET-MA: agent-id=$(cat $AGENT_ID_FILE)"
-echo
 
 # build inetup command, try to drop priviledges
 INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
@@ -70,16 +92,18 @@ INETUPCMD="sudo -u $USER -g $USER -H -n"
 	service simet-lmapd start
 }
 
-[ "$SIMET_INETUP_DISABLE" != "true" ] && [ -z "$SIMET_RUN_TEST" ] && {
-	echo "SIMET-MA: will execute the Internet Availability measurement (inetup)..."
-	[ -n "$INETUP" ] && exec $INETUPCMD $INETUP $INETUP_ARGS $SIMET_INETUP_SERVER
-	# not reached if inetup is run.
-}
-
-# We are not running inetup, so do a test run instead
-if [ -n "$SIMET_RUN_TEST" ] ; then
-	SIMET_RUN_TEST="--test $SIMET_RUN_TEST"
+if [ -z "$SIMET_RUN_TEST" ] ; then
+	echo "SIMET-MA: main loop start."
+	while true; do
+		if [ "$SIMET_INETUP_DISABLE" != "true" ] && [ -n "$INETUP" ] ; then
+			$INETUPCMD $INETUP $INETUP_ARGS $SIMET_INETUP_SERVER
+			sleep 1
+		else
+			sleep 365d
+		fi
+	done
+else
+	# We are not running inetup, so do a test run instead
+	exec $SIMETRUN --test $SIMET_RUN_TEST "$@"
 fi
-
-exec $SIMETRUN $SIMET_RUN_TEST "$@"
 :

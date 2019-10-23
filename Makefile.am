@@ -36,19 +36,28 @@ bin-dist: all
 
 
 # Docker examples
-# run docker-build first, to get the image.
-docker-build:
-	test -r docker/Dockerfile
-	docker build --network host -t simet-ma:local -f docker/Dockerfile .
+# run docker-build or docker-build-devel first, to get the image.
+docker-build-devel:
+	@test -r docker/Dockerfile
+	docker build --network host -t simet-ma:devel -f docker/Dockerfile .
+	@echo Unofficial image built and tagged as simet-ma:devel.
+	@echo To run the unofficial image you just built, do "make docker-run-devel"
 
-docker-simetma:
+docker-build:
+	@test -r docker/Dockerfile.reference-container
+	docker build --network host -t simet-ma:local -f docker/Dockerfile.reference-container .
+	@echo Image built from official sources and tagged as simet-ma:local.
+	@echo To run the image, do "make docker-run-simetma" or run it directly:
+	@echo docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
+
+docker-run-simetma:
 	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
 
-docker-twamp:
+docker-run-twamp:
 	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \
 		-e SIMET_RUN_TEST=TWAMP simet-ma:local
 
-docker-tcpbw:
+docker-run-tcpbw:
 	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \
 		-e SIMET_RUN_TEST=TCPBW simet-ma:local
 

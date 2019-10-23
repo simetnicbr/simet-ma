@@ -1,0 +1,76 @@
+# Creates a container image for a SIMET-MA node (with automatic updates)
+# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+##
+##  Runtime image
+##
+##  This runtime image uses the official Debian packages for simet-ma,
+##  and keeps itself up-to-date using the "unattended-upgrades"
+##  functionality.
+##
+##  Built it with:
+##  docker build --network host -t simet-ma:local \
+##               -f docker/Dockerfile.reference-container
+##
+##  Run it with:
+##  docker run --init -dt --rm --network host \
+##             --mount source=simet-ma-id,target=/opt/simet/etc/simet \
+##             simet-ma:local
+##
+##  The image will auto-update itself when run, and periodically.
+##  The persistent volume ("simet-ma-id") allows for container restarts
+##  and credential persistence.
+
+ARG  DISTRO=debian:buster
+FROM $DISTRO
+LABEL description="SIMET2 Measurement Agent (measurement node)"
+LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
+
+#====== no system services may start (begin) ======
+## We need to run this section under a policy-rc.d that refuses service
+## starts, we don't want the simet-ma initscript/unit to run!
+## (service start is refused by default in the images we use as base)
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade ; \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install sudo procps rsyslog logrotate lsb-release
+
+COPY debian/etc.apt/* /etc/apt/
+COPY debian/etc.apt.conf.d/* /etc/apt/apt.conf.d/
+COPY debian/etc.apt.sources.list.d/* /etc/apt/sources.list.d/
+COPY docker/helpers/* /usr/local/bin/
+# Prepare container and install simet-ma for $DISTRO
+RUN /usr/local/bin/simet-ma-prepare.sh && rm /usr/local/bin/simet-ma-prepare.sh
+
+#====== no system services may start (end) ======
+
+RUN rm -fr /usr/sbin/policy-rc.d /usr/local/bin/*
+COPY docker/simet-ma.foreground.sh /opt/simet/bin/
+
+VOLUME /opt/simet/etc/simet
+
+##
+## Start service upon container run.
+##
+
+# Meaningful environment variables one might want to hardcode in the image
+# for specific needs.  Please refer to simet-ma.foreground.sh for details
+ENV SIMET_INETUP_DISABLE=
+ENV SIMET_CRON_DISABLE=
+ENV SIMET_REFRESH_AGENTID=
+ENV SIMET_RUN_TEST=
+
+ENTRYPOINT [ "/opt/simet/bin/simet-ma.foreground.sh" ]
