@@ -25,60 +25,91 @@ SMAUSER=nicbr-simet
 ## Hook system
 ##
 [ -r "$0.hooks" ] &&
-	. "$0.hooks"
+  . "$0.hooks"
 
 is_call_implemented() {
-	command -V "$1" > /dev/null 2>&1
+  command -V "$1" > /dev/null 2>&1
 }
 call() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}_override" ; then
-		"${cmd}_override" "$@"
-        else
-		"${cmd}" "$@"
-	fi
+  cmd="$1"
+  shift
+  if is_call_implemented "${cmd}_override" ; then
+    "${cmd}_override" "$@"
+  else
+    "${cmd}" "$@"
+  fi
 }
 call_hook() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}" ; then
-		"${cmd}" "$@"
-	fi
+  cmd="$1"
+  shift
+  if is_call_implemented "${cmd}" ; then
+    "${cmd}" "$@"
+  fi
 }
 
 ##
 
-system_prepare() {
-  ls /etc/apt/sources.list.d/*template >/dev/null 2>&1 || {
-    echo "Missing /etc/apt/sources.list.d/*template" >&2
-    exit 1
-  }
-  command -v lsb_release >/dev/null || {
-    echo "Missing lsb-release package" >&2
-    exit 1
-  }
+INSTDIR=
+# Handle command line
+while [ $# -gt 0 ] ; do
+  case "$1" in
+    --localdebs)
+      shift
+      INSTDIR="$1"
+      [ -d "$1" ] || {
+        echo "$0: not a directory: $INSTDIR" >&2
+        exit 1
+      }
+      ;;
+    *)
+      echo "$0: Unknown command line argument/option $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
-  CODENAME=$( lsb_release -sc )
-  DISTRO=$( lsb_release -si | tr A-Z a-z )
-  sed -e "s/@codename@/${CODENAME}/g" -e "s/@distro@/${DISTRO}/g" \
-         < /etc/apt/sources.list.d/*.template \
-         > /etc/apt/sources.list.d/nicbr-simet.apt.source.list
-  rm -f /etc/apt/sources.list.d/*.template
-  echo "$0: enabled required NIC.br package repositories for ${CODENAME} / ${DISTRO}" >&2
+system_prepare() {
+  [ -z "$INSTDIR" ] && {
+    ls /etc/apt/sources.list.d/*template >/dev/null 2>&1 || {
+      echo "Missing /etc/apt/sources.list.d/*template" >&2
+      exit 1
+    }
+    command -v lsb_release >/dev/null || {
+      echo "Missing lsb-release package" >&2
+      exit 1
+    }
+
+    CODENAME=$( lsb_release -sc )
+    DISTRO=$( lsb_release -si | tr A-Z a-z )
+    sed -e "s/@codename@/${CODENAME}/g" -e "s/@distro@/${DISTRO}/g" \
+           < /etc/apt/sources.list.d/*.template \
+           > /etc/apt/sources.list.d/nicbr-simet.apt.source.list
+    rm -f /etc/apt/sources.list.d/*.template
+    echo "$0: enabled required NIC.br package repositories for ${CODENAME} / ${DISTRO}" >&2
+  }
 
   echo "$0: updating list of available packages..." >&2
   apt-get -qq update
 }
 
 simet_ma_install() {
-  echo "$0: updating system components and installing simet-ma..." >&2
-  apt-get -q -y dist-upgrade \
-    && apt-get -q -y install --install-recommends simet-ma \
-    && return 0
+  echo "$0: updating system components..." >&2
+  apt-get -q -y dist-upgrade
 
-  echo "$0: failed to install simet-ma" >&2
-  exit 1
+  if [ -z "$INSTDIR" ] ; then
+    echo "$0: installing simet-ma..." >&2
+    apt-get -q -y install -o "APT::Install-Recommends=true" simet-ma
+  else
+    echo "$0: installing all debs from $INSTDIR..." >&2
+    if apt-get -y install -o "APT::Install-Recommends=true" "$INSTDIR"/*deb ; then
+        apt-get -y -f install -o "APT::Install-Recommends=true"
+    else
+        dpkg -i "$INSTDIR"/*deb
+        apt-get -y -f install -o "APT::Install-Recommends=true"
+        dpkg -i "$INSTDIR"/*deb
+    fi
+  fi
 }
 
 simet_ma_setup() {
@@ -87,6 +118,13 @@ simet_ma_setup() {
   rm -f /opt/simet/etc/simet/agent-id* /opt/simet/etc/simet/agent*.jwt \
         /opt/simet/etc/simet/agent-vlabel \
         /opt/simet/etc/simet/lmap/agent-id.json /opt/simet/etc/simet/lmap/group-id.json
+
+  # On the development image, do not auto-update the debs
+  [ -z "$INSTDIR" ] || {
+    echo "$0: disabling SIMET-MA auto-update (local debs install) ..." >&2
+    sed -i -e '/^deb[[:blank:]]/ s/^/#/' /etc/apt/sources.list.d/nicbr-simet*
+    apt-get -y -qq update || :
+  }
 }
 
 call system_prepare \
