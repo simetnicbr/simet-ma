@@ -30,24 +30,54 @@
 # Command line:
 #   will be passed as-is to simet-runner.
 
-
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
+##
+## Hook system
+##
+[ -r "$0.hooks" ] &&
+	. "$0.hooks"
+
+is_call_implemented() {
+	command -V "$1" > /dev/null 2>&1
+}
+call() {
+	cmd="$1"
+	shift
+	if is_call_implemented "${cmd}_override" ; then
+		"${cmd}_override" "$@"
+        else
+		"${cmd}" "$@"
+	fi
+}
+call_hook() {
+	cmd="$1"
+	shift
+	if is_call_implemented "${cmd}" ; then
+		"${cmd}" "$@"
+	fi
+}
+
+call_hook simet_ma_docker_ep_init
+
 # update the system packages at start-up
 # (security updates and SIMET engine updates, only)
-#
-# get a full container update to fix issues with the
-# container scripts themselves!
-echo "SIMET-MA: checking for engine and security updates..."
-apt-get -qq update && unattended-upgrades || true
+simet_ma_docker_ep_update() {
+	echo "SIMET-MA: checking for engine and security updates..."
+	apt-get -qq update && unattended-upgrades || true
+}
+call simet_ma_docker_ep_update
 
 # create virtual label for this instance
-VLABEL=$(/opt/simet/bin/simet_create_vlabel.sh) || VLABEL=
-[ -n "$VLABEL" ] && {
-	echo "SIMET-MA: agent virtual label is: $VLABEL" >&2
-	logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
+simet_ma_docker_vlabel_setup() {
+	VLABEL=$(/opt/simet/bin/simet_create_vlabel.sh) || VLABEL=
+	[ -n "$VLABEL" ] && {
+		echo "SIMET-MA: agent virtual label is: $VLABEL" >&2
+		logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
+	}
 }
+call simet_ma_docker_vlabel_setup
 
 INETUP=/opt/simet/bin/inetupc
 REGISTER=/opt/simet/bin/simet_register_ma.sh
@@ -63,18 +93,23 @@ LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-/opt/simet/etc/simet/lmap/agent-id.json}
 SIMET_INETUP_SERVER=${SIMET_INETUP_SERVER:-simet-monitor-inetup.simet.nic.br}
 BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 
-# first, ensure MA is registered
-[ "$SIMET_REFRESH_AGENTID" = "true" ] && \
-	rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE"
+call_hook simet_ma_docker_env_setup
 
-echo "SIMET-MA: attempting agent registration..."
-while [ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] ; do
-	sudo -u $USER -g $USER -H -n $REGISTER || {
-		echo "SIMET-MA: agent registration failed, will retry in 120 seconds"
-		sleep 120
-	}
-done
-echo "SIMET-MA: agent-id=$(cat $AGENT_ID_FILE)"
+# first, ensure MA is registered
+simet_ma_docker_register() {
+	[ "$SIMET_REFRESH_AGENTID" = "true" ] && \
+		rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE"
+
+	echo "SIMET-MA: attempting agent registration..."
+	while [ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] ; do
+		sudo -u $USER -g $USER -H -n $REGISTER || {
+			echo "SIMET-MA: agent registration failed, will retry in 120 seconds"
+			sleep 120
+		}
+	done
+	echo "SIMET-MA: agent-id=$(cat $AGENT_ID_FILE)"
+}
+call simet_ma_docker_register
 
 # build inetup command, try to drop priviledges
 INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"

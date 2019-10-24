@@ -106,7 +106,7 @@ RUN if DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; then \
     fi
 
 RUN rm -fr /tmp/debs /usr/sbin/policy-rc.d
-COPY docker/*.sh /opt/simet/bin/
+COPY docker/*.sh* /opt/simet/bin/
 
 # We want to make sure these will not be reused unless persisted,
 # i.e. it must not be present in the image... but the deb package

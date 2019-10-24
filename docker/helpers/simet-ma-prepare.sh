@@ -21,6 +21,34 @@ set -o pipefail
 export DEBIAN_FRONTEND=noninteractive
 SMAUSER=nicbr-simet
 
+##
+## Hook system
+##
+[ -r "$0.hooks" ] &&
+	. "$0.hooks"
+
+is_call_implemented() {
+	command -V "$1" > /dev/null 2>&1
+}
+call() {
+	cmd="$1"
+	shift
+	if is_call_implemented "${cmd}_override" ; then
+		"${cmd}_override" "$@"
+        else
+		"${cmd}" "$@"
+	fi
+}
+call_hook() {
+	cmd="$1"
+	shift
+	if is_call_implemented "${cmd}" ; then
+		"${cmd}" "$@"
+	fi
+}
+
+##
+
 system_prepare() {
   ls /etc/apt/sources.list.d/*template >/dev/null 2>&1 || {
     echo "Missing /etc/apt/sources.list.d/*template" >&2
@@ -61,9 +89,13 @@ simet_ma_setup() {
         /opt/simet/etc/simet/lmap/agent-id.json /opt/simet/etc/simet/lmap/group-id.json
 }
 
-system_prepare \
-&& simet_ma_install \
-&& simet_ma_setup \
+call system_prepare \
+&& call_hook system_prepare_hook \
+&& call_hook simet_ma_preinst_hook \
+&& call simet_ma_install \
+&& call_hook simet_ma_postinst_hook \
+&& call simet_ma_setup \
+&& call_hook simet_ma_postsetup_hook \
 && {
   echo "$0: SIMET-MA installation into container successfull" >&2
   exit 0
