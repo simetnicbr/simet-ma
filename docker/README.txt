@@ -14,16 +14,21 @@ docker/Dockerfile.reference-container:
 
 
 To build simet-ma:
-docker build -t simet-ma:devel -f docker/Dockerfile .
-docker build -t simet-ma:local -f docker/Dockerfile.reference-container .
+docker build -t simet-ma:local -f docker/Dockerfile .
+docker build -t simet-ma:nicbr -f docker/Dockerfile.reference-container .
 
 * Note that you must give the container some sort of network access for it to
-  work (it downloads the build environment) so you might need to add "--network
-  host" or other network access configurantion to the docker line.
+  work (it downloads the build environment, and in the "reference-container"
+  case, the official binaries for simet-ma and simet-lmad)) so you might need
+  to add "--network host" or other network access configurantion to the docker
+  line.
 
-This will create a simet-ma:local (or simet-ma:devel) image with simet-ma
+This will create a simet-ma:local (or simet-ma:nicbr) image with simet-ma
 installed inside.  Some environment variables may be set to create images with
 an specific purpose, please refer to the Dockerfiles for details.
+
+NOTE: the "reference-container" version *auto-upgrades* the simet-ma components
+inside it.
 
 
 To run the full simet-ma agent, with identity (agent-id, group-id, vlabel)
