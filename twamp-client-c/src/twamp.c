@@ -62,7 +62,6 @@ int twamp_run_client(TWAMPParameters param) {
     TWAMPReport * report = twamp_report_init();
     if (!report)
         return SEXIT_OUTOFRESOURCE;
-    report->device_id = param.device_id ? param.device_id : "(unknown)";
     report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_max);
     report->family = param.family;
     report->host = param.host;
