@@ -36,8 +36,6 @@ typedef struct twamp_result {
 } TWAMPResult;
 
 typedef struct twamp_report {
-    const char *device_id;
-
     const char *host;
     const char *address;
     unsigned int serverPort;

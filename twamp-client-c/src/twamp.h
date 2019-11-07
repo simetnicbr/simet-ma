@@ -31,7 +31,6 @@
 
 /* TWAMP parameters struct */
 typedef struct twamp_parameters {
-    const char *device_id;
     const char *host;
     const char *port;
     int family;

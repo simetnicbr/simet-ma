@@ -50,7 +50,7 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-p <service port>] [-t <timeout>] "
-        "[-c <packet count>] [-i <interpacket interval>] [-T <packet discard timeout>] [-d <device id>] "
+        "[-c <packet count>] [-i <interpacket interval>] [-T <packet discard timeout>] "
         "<server>\n", p);
     if (mode) {
         fprintf(stderr, "\n"
@@ -64,7 +64,6 @@ static void print_usage(const char * const p, int mode)
             "\t-c\tnumber of packets to transmit per session\n"
             "\t-i\ttime in microseconds between each packet (lower bound)\n"
             "\t-T\ttime in microseconds before an unreceived packet is considered lost\n"
-            "\t-d\tdevice identification string to send to the TWAMP server\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\nserver: hostname or IP address of the TWAMP server\n\n");
     }
@@ -117,7 +116,6 @@ static void sanitize_std_fds(void)
 
 int main(int argc, char **argv)
 {
-    char *device_id = NULL;
     char *host = NULL;
     char *port = "862";
     int family = 0;
@@ -131,7 +129,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVp:t:c:T:i:d:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVp:t:c:T:i:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -166,9 +164,6 @@ int main(int argc, char **argv)
         case 'T':
             packet_timeout_us = atol(optarg);
             break;
-        case 'd':
-            device_id = optarg;
-            break;
         case 'h':
             print_usage(argv[0], 1);
             /* fall-through */ /* silence bogus warning */
@@ -186,7 +181,6 @@ int main(int argc, char **argv)
     host = argv[optind];
 
     TWAMPParameters param;
-    param.device_id = device_id;
     param.host = host;
     param.port = port;
     param.family = family;
