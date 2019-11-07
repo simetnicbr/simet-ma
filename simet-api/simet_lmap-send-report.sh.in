@@ -79,7 +79,7 @@ if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] || [ ! -r "$LMAP_AGENT_FILE" ] ; then
 fi
 
 OUTFILE=$(mktemp -q -t simet-report.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
-(cd .. && $LMAPCTL -i json -j report) > $OUTFILE || abend "failed to render report"
+(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > $OUTFILE || abend "failed to render report"
 send_report_to_collector $COLLECTORS || abend "failed to submit report to collector"
 
 rm -f "$OUTFILE"
