@@ -1,3 +1,14 @@
+simet-ma (0.15.1) unstable; urgency=medium
+
+  * simet-ma version 0.15.1
+  * control: depend on simet-lmapd version 0.13.3 or newer, for
+    the ma-report-result-event-time report fix
+  * lmapd: expose simet.nic.br_twampc for SIMET-AS use
+  * twampc: remove the dead "-d device_id" parameter
+  * lmap report helpers: render reports in UTC
+
+ -- SIMET <medicoes@simet.nic.br>  Fri, 08 Nov 2019 12:51:24 -0300
+
 simet-ma (0.15.0) unstable; urgency=medium
 
   * simet-ma version 0.15.0
