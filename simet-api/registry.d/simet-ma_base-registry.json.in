@@ -5,6 +5,7 @@
   { "name":"simet.nic.br_reschedule","version":"@PACKAGEVERSION@","program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
   { "name":"simet.nic.br_geolocation","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_geolocation.sh" },
   { "name":"simet.nic.br_basic-tests","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet-ma_run.sh" },
+  { "name":"simet.nic.br_twampc","version":"@PACKAGEVERSION@","program":"@BINDIR@/twampc" },
   { "name":"simet.nic.br_internet-availability","version":"@PACKAGEVERSION@","program":"@BINDIR@/inetupc" },
   { "name":"simet.nic.br_report","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_lmap-send-report.sh" },
   { "name":"simet.nic.br_nop","version":"@PACKAGEVERSION@","program":"/bin/true" },
