@@ -30,6 +30,7 @@ typedef struct measure_context {
     char *token;
     char *sessionid;
     int family;
+    int report_mode;
     unsigned int timeout_test;
     unsigned int numstreams;
     unsigned int test_duration;

@@ -95,7 +95,7 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
-	    "[-d <agent-id>] [-j <token> ] "
+	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>]"
 	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
@@ -110,6 +110,7 @@ static void print_usage(const char * const p, int mode)
 		"\t-c\tnumber of desired concurrent streams\n"
 		"\t-d\tmeasurement agent id\n"
 		"\t-j\taccess credentials\n"
+		"\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -121,6 +122,7 @@ int main(int argc, char **argv) {
     char *control_url = NULL;
     char *token = NULL;
     int family = 6;
+    int report_mode = 0;
     int timeout_test = 30;
     int test_lenght = 11;
     int numstreams = 5;
@@ -130,7 +132,7 @@ int main(int argc, char **argv) {
 
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:")) != -1) {
         switch (option) {
         case 'v':
             if (log_level < 1)
@@ -164,6 +166,9 @@ int main(int argc, char **argv) {
 	    break;
 	case 'j':
 	    token = optarg;
+	    break;
+	case 'r':
+	    report_mode = atoi(optarg);
 	    break;
 	case 'h':
 	    print_usage(progname, 1);
@@ -203,6 +208,7 @@ int main(int argc, char **argv) {
 	.control_url = control_url,
 	.token = token,
 	.family = family,
+	.report_mode = report_mode,
 	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : timeout_test,
 	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : numstreams,
 	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : test_lenght,
