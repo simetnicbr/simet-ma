@@ -55,9 +55,9 @@ CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 
 # LMAP wrapped tasklet links we want to create
 if SIMETBOX_BUILD
-tasklets = v__fping -help__traceroute -help__traceroute6 -help__ping -help__ping6 -help__nslookup v__drill v__dig
+tasklets = v__fping -help_UDP-traceroute_traceroute -help_UDP-traceroute_traceroute6 -help__ping -help__ping6 -help__nslookup v__drill v__dig
 else
-tasklets = v__fping V__traceroute V__traceroute6 V__ping V__ping6 version__nslookup v__drill v__dig
+tasklets = v__fping V_UDP-traceroute_traceroute V_UDP-traceroute_traceroute6 V__ping V__ping6 version__nslookup v__drill v__dig
 endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh
