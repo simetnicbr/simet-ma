@@ -1,3 +1,13 @@
+simet-ma (0.15.2) unstable; urgency=medium
+
+  * simet-ma version 0.15.2
+  * twampc, tcpbwc: add -r option for simet-lmapd compatibility
+    since simet-lmapd and simet-runner have different output
+    format requirements at the moment
+  * lmapd: use twampc -r1 for simet.nic.br_twampc
+
+ -- SIMET <medicoes@simet.nic.br>  Mon, 11 Nov 2019 09:25:26 -0300
+
 simet-ma (0.15.1) unstable; urgency=medium
 
   * simet-ma version 0.15.1
