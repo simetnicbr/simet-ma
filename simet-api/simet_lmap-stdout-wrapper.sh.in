@@ -23,10 +23,12 @@
 # $1: exec
 #      $2 - tool name to execute (searches path)
 #      $3 - tool commands to get a version string out of it
-#      $4.. - tool parameters
+#      $4 - metric field, or - for default
+#      $5.. - tool parameters
 # $1: wrap
 #      $2 - tool name that was executed and its version
-#      $3.. - tool parameters used when the tool was executed
+#      $3 - metric field, or - for default
+#      $4.. - tool parameters used when the tool was executed
 
 set -e
 set -o pipefail
@@ -39,32 +41,40 @@ abend() {
     exit 1
 }
 
+metric_name() {
+    if [ $# -eq 0 ] || [ -z "$1" ] || [ "$1" = "-" ] ; then
+        echo "urn:ietf:metrics:perf:Priv_SPMonitor_Active_stdout-output__Multiple_Raw"
+    else
+        echo "urn:ietf:metrics:perf:Priv_SPMonitor_Active_$1__Multiple_Raw"
+    fi
+}
+
 do_wrap() {
-    cat <<- "PROLOGEOF"
-	{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Active_stdout-output__Multiple_Raw"}],
-	 "column":["output_line"],"row":[
-	PROLOGEOF
+    echo '{"function":[{"uri":' "\"$(metric_name $1)\"" '}],'
+    echo ' "column":["output_line"],"row":['
+    shift
     { [ $# -gt 0 ] && { echo "$1" ; shift ; echo "$*" ; } ; cat ; } |
 	sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/^/{"value":["/' -e '$ s/$/"]}/' -e '$! s/$/"]},/' -e 's/[[:cntrl:]]*//g'
-    cat <<- "EPILOGEOF"
-	]}
-	EPILOGEOF
+    echo ']}'
     :
 }
 
+METRIC=
 if [ "$1" = "exec" ] ; then
     shift ; TOOL=$(command -v $1) || abend "command $1 not found in PATH $PATH"
     shift ; TOOLVER=
     [ $# -gt 0 ] && { TOOLVER=$( { $TOOL $1 2>&1 || true ; } | sed -e '/^[[:blank:]]*$/ d' | sed -e '1 q' ) ; shift ; }
+    [ $# -gt 0 ] && { METRIC=$1 ; shift ; }
     RC=0
-    $TOOL "$@" | do_wrap "$TOOL ($TOOLVER)" "$*" || RC=$?
+    $TOOL "$@" | do_wrap "$METRIC" "$TOOL ($TOOLVER)" "$*" || RC=$?
     exit $RC
 fi
 
 if [ $# -ge 2 ] && [ "$1" = "wrap" ] ; then
     shift
+    [ $# -gt 0 ] && { METRIC=$1 ; shift ; }
 elif [ $# -ne 0 ] ; then
     abend "bad command line arguments"
 fi
 
-do_wrap "$@"
+do_wrap "$METRIC" "$@"

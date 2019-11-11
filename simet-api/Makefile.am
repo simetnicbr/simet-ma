@@ -55,9 +55,9 @@ CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 
 # LMAP wrapped tasklet links we want to create
 if SIMETBOX_BUILD
-tasklets = v_fping -help_traceroute -help_traceroute6 -help_ping -help_ping6 -help_nslookup v_drill v_dig
+tasklets = v__fping -help__traceroute -help__traceroute6 -help__ping -help__ping6 -help__nslookup v__drill v__dig
 else
-tasklets = v_fping V_traceroute V_traceroute6 V_ping V_ping6 version_nslookup v_drill v_dig
+tasklets = v__fping V__traceroute V__traceroute6 V__ping V__ping6 version__nslookup v__drill v__dig
 endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh
@@ -73,7 +73,7 @@ registry.d/simet-ma_tasklet-registry.json :
 	{ echo '{"ietf-lmap-control:lmap":{"capabilities":{' ; \
 	echo ' "tasks":{"task":[' ; \
 	{ for i in $(tasklets) ; do \
-		tn="simet.nic.br_tool_$${i#*_}" ; \
+		tn1="$${i#*_}" ; tn="simet.nic.br_tool_$${tn1#*_}" ; \
 		pn="lmap-task-$${i}" ; \
 		echo "  {\"name\":\"$${tn}\",\"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
 	done ; } | sed -e '$$ s/,$$//' ; \
@@ -83,7 +83,7 @@ registry.d/simet-ma_tasklet-registry.json :
 config.d/simet-ma_tasklet-config.json :
 	{ echo '{"ietf-lmap-control:lmap":{"tasks":{"task":[' ; \
 	{ for i in $(tasklets) ; do \
-		tn="simet.nic.br_tool_$${i#*_}" ; \
+		tn1="$${i#*_}" ; tn="simet.nic.br_tool_$${tn1#*_}" ; \
 		pn="lmap-task-$${i}" ; \
 		echo "  {\"name\":\"$${tn}\"," ; \
 		echo "   \"tag\":[\"simet.nic.br_engine-name:$(simetenginename)\"," ; \
