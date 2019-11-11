@@ -336,14 +336,19 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
     json_object_array_add(jo, jres_tbl_content);
 
-    /* we need to serialize the root array, but we don't want to output its delimiters [ ],
-     * and we need to omit the "," after the last member of the array */
-    int al = json_object_array_length(jo);
-    for (int i = 0; i < al ; i++) {
-        fprintf(stdout, "%s%s",
-                  json_object_to_json_string_ext(json_object_array_get_idx(jo, i),
-                                      JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
-                  (i + 1 < al) ? ",\n" : "\n");
+    if (!param->report_mode) {
+        /* we need to serialize the root array, but we don't want to output its delimiters [ ],
+         * and we need to omit the "," after the last member of the array */
+        int al = json_object_array_length(jo);
+        for (int i = 0; i < al ; i++) {
+            fprintf(stdout, "%s%s",
+                      json_object_to_json_string_ext(json_object_array_get_idx(jo, i),
+                                          JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
+                      (i + 1 < al) ? ",\n" : "\n");
+        }
+    } else {
+        fprintf(stdout, "%s\n", json_object_to_json_string_ext(jo,
+                                JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
     }
     fflush(stdout);
 

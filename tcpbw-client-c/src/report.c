@@ -319,14 +319,19 @@ int tcpbw_report(struct tcpbw_report *report,
     if (report_obj)
         json_object_array_add(rp->root, report_obj);
 
-    /* we need to serialize the root array, but we don't want to output its delimiters [ ],
-     * and we need to omit the "," after the last member of the array */
-    int al = json_object_array_length(rp->root);
-    for (int i = 0; i < al ; i++) {
-        fprintf(stdout, "%s%s",
-                  json_object_to_json_string_ext(json_object_array_get_idx(rp->root, i),
-                                      JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
-                  (i + 1 < al) ? ",\n" : "\n");
+    if (!ctx->report_mode) {
+        /* we need to serialize the root array, but we don't want to output its delimiters [ ],
+         * and we need to omit the "," after the last member of the array */
+        int al = json_object_array_length(rp->root);
+        for (int i = 0; i < al ; i++) {
+            fprintf(stdout, "%s%s",
+                      json_object_to_json_string_ext(json_object_array_get_idx(rp->root, i),
+                                          JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
+                      (i + 1 < al) ? ",\n" : "\n");
+        }
+    } else {
+        fprintf(stdout, "%s\n", json_object_to_json_string_ext(rp->root,
+                                    JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
     }
     fflush(stdout);
 

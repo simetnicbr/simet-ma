@@ -35,6 +35,7 @@ typedef struct twamp_parameters {
     const char *port;
     int family;
     int connect_timeout;
+    int report_mode;
     unsigned int packets_count;
     unsigned int packets_max;
     unsigned long int packets_interval_us;
