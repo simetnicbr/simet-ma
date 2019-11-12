@@ -11,8 +11,9 @@
 #          to call fping, which has -v:
 #             ln -s (our name) lmap-task-v_fping
 MYPATH=$(readlink -f "$0") ; MYDIR=$(dirname "$MYPATH")
-MYSELF=$(basename "$0") ; TN1="${MYSELF#lmap-task-}" ; VC="${TN1%%_*}" ; TOOL="${TN1#*_}"
+MYSELF=$(basename "$0") ; TN1="${MYSELF#lmap-task-}" ; VC="${TN1%%_*}"
+TN2="${TN1#*_}" ; TOOL="${TN2#*_}" ; METRIC="${TN2%%_*}"
 [ -n "$TOOL" ] && [ -x "$MYDIR/$MYTOOL" ] && \
-	exec "@BINDIR@/simet_lmap-stdout-wrapper.sh" exec "$TOOL" "-$VC" "$@"
+	exec "@BINDIR@/simet_lmap-stdout-wrapper.sh" exec "$TOOL" "-$VC" "$METRIC" "$@"
 echo "$MYPATH: ($0): unknown or unlisted tool: $TOOL" >&2
 exit 1
