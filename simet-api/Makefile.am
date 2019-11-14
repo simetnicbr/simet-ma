@@ -149,6 +149,7 @@ EXTRA_DIST += simet_lib.simetbox.sh.in  simet_lib.simet.sh.in
 CLEANFILES += simet_lib.sh simet_lib.sh.in
 
 dist_simetlmapregistry_DATA = registry.d/simet-ma_base-registry.json registry.d/simet-ma_tasklet-registry.json
+dist_simetlmapregistry_DATA += registry.d/simet.nic.br_subsystem-id.tag-registry.json
 EXTRA_DIST += registry.d/simet-ma_base-registry.json.in
 CLEANFILES += registry.d/simet-ma_base-registry.json registry.d/simet-ma_tasklet-registry.json
 dist_simetlmapconfig_DATA   = config.d/simet-ma_base-config.json config.d/simet-ma_tasklet-config.json

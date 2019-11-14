@@ -183,6 +183,7 @@ _task_environment(){
   export _task_action="report_context"
   export _task_parameters='{ }'
   export _task_options='[]'
+  export _task_extra_tags='"simet.nic.br_subsystem-id:simet2_std-v1",'
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
   ma_environment > "$_task_dir/tables/environment_short.json"
@@ -202,6 +203,7 @@ _task_geolocation(){
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/geolocation"
   export _task_action="geolocation_https_bssids"
+  export _task_extra_tags=
   export _task_parameters='{ }'
   export _task_options='[]'
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -239,6 +241,7 @@ _task_twamp(){
   export _task_action="packettrain_udp_ipv${_af}_to_nearest_available_peer"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
+  export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
   log_debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
@@ -285,6 +288,7 @@ _task_tcpbw(){
   export _task_action="bandwidth_tcp_ipv${_af}_to_nearest_available_peer"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
+  export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
   if [ -n "$AUTHORIZATION_TOKEN" ] ; then
