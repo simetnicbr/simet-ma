@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Execute a simet-ma SIMET2 agent in foreground
 # Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
 #
@@ -59,6 +59,20 @@ call_hook() {
 	fi
 }
 
+_simet_ma_exit() {
+	trap - SIGTERM SIGINT SIGQUIT
+	echo "$0: stopping services..." >&2
+	for i in $SMA_SERVICES ; do service "$i" stop || true ; done
+	echo "$0: send SIGTERM to all processes... ">&2
+	kill -s TERM -1 ; sleep 10
+	echo "$0: exiting" >&2
+	exit 0
+}
+
+simet_ma_trap_setup() {
+	trap '_simet_ma_exit' SIGTERM SIGINT SIGQUIT
+}
+
 call_hook simet_ma_docker_ep_init
 
 # update the system packages at start-up
@@ -111,6 +125,10 @@ simet_ma_docker_register() {
 }
 call simet_ma_docker_register
 
+# Handle and forward SIGQUIT, SIGTERM
+SMA_SERVICES=
+call simet_ma_trap_setup
+
 # build inetup command, try to drop priviledges
 INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
 [ -r "$AGENT_TOKEN_FILE" ] && INETUP_ARGS="$INETUP_ARGS -j $(cat $AGENT_TOKEN_FILE)"
@@ -122,16 +140,19 @@ INETUPCMD="sudo -u $USER -g $USER -H -n"
 	if [ -r /etc/cron.d/simet-ma ] ; then
 		echo "SIMET-MA: starting cron to run management tasks in background..."
 		service cron start
+		SMA_SERVICES="cron ${SMA_SERVICES}"
 	fi
 	echo "SIMET-MA: starting LMAP scheduler..."
 	service simet-lmapd start
+	SMA_SERVICES="simet-lmapd ${SMA_SERVICES}"
 }
 
 if [ -z "$SIMET_RUN_TEST" ] ; then
 	echo "SIMET-MA: main loop start."
 	while true; do
 		if [ "$SIMET_INETUP_DISABLE" != "true" ] && [ -n "$INETUP" ] ; then
-			$INETUPCMD $INETUP $INETUP_ARGS $SIMET_INETUP_SERVER
+			$INETUPCMD $INETUP $INETUP_ARGS $SIMET_INETUP_SERVER &
+			wait $! && exit 0
 			sleep 1
 		else
 			sleep 365d
