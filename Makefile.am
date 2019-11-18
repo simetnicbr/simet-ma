@@ -37,13 +37,13 @@ bin-dist: all
 
 # Docker examples
 # run docker-build or docker-build-prod first, to get the image.
-docker-build:
+docker-build: clean
 	@test -r docker/Dockerfile
 	docker build --network host -t simet-ma:local -f docker/Dockerfile .
 	@echo Unofficial image built and tagged as simet-ma:local.
 	@echo To run the unofficial image you just built, do "make docker-simetma"
 
-docker-build-prod:
+docker-build-prod: clean
 	@test -r docker/Dockerfile.reference-container
 	docker build --network host -t simet-ma:nicbr -f docker/Dockerfile.reference-container .
 	@echo Image built from official simet-ma binaries and tagged as simet-ma:nicbr
