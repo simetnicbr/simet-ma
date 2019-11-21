@@ -15,10 +15,10 @@
 # Description:       Re(register) at boot the SIMET Managagement Agent
 #                    and start the inetupd measurement (internet uptime)
 ### END INIT INFO
-set -e
 
 DAEMON=/opt/simet/bin/inetupc
 NAME="inetupc"
+COMMAND_NAME="inetupc"
 DESC="SIMET Measurement Agent"
 USER=nicbr-simet
 GROUP=$USER
@@ -42,6 +42,7 @@ DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
 
 # not called by default init-d-script reload/restart
 do_start_prepare() {
+	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
 	GEO_DIR=$(dirname "${GEOLOC_CACHE}")
 	[ -n "$GEO_DIR" ] && mkdir -m 0750 -p "$GEO_DIR" && chgrp $GROUP "$GEO_DIR"
 
@@ -54,6 +55,17 @@ do_reload() {
 	invoke-rc.d --quiet simet-lmapd reload || true
 	# "reload" inetup by restarting it
 	do_restart
-	:
 }
 
+# start-stop-daemon --exec requires CAP_SYS_ADMIN, no good inside a container.
+do_stop_cmd_override() {
+	RETVAL="0"
+	start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 \
+	    $STOP_ARGS --pidfile ${PIDFILE} --name ${COMMAND_NAME} || RETVAL="$?"
+	return $RETVAL
+}
+
+# init-d-script do_status() is broken when PIDFILE is set due to a bug
+do_status_override() {
+	status_of_proc "$DAEMON" "$NAME" -p "${PIDFILE}"
+}
