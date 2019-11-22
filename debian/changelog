@@ -1,3 +1,19 @@
+simet-ma (0.15.3) unstable; urgency=medium
+
+  * simet-ma version 0.15.3
+  * debian/control: depend on lsb-base for initscripts
+  * simet-lmapd.init, simet-ma.init: several fixes
+  * simet-lmapd.init, simet-ma.init avoid start-stop-daemon --exec
+    to better support containers for now (--exec requires CAP_SYS_ADMIN)
+  * lmap: add some tags to help detect backend routing issues
+  * lmap: add subsystem-id tags to differentiate from simet-as, simet-ix
+  * lmap: add peer-name tags for better backend compatibility
+  * lmap: change the traceroute metric to an specific one
+  * docker: cleanly terminate inetup and lmapd on container stop
+  * docker: clean before build
+
+ -- SIMET <medicoes@simet.nic.br>  Fri, 22 Nov 2019 14:00:26 -0300
+
 simet-ma (0.15.2) unstable; urgency=medium
 
   * simet-ma version 0.15.2
