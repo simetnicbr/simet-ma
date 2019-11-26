@@ -474,9 +474,7 @@ static int sendUploadPackets(const MeasureContext ctx)
     tv_stop_test.tv_sec = tv_cur.tv_sec + (long)upTimeout;
 
     while (timercmp(&tv_cur, &tv_stop_test, <)) {
-        tv_select.tv_sec = tv_stop_test.tv_sec - tv_cur.tv_sec;
-        tv_select.tv_usec = 0;
-
+        timersub(&tv_stop_test, &tv_cur, &tv_select);
         memcpy(&wset, &masterset, sizeof(fd_set));
         if (select(sockListLastFD + 1, NULL, &wset, NULL, &tv_select) > 0) {
 	    for (i = 0; i < ctx.numstreams; i++) {
@@ -524,9 +522,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
     while (timercmp(&tv_cur, &tv_stop_test, <) && (rCounter < maxResults))
     {
-	tv_select.tv_sec = tv_stop_test.tv_sec - tv_cur.tv_sec;
-	tv_select.tv_usec = 0;
-
+	timersub(&tv_stop_test, &tv_cur, &tv_select);
 	memcpy(&rset, &masterset, sizeof(fd_set));
 	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
 	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
