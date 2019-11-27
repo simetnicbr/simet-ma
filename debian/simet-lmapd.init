@@ -14,9 +14,9 @@
 # Short-Description: SIMET-MA LMAP scheduler
 # Description:       SIMET Management Agent LMAP task scheduler
 ### END INIT INFO
-set -e
 
 DAEMON=/opt/simet/bin/lmapd
+COMMAND_NAME=lmapd
 NAME="lmapd"
 DESC="SIMET Measurement Agent LMAP scheduler"
 USER=nicbr-simet
@@ -24,6 +24,8 @@ GROUP=$USER
 
 PID_DIR=/var/run/lmapd
 PIDFILE="${PID_DIR}/lmapd.pid"
+
+LMAPCTL="/opt/simet/bin/lmapctl -j"
 
 START_ARGS="-u $USER -c $USER --background"
 STOP_ARGS="-u $USER"
@@ -65,13 +67,36 @@ do_start_prepare() {
 	# contact controller at daemon start/boot, we will use the default schedule
 	# if this fails
 	start-stop-daemon -c "$USER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
-	:
 }
 
+# start-stop-daemon --exec requires CAP_SYS_ADMIN, no good inside a container
+
 do_reload() {
-	log_daemon_msg "Reloading $DESC configuration files" "$NAME"
-	start-stop-daemon --oknodo --stop --signal HUP --quiet \
-		--pidfile "$PIDFILE" --exec "$DAEMON"
-	log_end_msg $?
-	:
+	log_action_begin_msg "Validating $DESC configuration"
+	if $LMAPCTL validate >/dev/null 2>&1 ; then
+		log_action_end_msg 0
+		log_daemon_msg "Reloading $DESC configuration files" "$NAME"
+		RETVAL=0
+		$LMAPCTL reload || RETVAL=$?
+		log_end_msg $RETVAL
+	else
+		log_action_end_msg 1 "not reloading"
+		RETVAL=1
+	fi
+	return $RETVAL
 }
+
+do_stop_cmd_override() {
+	$LMAPCTL shutdown || return $?
+}
+
+do_status_override() {
+	if $LMAPCTL running >/dev/null ; then
+		log_success_msg "$NAME is running"
+		return 0
+	else
+		log_failure_msg "$NAME is not running"
+		return 3
+	fi
+}
+
