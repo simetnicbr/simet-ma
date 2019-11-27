@@ -496,12 +496,12 @@ static int sendUploadPackets(const MeasureContext ctx)
 static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const res, unsigned int *numres)
 {
     size_t bytes_recv = 0;
-    struct timeval tv_cur, tv_start, tv_stop_test, tv_select;
+    struct timeval tv_cur, tv_start, tv_stop_test, tv_select, tv_sampleperiod;
     fd_set rset, masterset;
     uint64_t total = 0;
     unsigned int rCounter = 0;
     long elapsed;
-    long interval = ctx.sample_period_ms * 1000UL;
+    long interval = ctx.sample_period_ms * 1000L;
     unsigned int maxResults = ((unsigned long)ctx.test_duration * 1000U) / ctx.sample_period_ms + 1;
 
     assert(res && numres);
@@ -514,15 +514,19 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
 
+    tv_sampleperiod.tv_sec = ctx.sample_period_ms / 1000U;
+    tv_sampleperiod.tv_usec = (ctx.sample_period_ms % 1000U) * 1000U;
+
     gettimeofday(&tv_cur, NULL);
-    tv_start.tv_usec = tv_cur.tv_usec;
-    tv_start.tv_sec = tv_cur.tv_sec;
+    tv_start = tv_cur;
     tv_stop_test.tv_usec = tv_cur.tv_usec;
     tv_stop_test.tv_sec = tv_cur.tv_sec + ctx.test_duration;
 
-    while (timercmp(&tv_cur, &tv_stop_test, <) && (rCounter < maxResults))
-    {
+    while (timercmp(&tv_cur, &tv_stop_test, <) && (rCounter < maxResults)) {
 	timersub(&tv_stop_test, &tv_cur, &tv_select);
+	if (timercmp(&tv_select, &tv_sampleperiod, >))
+	    tv_select = tv_sampleperiod;
+
 	memcpy(&rset, &masterset, sizeof(fd_set));
 	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
 	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
@@ -545,8 +549,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
 	    rCounter++;
 	    total = 0;
-	    tv_start.tv_usec = tv_cur.tv_usec;
-	    tv_start.tv_sec = tv_cur.tv_sec;
+	    tv_start = tv_cur;
 	}
 	gettimeofday(&tv_cur, NULL);
     }
