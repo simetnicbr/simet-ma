@@ -14,7 +14,6 @@
 # Short-Description: SIMET-MA LMAP scheduler
 # Description:       SIMET Management Agent LMAP task scheduler
 ### END INIT INFO
-set -e
 
 DAEMON=/opt/simet/bin/lmapd
 COMMAND_NAME=lmapd
@@ -68,7 +67,6 @@ do_start_prepare() {
 	# contact controller at daemon start/boot, we will use the default schedule
 	# if this fails
 	start-stop-daemon -c "$USER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
-	:
 }
 
 # start-stop-daemon --exec requires CAP_SYS_ADMIN, no good inside a container
@@ -78,8 +76,8 @@ do_reload() {
 	if $LMAPCTL validate >/dev/null 2>&1 ; then
 		log_action_end_msg 0
 		log_daemon_msg "Reloading $DESC configuration files" "$NAME"
-		$LMAPCTL reload
-		RETVAL="$?"
+		RETVAL=0
+		$LMAPCTL reload || RETVAL=$?
 		log_end_msg $RETVAL
 	else
 		log_action_end_msg 1 "not reloading"
@@ -89,9 +87,7 @@ do_reload() {
 }
 
 do_stop_cmd_override() {
-	$LMAPCTL shutdown
-	RETVAL="$?"
-	return $RETVAL
+	$LMAPCTL shutdown || return $?
 }
 
 do_status_override() {
