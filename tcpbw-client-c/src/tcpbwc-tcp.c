@@ -527,7 +527,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
 	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &rset)) {
-		    bytes_recv = recv(sockList[i], sockBuffer, sockBufferSz-1, MSG_DONTWAIT);
+		    bytes_recv = recv(sockList[i], sockBuffer, sockBufferSz-1, MSG_DONTWAIT | MSG_TRUNC);
 		    if (bytes_recv > 0) {
 			total += bytes_recv;
 		    } else if (!bytes_recv) {
