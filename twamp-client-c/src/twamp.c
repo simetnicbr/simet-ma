@@ -58,6 +58,19 @@ int twamp_run_client(TWAMPParameters param) {
 
     assert(param.packets_count < param.packets_max);
 
+    /* Make room for one extra packet, which acts as a sentinel of
+     * too-many-dupes.
+     *
+     * This only exists because we have an external requirement that we
+     * have to be able to handle at least 100% packet duplication.
+     *
+     * NOTE: we do not process this last packet, it is received and
+     * stored, but discarded as lost when processing.  If you remove
+     * this line, you must adjust the post-receive routines to not
+     * ignore the last packet when packets_received == packets_max.
+     */
+    param.packets_max++;
+
     // Create TWAMPReport
     TWAMPReport * report = twamp_report_init();
     if (!report)
@@ -337,9 +350,13 @@ int twamp_run_client(TWAMPParameters param) {
             t_param.report->result->packets_sent, t_param.report->result->packets_received,
             t_param.report->result->packets_dropped_timeout);
 
-    /* SEXIT_OUTOFRESOURCE if we got way too many duplicates, othetwise SEXIT_SUCCESS */
-    rc = (t_param.report->result->packets_received < t_param.param.packets_max) ?
-        SEXIT_SUCCESS : SEXIT_OUTOFRESOURCE;
+    /* SEXIT_OUTOFRESOURCE if we got way too many duplicates, otherwise SEXIT_SUCCESS */
+    if (t_param.report->result->packets_received < t_param.param.packets_max) {
+        rc = SEXIT_SUCCESS;
+    } else {
+        rc = SEXIT_OUTOFRESOURCE;
+        print_warn("Received too many packets, test aborted with partial results");
+    }
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {

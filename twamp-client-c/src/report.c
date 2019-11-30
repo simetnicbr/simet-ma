@@ -272,7 +272,13 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     /* each member of the tbl_rows below be a single "value: ["cell", "cell"]" array object? */
     json_object * jarray_res_tbl_rows = json_object_new_array();
 
-    for (unsigned int it = 0; it < report->result->packets_received; it++) {
+    /*
+     * NOTE: we do not report the sentinel packet
+     */
+    unsigned int np = report->result->packets_received;
+    if (np == param->packets_max)
+        np--;
+    for (unsigned int it = 0; it < np; it++) {
         ReportPacket pkg;
 
         struct timeval tv_sender = timestamp_to_timeval(&(report->result->raw_data[it].data.SenderTime));
