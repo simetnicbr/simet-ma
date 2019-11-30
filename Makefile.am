@@ -36,13 +36,25 @@ bin-dist: all
 
 
 # Docker examples
-# run docker-build first, to get the image.
-docker-build:
-	test -r docker/Dockerfile
+# run docker-build or docker-build-prod first, to get the image.
+docker-build: clean
+	@test -r docker/Dockerfile
 	docker build --network host -t simet-ma:local -f docker/Dockerfile .
+	@echo Unofficial image built and tagged as simet-ma:local.
+	@echo To run the unofficial image you just built, do "make docker-simetma"
+
+docker-build-prod: clean
+	@test -r docker/Dockerfile.reference-container
+	docker build --network host -t simet-ma:nicbr -f docker/Dockerfile.reference-container .
+	@echo Image built from official simet-ma binaries and tagged as simet-ma:nicbr
+	@echo To run the image, do "make docker-nicbr-simetma" or run it directly:
+	@echo docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
 
 docker-simetma:
 	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
+
+docker-nicbrsimetma:
+	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
 
 docker-twamp:
 	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \

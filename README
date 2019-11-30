@@ -10,6 +10,9 @@ You will also find a quick guide on how to compile the software there.
 This package has a runtime dependency on the simet-lmapd package: both
 packages must be installed for measurements tasks to be run.
 
+This package contains recipes and helper scripts for building and/or
+running a SIMET-MA instance through a docker image.  Please refer to the
+docker/ directory for details.
 
 The copyright license for the SIMET-MA source code and software is on
 the COPYING file.  It is based on the GNU GPL version 3 license WITH

@@ -20,14 +20,18 @@
 ##
 
 ## Docker build arguments
-##    distro:    debian:buster, (debian:stretch), debian:jessie,
-##               ubuntu:disco, ubuntu:bionic, ubuntu:xenial
-##    BUILD_DIR: /usr/src/simet
-##    SIMET_LMAPD: https://github.com/simetnicbr/simet-lmapd/archive/master.tar.gz
-##    DEB_BUILD_OPTIONS: "noautodbgsym nodoc terse hardening=+all"
+##    DISTRO: base image (default)
+##       (debian:buster), debian:stretch, debian:jessie,
+##        ubuntu:disco, ubuntu:bionic, ubuntu:xenial
+##    BUILD_DIR:
+##       /usr/src/simet
+##    SIMET_LMAPD: where to get simet-lmapd from
+##       https://github.com/simetnicbr/simet-lmapd/archive/master.tar.gz
+##    DEB_BUILD_OPTIONS: refer to debian packaging manual
+##       "noautodbgsym nodoc terse hardening=+all"
 
 # Base distro
-ARG DISTRO=debian:stretch
+ARG DISTRO=debian:buster
 FROM $DISTRO
 
 LABEL description="SIMET2 Measurement Agent builder environment"
@@ -63,7 +67,7 @@ USER builder:builder
 WORKDIR $BUILD_DIR
 
 # unpack and build every subdirectory, using the debian packaging support.
-# we could avoid doing a package buikd, something like:
+# we could avoid doing a package build, something like:
 #    CMD ./autogen.sh && ./configure --prefix=/opt/simet-ma \
 #        && make install
 # but if we did that, we'd need to figure out the lib packages we need,
@@ -91,29 +95,20 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade ; \
     DEBIAN_FRONTEND=noninteractive apt-get -y install sudo procps rsyslog logrotate
 
-# We need to run this snippet under a policy-rc.d that refuses service
-# starts, we don't want the simet-ma initscript/unit to run!
-#
-# Also, Debian jessie apt-get knows not how to install from files, one must
-# use the dpkg -i <packages> ; apt-get -f install ; dpkg -i <packages> sequence.
+#====== no system services may start (begin) ======
+## We need to run this section under a policy-rc.d that refuses service
+## starts, we don't want the simet-ma initscript/unit to run!
+## (service start is refused by default in the images we use as base)
+
 COPY --from=0 /tmp/debs/ /tmp/debs/
-RUN if DEBIAN_FRONTEND=noninteractive apt-get -y install /tmp/debs/*deb ; then \
-        DEBIAN_FRONTEND=noninteractive apt-get -y -f install ; \
-    else \
-        DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/debs/*deb ; \
-        DEBIAN_FRONTEND=noninteractive apt-get -y -f install ; \
-        DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/debs/*deb ; \
-    fi
+COPY docker/helpers/* /usr/local/bin/
+RUN /usr/local/bin/simet-ma-prepare.sh --localdebs /tmp/debs && rm -f /usr/local/bin/simet-ma-prepare.sh*
 
-RUN rm -fr /tmp/debs /usr/sbin/policy-rc.d
-COPY docker/*.sh /opt/simet/bin/
+#====== no system services may start (end) ======
 
-# We want to make sure these will not be reused unless persisted,
-# i.e. it must not be present in the image... but the deb package
-# might have created them when it was installed.
-RUN rm -f /opt/simet/etc/simet/agent-id* /opt/simet/etc/simet/agent*.jwt \
-    /opt/simet/etc/simet/agent-vlabel \
-    /opt/simet/etc/simet/lmap/agent-id.json /opt/simet/etc/simet/lmap/group-id.json
+RUN rm -fr /tmp/debs /usr/sbin/policy-rc.d /usr/local/bin/*
+COPY docker/*.sh* /opt/simet/bin/
+
 VOLUME /opt/simet/etc/simet
 
 ##
