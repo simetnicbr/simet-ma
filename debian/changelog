@@ -1,3 +1,15 @@
+simet-ma (0.15.4) unstable; urgency=medium
+
+  * simet-ma version 0.15.4
+  * docker: documentation updates
+  * docker: use Debian 10 "buster" on simet-ma container
+  * twamp: handle exactly 2x packet duplication properly
+  * tcpbw: be stricter about test duration and sample timing
+  * tcpbw: zero-copy discard during downloads using MSG_TRUNC
+  * deb: initscript fixes
+
+ -- SIMET <medicoes@simet.nic.br>  Sun, 01 Dec 2019 16:40:24 -0300
+
 simet-ma (0.15.3) unstable; urgency=medium
 
   * simet-ma version 0.15.3
