@@ -1,3 +1,26 @@
+simet-ma (0.14.7) unstable; urgency=medium
+
+  * simet-ma version 0.14.7
+  * twamp: handle exactly 2x packet duplication properly
+  * tcpbw: be stricter about test duration and sample timing
+  * tcpbw: zero-copy discard during downloads using MSG_TRUNC
+  * debian/control: depend on lsb-base for initscripts
+  * simet-lmapd.init, simet-ma.init: several fixes
+  * simet-lmapd.init: validate config before reload
+  * simet-lmapd.init, simet-ma.init avoid start-stop-daemon --exec
+    to better support containers for now (--exec requires CAP_SYS_ADMIN)
+  * lmap: add some tags to help detect backend routing issues
+  * lmap: add subsystem-id tags to differentiate from simet-as, simet-ix
+  * lmap: add peer-name tags for better backend compatibility
+  * docker: documentation updates
+  * docker: use Debian 10 "buster" on simet-ma container
+  * docker: cleanly terminate inetup and lmapd on container stop
+  * docker: clean before build
+  * docker: add a "production" version of the simet-ma running in a docker
+    container
+
+ -- SIMET <medicoes@simet.nic.br>  Sun, 01 Dec 2019 16:57:58 -0300
+
 simet-ma (0.14.6) unstable; urgency=medium
 
   * simet-ma version 0.14.6
