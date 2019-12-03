@@ -75,6 +75,15 @@ simet_ma_trap_setup() {
 
 call_hook simet_ma_docker_ep_init
 
+# Handle early issues with filesystem permissions on persistent volumes
+USER=nicbr-simet
+simet_ma_docker_volume_prepare() {
+	find /opt/simet \! \( -user root -o -user $USER \) -exec chown $USER:$USER {} \+
+	find /opt/simet \! \( -group root -o -group $USER \) -exec chgrp $USER {} \+
+	:
+}
+call simet_ma_docker_volume_prepare
+
 # update the system packages at start-up
 # (security updates and SIMET engine updates, only)
 simet_ma_docker_ep_update() {
@@ -96,7 +105,6 @@ call simet_ma_docker_vlabel_setup
 INETUP=/opt/simet/bin/inetupc
 REGISTER=/opt/simet/bin/simet_register_ma.sh
 SIMETRUN=/opt/simet/bin/simet-ma_run.sh
-USER=nicbr-simet
 
 # do not mess with these unless you know what you are doing
 [ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
