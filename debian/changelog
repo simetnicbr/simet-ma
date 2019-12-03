@@ -1,3 +1,10 @@
+simet-ma (0.14.8) unstable; urgency=medium
+
+  * simet-ma version 0.14.8
+  * docker: ensure file onwership is correct in persistent volume
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 03 Dec 2019 14:52:37 -0300
+
 simet-ma (0.14.7) unstable; urgency=medium
 
   * simet-ma version 0.14.7
