@@ -25,11 +25,12 @@ SIMET2_AGENT_FAMILY="embedded"
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
 AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
 
+SIMET_MAC_LABEL=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
+
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
 get_http_useragent()
 (
-	BOXID=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
 	BOXVERSION=$(get_simet_box_version.sh 2>/dev/null) || BOXVERSION="unknown"
 	[ -r "${AGENT_VERSION_FILE}" ] && AGENTVERSION=$(cat "${AGENT_VERSION_FILE}")
 	[ -z "$AGENTVERSION" ] && AGENTVERSION="simet-ma/unknown"
