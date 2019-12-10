@@ -51,18 +51,20 @@ docker-build-prod: clean
 	@echo docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
 
 docker-simetma:
-	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
+	docker run --init -dt --rm --network host --cap-add NET_ADMIN --cap-add NET_RAW \
+		--mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:local
 
 docker-nicbrsimetma:
-	docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
+	docker run --init -dt --rm --network host --cap-add NET_ADMIN --cap-add NET_RAW \
+		--mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
 
 docker-twamp:
 	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \
-		-e SIMET_RUN_TEST=TWAMP simet-ma:local
+		--cap-add NET_ADMIN --cap-add NET_RAW -e SIMET_RUN_TEST=TWAMP simet-ma:local
 
 docker-tcpbw:
 	docker run -t --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet \
-		-e SIMET_RUN_TEST=TCPBW simet-ma:local
+		--cap-add NET_ADMIN --cap-add NET_RAW -e SIMET_RUN_TEST=TCPBW simet-ma:local
 
 # SIMET internal: reminder of how to update the version file
 .PHONY: bump-version
