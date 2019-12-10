@@ -33,6 +33,10 @@ create_crond() {
 	# Renova autorização e identificação da sonda SIMET
 	$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
 
+	# Geolocate if cache too old
+	# Geolocaliza se o cache estiver velho
+	$RND2 root if [ -x /opt/simet/bin/simet_geolocation.sh ] ; then /opt/simet/bin/simet_geolocation.sh >/dev/null 2>&1 || true ; fi
+
 	# Run the SIMET periodic measurements
 	# Executa a medição periódica do SIMET
 	$RND2 nicbr-simet if [ -x /opt/simet/bin/simet-ma_periodic.sh ] ; then /opt/simet/bin/simet-ma_periodic.sh >/dev/null 2>&1 || true ; fi

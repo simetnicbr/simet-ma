@@ -67,6 +67,10 @@ do_start_prepare() {
 	# contact controller at daemon start/boot, we will use the default schedule
 	# if this fails
 	start-stop-daemon -c "$USER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
+
+	# try to geolocate (as root)
+	/opt/simet/bin/simet_geolocation.sh >/dev/null 2>&1 &
+	:
 }
 
 # start-stop-daemon --exec requires CAP_SYS_ADMIN, no good inside a container
