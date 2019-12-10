@@ -77,11 +77,17 @@ call_hook simet_ma_docker_ep_init
 
 # Handle early issues with filesystem permissions on persistent volumes
 USER=nicbr-simet
+simet_ma_ephemeral_dirs() {
+	[ -d /var/run/simet ] || mkdir -p -m 0750 /var/run/simet
+	chgrp $USER /var/run/simet
+	:
+}
 simet_ma_docker_volume_prepare() {
 	find /opt/simet \! \( -user root -o -user $USER \) -exec chown $USER:$USER {} \+
 	find /opt/simet \! \( -group root -o -group $USER \) -exec chgrp $USER {} \+
 	:
 }
+call simet_ma_ephemeral_dirs
 call simet_ma_docker_volume_prepare
 
 # update the system packages at start-up
