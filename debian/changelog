@@ -1,3 +1,11 @@
+simet-ma (0.15.6) unstable; urgency=medium
+
+  * simet-ma version 0.15.6
+  * SIMETBOX: register the MAC address along the agent-id
+    to aid user support and preseeded MA grouping
+
+ -- SIMET <medicoes@simet.nic.br>  Mon, 09 Dec 2019 23:48:58 -0300
+
 simet-ma (0.15.5) unstable; urgency=medium
 
   * simet-ma version 0.15.5
