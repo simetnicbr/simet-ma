@@ -23,6 +23,10 @@ docker build -t simet-ma:nicbr -f docker/Dockerfile.reference-container .
   you might need to add "--network host" or other network access
   configuration to the docker line.
 
+* Note that for the container to be able to geolocate, it requires
+  CAP_NET_ADMIN.  It should also have CAP_NET_RAW as some future SIMET2 tests
+  will require it.
+
 This will create a simet-ma:local (or simet-ma:nicbr) image with simet-ma
 installed inside.  Some environment variables may be set to create images with
 an specific purpose, please refer to the Dockerfiles for details.
@@ -33,12 +37,14 @@ components inside it.
 
 To run the full simet-ma agent, with identity (agent-id, group-id, vlabel)
 persistence:
-docker run --init -dt --rm --network host \
+docker run --init -dt --rm \
+           --network host --cap-add NET_ADMIN --cap-add NET_RAW \
            --mount source=simet-ma-id,target=/opt/simet/etc/simet \
 	   simet-ma:local
 
 To run an specific test (TWAMP, TCPBW, GEOLOC):
-docker run -t --rm --network host \
+docker run -t --rm \
+           --network host --cap-add NET_ADMIN --cap-add NET_RAW \
            --mount source=simet-ma-id,target=/opt/simet/etc/simet \
            -e SIMET_RUN_TEST=TWAMP simet-ma:local
 
@@ -96,6 +102,9 @@ purposes:
 1. *CREATE* the container image with environment SIMET2_VLABEL=DISABLED,
    so that it will use that virtual label when it first contacts the
    SIMET2 system.
+
+2. The MA will declare to the SIMET2 servers that it is not available
+   for pairing when the virtual label is either disabled or missing.
 
 It will be generally impossible to interact with the MA through the portal
 should its virtual label be set to DISABLED.  This *will* result in
