@@ -1,3 +1,13 @@
+simet-ma (0.14.10) unstable; urgency=medium
+
+  * simet-ma version 0.14.10
+  * docker: document the need for CAP_NET_RAW, CAP_NET_ADMIN
+  * docker: create /var/run/simet for geolocation cache
+  * geolocation: fix mawk compatibility
+  * geolocation: periodically run as root
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 10 Dec 2019 12:30:00 -0300
+
 simet-ma (0.14.9) unstable; urgency=medium
 
   * simet-ma version 0.14.9
