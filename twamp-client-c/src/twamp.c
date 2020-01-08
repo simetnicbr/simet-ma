@@ -331,9 +331,6 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     print_msg(MSG_IMPORTANT, "measurement finished");
-
-    twamp_report(report, &param);
-
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
             t_param.report->result->packets_sent, t_param.report->result->packets_received,
             t_param.report->result->packets_dropped_timeout);
@@ -375,6 +372,7 @@ MEM_FREE:
 
     free(testPort);
 
+    twamp_report(report, &param);
     twamp_report_done(report);
     report = NULL;
 
