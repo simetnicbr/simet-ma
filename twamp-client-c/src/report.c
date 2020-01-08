@@ -226,12 +226,8 @@ int report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
 int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 {
     char metric_name[256];
-    struct twamp_report_private *report_private;
 
-    assert(report);
     assert(param);
-
-    report_private = (struct twamp_report_private *)report->privdata;
 
     snprintf(metric_name, sizeof(metric_name),
         "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
@@ -272,7 +268,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     /* each member of the tbl_rows below be a single "value: ["cell", "cell"]" array object? */
     json_object * jarray_res_tbl_rows = json_object_new_array();
 
-    for (unsigned int it = 0; it < report->result->packets_received; it++) {
+    for (unsigned int it = 0; report && report->result && it < report->result->packets_received; it++) {
         ReportPacket pkg;
 
         struct timeval tv_sender = timestamp_to_timeval(&(report->result->raw_data[it].data.SenderTime));
@@ -329,7 +325,11 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     json_object_object_add(jres_tbl_content, "row", jarray_res_tbl_rows);
     jarray_res_tbl_rows = NULL;
 
-    jo = report_private->root;
+    if (report && report->privdata) {
+        jo = ((struct twamp_report_private *)(report->privdata))->root;
+    } else {
+        jo = NULL;
+    }
     if (!jo)
         jo = json_object_new_array();
     assert(jo);
