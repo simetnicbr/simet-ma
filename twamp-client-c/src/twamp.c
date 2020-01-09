@@ -334,6 +334,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     twamp_report(report, &param);
 
+    /* FIXME: remove or repurpose packets_dropped_timeout */
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
             t_param.report->result->packets_sent, t_param.report->result->packets_received,
             t_param.report->result->packets_dropped_timeout);
@@ -449,7 +450,7 @@ static void *twamp_callback_thread(void *p) {
     UnauthReflectedPacket *reflectedPacket = malloc(sizeof(UnauthReflectedPacket));
     memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket)); /* FIXME */
 
-    /* we wait for (number of packets * inter-packet interval) + per-packet timeout */
+    /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
     unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
 			  + t_param->param.packets_timeout_us;
     /* clamp to 10 minutes */

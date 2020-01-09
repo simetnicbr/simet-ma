@@ -63,7 +63,7 @@ static void print_usage(const char * const p, int mode)
             "\t-t\tconnection timeout in seconds\n"
             "\t-c\tnumber of packets to transmit per session\n"
             "\t-i\ttime in microseconds between each packet (lower bound)\n"
-            "\t-T\ttime in microseconds before an unreceived packet is considered lost\n"
+            "\t-T\ttime in microseconds to wait for the last packet\n"
             "\t-d\tdevice identification string to send to the TWAMP server\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\nserver: hostname or IP address of the TWAMP server\n\n");
