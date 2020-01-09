@@ -228,8 +228,8 @@ static json_object *createReport(json_object *jresults,
 {
     char metric_name[256];
 
-    assert(downloadRes);
     assert(ctx);
+    assert(counter == 0 || downloadRes);
 
     snprintf(metric_name, sizeof(metric_name),
 	    "urn:ietf:metrics:perf:Priv_OWBTC_Active_TCP-SustainedBurst-MultipleParallelStreams-"
@@ -309,11 +309,11 @@ int tcpbw_report(struct tcpbw_report *report,
                  MeasureContext *ctx)
 {
     struct tcpbw_report_private *rp;
-    assert(report && upload_results_json && downloadRes && ctx);
+    assert(report && ctx);
 
     rp = (struct tcpbw_report_private *)report;
 
-    json_object *j_obj_upload = json_tokener_parse(upload_results_json);
+    json_object *j_obj_upload = upload_results_json ? json_tokener_parse(upload_results_json) : NULL;
     json_object *report_obj = createReport(j_obj_upload, downloadRes, counter, ctx);
 
     if (report_obj)
