@@ -302,11 +302,15 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
         pkg.rtt_us = returnTime - sendTime - processTime;
 
+#if 0
+        /* THIS CODE CANNOT BE DISABLED FOR HOMOLOGATION V1.X CLIENTS */
+
         /* drop packets above the per-packet rtt from report */
         if (pkg.rtt_us > param->packets_timeout_us) {
             report->result->packets_dropped_timeout++;
             continue;
         }
+#endif
 
         /* this row (object), will be inserted into the row array later, it is a list of cells */
         json_object * jcurrow = json_object_new_array();

@@ -30,7 +30,7 @@ typedef struct twamp_raw_data {
 typedef struct twamp_result {
     unsigned int packets_sent;
     unsigned int packets_received;
-    unsigned int packets_dropped_timeout;
+    unsigned int packets_dropped_timeout; /* FIXME: remove or repurpose */
     /* FIXME: duplicates, out-of-sequence */
     TWAMPRawData * raw_data;
 } TWAMPResult;
