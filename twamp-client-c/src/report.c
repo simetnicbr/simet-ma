@@ -226,12 +226,8 @@ int report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
 int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 {
     char metric_name[256];
-    struct twamp_report_private *report_private;
 
-    assert(report);
     assert(param);
-
-    report_private = (struct twamp_report_private *)report->privdata;
 
     snprintf(metric_name, sizeof(metric_name),
         "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
@@ -275,8 +271,8 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     /*
      * NOTE: we do not report the sentinel packet
      */
-    unsigned int np = report->result->packets_received;
-    if (np == param->packets_max)
+    unsigned int np = (report && report->result) ? report->result->packets_received : 0;
+    if (np == param->packets_max && np > 0)
         np--;
     for (unsigned int it = 0; it < np; it++) {
         ReportPacket pkg;
@@ -335,7 +331,11 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     json_object_object_add(jres_tbl_content, "row", jarray_res_tbl_rows);
     jarray_res_tbl_rows = NULL;
 
-    jo = report_private->root;
+    if (report && report->privdata) {
+        jo = ((struct twamp_report_private *)(report->privdata))->root;
+    } else {
+        jo = NULL;
+    }
     if (!jo)
         jo = json_object_new_array();
     assert(jo);

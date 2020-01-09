@@ -565,8 +565,9 @@ int tcp_client_run(MeasureContext ctx)
     CURL *curl;
     int rc;
 
-    unsigned int rcvcounter;
-    DownResult *rcv;
+    unsigned int rcvcounter = 0;
+    DownResult *rcv = NULL;
+    const char *upload_results_json = NULL;
 
     struct tcpbw_report *report;
 
@@ -710,8 +711,6 @@ int tcp_client_run(MeasureContext ctx)
     FD_ZERO(&sockListFDs);
     sockListLastFD = -1;
 
-    const char *upload_results_json = NULL;
-
     print_msg(MSG_NORMAL, "requesting upload measurement results from measurement peer");
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/get-upload-samples", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
@@ -728,13 +727,14 @@ int tcp_client_run(MeasureContext ctx)
 	upload_results_json = chunk.memory;
     }
 
-    /* FIXME: does not belong here, but on caller */
-    rc = (tcpbw_report(report, upload_results_json, rcv, rcvcounter, &ctx)) ?
-                SEXIT_FAILURE : SEXIT_SUCCESS;
-
     print_msg(MSG_IMPORTANT, "tcp bandwidth measurements finished");
+    rc = SEXIT_SUCCESS;
 
 err_exit:
+    /* we want the lmap report table (even if it is empty) if we can output it */
+    if (tcpbw_report(report, upload_results_json, rcv, rcvcounter, &ctx))
+	rc = rc ? rc : SEXIT_FAILURE;
+
     free(chunk.memory);
     free(sockBuffer);
 
