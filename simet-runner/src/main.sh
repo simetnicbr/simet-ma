@@ -258,7 +258,7 @@ _task_twamp(){
   if [ "$_task_status" -ne 0 ]; then
     log_error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
 #   error_template > "$_task_dir/tables/stderr.json"
-    rm -f "$_task_dir/tables/twamp.json"
+#   rm -f "$_task_dir/tables/twamp.json"
   else
     rm -f "$_task_dir/tables/stderr.txt"
   fi
@@ -310,7 +310,7 @@ _task_tcpbw(){
   if [ "$_task_status" -ne 0 ]; then
     log_error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
 #   error_template > "$_task_dir/tables/stderr.json"
-    rm -f "$_task_dir/tables/tcpbw.json"
+#   rm -f "$_task_dir/tables/tcpbw.json"
   else
     rm -f "$_task_dir/tables/stderr.txt"
   fi
