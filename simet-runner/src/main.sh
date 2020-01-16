@@ -257,7 +257,9 @@ _task_twamp(){
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
     log_error "Task TWAMP IPv$_af, failed with exit code: $_task_status"
-#   error_template > "$_task_dir/tables/stderr.json"
+    [ -s "$_task_dir/tables/stderr.txt" ] && \
+      error_template < "$_task_dir/tables/stderr.txt" > "$_task_dir/tables/stderr.json" && \
+      rm -f "$_task_dir/tables/stderr.txt"
 #   rm -f "$_task_dir/tables/twamp.json"
   else
     rm -f "$_task_dir/tables/stderr.txt"
@@ -309,7 +311,9 @@ _task_tcpbw(){
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
     log_error "Task TCPBW IPv$_af, failed with exit code: $_task_status"
-#   error_template > "$_task_dir/tables/stderr.json"
+    [ -s "$_task_dir/tables/stderr.txt" ] && \
+      error_template < "$_task_dir/tables/stderr.txt" > "$_task_dir/tables/stderr.json" && \
+      rm -f "$_task_dir/tables/stderr.txt"
 #   rm -f "$_task_dir/tables/tcpbw.json"
   else
     rm -f "$_task_dir/tables/stderr.txt"
