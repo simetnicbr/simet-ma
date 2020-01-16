@@ -1,13 +1,16 @@
-simet-ma (0.16.0) unstable; urgency=medium
+simet-ma (0.16.1) unstable; urgency=medium
 
-  * simet-ma version 0.16.0
+  * simet-ma version 0.16.1
   * twamp: remove per-packet discarding due to timeout (except
     for last packet in the packet train)
   * twamp, tcpbw: output lmap result table boilerplate to stdout even
     when aborting the test, except for initialization and parameter
     errors
+  * simet-runner: preserve twamp, tcpbw stdout output even when their
+    return status is non-zero, and in that case also add the stderr
+    output to the report.
 
- -- SIMET <medicoes@simet.nic.br>  Thu, 09 Jan 2020 13:18:52 -0300
+ -- SIMET <medicoes@simet.nic.br>  Thu, 16 Jan 2020 13:46:37 -0300
 
 simet-ma (0.15.7) unstable; urgency=medium
 
