@@ -56,7 +56,10 @@ int twamp_run_client(TWAMPParameters param) {
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
 
-    assert(param.packets_count < param.packets_max);
+    if (param.packets_count > param.packets_max) {
+        print_err("Configuration error: packet train size (%u) too big (max %u)", param.packets_count, param.packets_max);
+        return SEXIT_BADCMDLINE;
+    }
 
     /* Make room for one extra packet, which acts as a sentinel of
      * too-many-dupes.
@@ -73,9 +76,16 @@ int twamp_run_client(TWAMPParameters param) {
 
     // Create TWAMPReport
     TWAMPReport * report = twamp_report_init();
-    if (!report)
+    if (!report) {
+        print_err("Error initializing TWAMP report");
         return SEXIT_OUTOFRESOURCE;
+    }
     report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_max);
+    if (!report->result->raw_data) {
+        print_err("Error allocating memory for raw_data");
+        return SEXIT_OUTOFRESOURCE;
+    }
+
     report->family = param.family;
     report->host = param.host;
 
@@ -84,30 +94,48 @@ int twamp_run_client(TWAMPParameters param) {
     t_param.report = report;
 
     ServerGreeting *srvGreetings = malloc(SERVER_GREETINGS_SIZE);
-    SetupResponse *stpResponse = malloc(SETUP_RESPONSE_SIZE);
-    if (!srvGreetings || !stpResponse)
+    if (!srvGreetings) {
+        print_err("Error allocating memory for ServerGreeting");
         return SEXIT_OUTOFRESOURCE;
+    }
+    SetupResponse *stpResponse = malloc(SETUP_RESPONSE_SIZE);
+    if (!stpResponse) {
+        print_err("Error allocating memory for SetupResponse");
+        return SEXIT_OUTOFRESOURCE;
+    }
     memset(stpResponse, 0 , SETUP_RESPONSE_SIZE);
     ServerStart *srvStart = malloc(SERVER_START_SIZE);
-    if (!srvStart)
+    if (!srvStart) {
+        print_err("Error allocating memory for ServerStart");
         return SEXIT_OUTOFRESOURCE;
-
+    }
     RequestSession *rqtSession = malloc(REQUEST_SESSION_SIZE);
-    if (!rqtSession)
+    if (!rqtSession) {
+        print_err("Error allocating memory for RequestSession");
         return SEXIT_OUTOFRESOURCE;
+    }
     memset(rqtSession, 0 , REQUEST_SESSION_SIZE);
     AcceptSession *actSession = malloc(ACCEPT_SESSION_SIZE);
-    StartSessions *strSession = malloc(START_SESSIONS_SIZE);
-    if (!actSession || !strSession)
+    if (!actSession) {
+        print_err("Error allocating memory for AcceptSession");
         return SEXIT_OUTOFRESOURCE;
+    }
+    StartSessions *strSession = malloc(START_SESSIONS_SIZE);
+    if (!strSession) {
+        print_err("Error allocating memory for StartSessions");
+        return SEXIT_OUTOFRESOURCE;
+    }
     memset(strSession, 0 , START_SESSIONS_SIZE);
     StartAck *strAck = malloc(START_ACK_SIZE);
-    if (!strAck)
+    if (!strAck) {
+        print_err("Error allocating memory for StartAck");
         return SEXIT_OUTOFRESOURCE;
-
+    }
     StopSessions *stpSessions = malloc(sizeof(StopSessions));
-    if (!stpSessions)
+    if (!stpSessions) {
+        print_err("Error allocating memory for StartAck");
         return SEXIT_OUTOFRESOURCE;
+    }
     memset(stpSessions, 0 , sizeof(StopSessions));
 
     int rc;
@@ -172,7 +200,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     ret_socket = message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE);
     if (ret_socket <= 0) {
-        print_err("message_send problem");
+        print_err("message_send problem sending stpResponse");
         goto CONTROL_CLOSE;
     }
 
@@ -186,7 +214,8 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     if(srvStart->Accept != 0) {
-        print_err("test not accepted: %"PRIu8 ,srvStart->Accept);
+        print_err("test not accepted: %" PRIu8 ,srvStart->Accept);
+        rc = SEXIT_MP_REFUSED;
         goto CONTROL_CLOSE;
     }
 
@@ -196,33 +225,33 @@ int twamp_run_client(TWAMPParameters param) {
     socklen_t addr_len = sizeof(local_addr_control);
     memset(&local_addr_control, 0, addr_len);
     if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, (socklen_t *) &addr_len) < 0){
-        print_err("getsockname problem");
+        print_err("getsockname problem on control socket");
         rc = SEXIT_INTERNALERR;
         goto CONTROL_CLOSE;
     }
 
     char str[INET6_ADDRSTRLEN];
     if (get_ip_str(&local_addr_control, str, INET6_ADDRSTRLEN) == NULL) {
-        print_err("get_ip_str problem");
+        print_err("get_ip_str problem on control socket");
         rc = SEXIT_INTERNALERR;
         goto CONTROL_CLOSE;
     }
 
     print_msg(MSG_NORMAL, "local address is %s", str);
 
-    // CREATE SOCKET
+    // CREATE UDP SOCKET FOR THE TEST
     memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
     fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, 2000);
     if (fd_test < 0) {
-        print_err("usock_inet_timeout problem");
-    rc = SEXIT_MP_REFUSED;
+        print_err("usock_inet_timeout problem on test socket");
+        rc = SEXIT_MP_REFUSED;
         goto CONTROL_CLOSE;
     }
 
     fd_ready = usock_wait_ready(fd_test, 5000);
     if (fd_ready != 0) {
-        print_err("usock_wait_ready problem");
-    rc = SEXIT_MP_TIMEOUT;
+        print_err("usock_wait_ready problem on test socket");
+        rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
     }
 
@@ -233,7 +262,7 @@ int twamp_run_client(TWAMPParameters param) {
     addr_len = sizeof(local_addr_measure);
     memset(&local_addr_measure, 0, addr_len);
     if (getsockname(fd_test, (struct sockaddr *) &local_addr_measure, (socklen_t *) &addr_len) < 0) {
-        print_msg(MSG_DEBUG, "getsockname problem");
+        print_err("getsockname problem on test socket");
         rc = SEXIT_INTERNALERR;
         goto TEST_CLOSE;
     }
@@ -255,35 +284,40 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     if (message_format_request_session(param.family, sender_port, rqtSession) != 0) {
-        print_msg(MSG_DEBUG, "message_format_request_session problem");
+        print_err("message_format_request_session problem");
+        rc = SEXIT_CTRLPROT_ERR;
         goto TEST_CLOSE;
     }
 
     ret_socket = message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE);
     if (ret_socket <= 0) {
-        print_msg(MSG_DEBUG, "message_send problem");
+        print_err("message_send problem sending rqtSession");
+        rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
     }
 
     // ACCEPT SESSION
     ret_socket = message_accept_session(fd_control, 10, actSession);
     if (ret_socket <= 0) {
-        print_msg(MSG_DEBUG, "message_server_start problem");
+        print_err("message_accept_session problem");
+        rc = SEXIT_CTRLPROT_ERR;
         goto TEST_CLOSE;
     }
 
     if(actSession->Accept != 0) {
-        print_err("test not accepted: %"PRIu8 ,actSession->Accept);
+        print_err("test not accepted on accept session message: %" PRIu8 ,actSession->Accept);
+        rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
     }
 
     /* FIXME: log this better */
     uint16_t receiver_port = actSession->Port;
     report->serverPort = (unsigned int)receiver_port;
-    print_msg(MSG_DEBUG, "session port: %"PRIu16, receiver_port);
+    print_msg(MSG_DEBUG, "session port: %" PRIu16, receiver_port);
 
     testPort = malloc(sizeof(char) * 6);
     if (!testPort) {
+        print_err("Error allocating memory for testPort");
         rc = SEXIT_OUTOFRESOURCE;
         goto TEST_CLOSE;
     }
@@ -297,8 +331,6 @@ int twamp_run_client(TWAMPParameters param) {
     print_msg(MSG_DEBUG, "addr value: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
     */
 
-    print_msg(MSG_DEBUG, "fd_test before: %d", fd_test);
-
     if (connect(fd_test, (struct sockaddr *) &remote_addr_measure,
                 remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0) {
         print_err("connect to remote measurement peer problem: %s", strerror(errno));
@@ -306,9 +338,8 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    print_msg(MSG_DEBUG, "fd_test after: %d", fd_test);
     if (report_socket_metrics(report, fd_test, IPPROTO_UDP))
-    print_warn("failed to add TEST socket information to report, proceeding anyway...");
+        print_warn("failed to add TEST socket information to report, proceeding anyway...");
     else
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
 
@@ -318,14 +349,14 @@ int twamp_run_client(TWAMPParameters param) {
     strSession->Type = 2;
     ret_socket = message_send(fd_control, 10, strSession, START_SESSIONS_SIZE);
     if (ret_socket <= 0) {
-        print_err("message_send problem");
+        print_err("message_send problem on start session on control socket");
         goto TEST_CLOSE;
     }
 
     // START ACK
     ret_socket = message_start_ack(fd_control, 10, strAck);
     if (ret_socket <= 0) {
-        print_err("message_start_ack problem");
+        print_err("message_start_ack problem on start session on control socket");
         goto TEST_CLOSE;
     }
 
@@ -338,7 +369,7 @@ int twamp_run_client(TWAMPParameters param) {
         message_format_stop_sessions(stpSessions);
         message_send(fd_control, 10, stpSessions, sizeof(StopSessions));
     } else {
-        print_err("Accept != 0, got %"PRIu8, strAck->Accept);
+        print_err("Accept != 0, got %" PRIu8, strAck->Accept);
         goto TEST_CLOSE;
     }
 

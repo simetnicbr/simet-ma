@@ -227,6 +227,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 {
     char metric_name[256];
 
+    print_msg(MSG_DEBUG, "Printing raw data Table");
     assert(param);
 
     snprintf(metric_name, sizeof(metric_name),
@@ -274,6 +275,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     unsigned int np = (report && report->result) ? report->result->packets_received : 0;
     if (np == param->packets_max && np > 0)
         np--;
+    print_msg(MSG_DEBUG, "Number of row of raw data to output: %u", np);
     for (unsigned int it = 0; it < np; it++) {
         ReportPacket pkg;
 
@@ -380,18 +382,24 @@ TWAMPReport * twamp_report_init(void)
     TWAMPReport *r = NULL;
 
     tr = malloc(sizeof(TWAMPResult));
-    if (!tr)
+    if (!tr) {
+        print_err("Error allocating memory for TWAPResult");
         goto err_exit;
+    }
     memset(tr, 0, sizeof(TWAMPResult));
 
     rp = malloc(sizeof(struct twamp_report_private));
-    if (!rp)
+    if (!rp) {
+        print_err("Error allocating memory for twamp_report_private");
         goto err_exit;
+    }
     memset(rp, 0, sizeof(struct twamp_report_private));
 
     r = malloc(sizeof(TWAMPReport));
-    if (!r)
+    if (!r) {
+        print_err("Error allocating memory for TWAMPReport");
         goto err_exit;
+    }
     memset(r, 0, sizeof(TWAMPReport));
 
     r->result = tr;
