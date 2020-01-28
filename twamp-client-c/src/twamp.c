@@ -45,7 +45,7 @@ static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t ma
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
-static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket);
+static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, int *bytes_recv);
 static void *twamp_callback_thread(void *param);
 
 static int twamp_test(TestParameters);
@@ -360,33 +360,41 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    if (strAck->Accept == 0) {
-        print_msg(MSG_NORMAL, "measurement starting...");
-        t_param.test_socket = fd_test;
-
-        twamp_test(t_param);
-
-        message_format_stop_sessions(stpSessions);
-        message_send(fd_control, 10, stpSessions, sizeof(StopSessions));
-    } else {
-        print_err("Accept != 0, got %" PRIu8, strAck->Accept);
+    if (strAck->Accept != 0) {
+        print_err("server refused to start session, reason %" PRIu8, strAck->Accept);
+        rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
     }
 
-    print_msg(MSG_IMPORTANT, "measurement finished");
+    print_msg(MSG_NORMAL, "measurement starting...");
+    t_param.test_socket = fd_test;
+
+    rc = twamp_test(t_param);
+    if (rc == SEXIT_OUTOFRESOURCE)
+        goto TEST_CLOSE;
+
+    /* Change to SEXIT_OUTOFRESOURCE if we got way too many duplicates */
+    if (rc == SEXIT_SUCCESS &&
+            t_param.report->result->packets_received >= t_param.param.packets_max) {
+        rc = SEXIT_OUTOFRESOURCE;
+        print_warn("Received too many packets, test aborted with partial results");
+    }
+
+    message_format_stop_sessions(stpSessions);
+    ret_socket = message_send(fd_control, 10, stpSessions, sizeof(StopSessions));
+    if (ret_socket <= 0) {
+       print_err("message_send problem on stop session on control socket");
+       if (rc == SEXIT_SUCCESS)
+           rc = SEXIT_CTRLPROT_ERR;
+    }
+
+    print_msg(MSG_IMPORTANT, "measurement finished %s",
+            (rc == SEXIT_SUCCESS) ? "successfully" : "unsuccessfully");
 
     /* FIXME: remove or repurpose packets_dropped_timeout */
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
             t_param.report->result->packets_sent, t_param.report->result->packets_received,
             t_param.report->result->packets_dropped_timeout);
-
-    /* SEXIT_OUTOFRESOURCE if we got way too many duplicates, otherwise SEXIT_SUCCESS */
-    if (t_param.report->result->packets_received < t_param.param.packets_max) {
-        rc = SEXIT_SUCCESS;
-    } else {
-        rc = SEXIT_OUTOFRESOURCE;
-        print_warn("Received too many packets, test aborted with partial results");
-    }
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
@@ -416,9 +424,7 @@ MEM_FREE:
     free(actSession);
     free(strSession);
     free(strAck);
-
     free(stpSessions);
-
     free(testPort);
 
     twamp_report(report, &param);
@@ -486,19 +492,33 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
 }
 
 // twamp_callback_thread receive the reflected packets and return the result array
+// non-reentrant due to static return_result
 static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
+    UnauthReflectedPacket *reflectedPacket = NULL;
     int bytes_recv = 0;
+    int ret;
     unsigned int pkg_count = 0;
+    unsigned int pkg_corrupt = 0;
 
     struct timeval tv_cur, tv_stop, tv_recv, to;
 
-    UnauthReflectedPacket *reflectedPacket = malloc(sizeof(UnauthReflectedPacket));
+    static int return_result; /* must be static! */
+
+    print_msg(MSG_NORMAL, "reflected packet receiveing thread started");
+
+    // FIXME: drop this double copying
+    reflectedPacket = malloc(sizeof(UnauthReflectedPacket));
+    if (!reflectedPacket) {
+       print_err("Error allocating memory for reflected packet");
+       ret = SEXIT_OUTOFRESOURCE;
+       goto error_out;
+    }
     memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket)); /* FIXME */
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
     unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
-			  + t_param->param.packets_timeout_us;
+                                   + t_param->param.packets_timeout_us;
     /* clamp to 10 minutes */
     if (tt_us > 600000000UL)
         tt_us = 600000000UL;
@@ -510,52 +530,83 @@ static void *twamp_callback_thread(void *p) {
 
     while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_max)) {
         // Read message
-        bytes_recv = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket);
+        ret = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket, &bytes_recv);
 
         gettimeofday(&tv_recv, NULL);
 
-        if (bytes_recv == -1)
-            break; /* timed out */
+        if (ret == SEXIT_MP_TIMEOUT)
+            break; /* test time limit reached, not an error */
+        if (ret != SEXIT_SUCCESS)
+            goto error_out;
 
-        if (bytes_recv != sizeof(UnauthReflectedPacket)) {
-            // Somthing is wrong
-            print_warn("unexpected message size. bytes_recv(%d) != sizeof(UnauthReflectedPacket)", bytes_recv);
-        } else {
+        if (bytes_recv == sizeof(UnauthReflectedPacket)) {
             // Save result
             t_param->report->result->raw_data[pkg_count].time = timeval_to_timestamp(&tv_recv);
             memcpy(&(t_param->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
             pkg_count++;
+        } else {
+            // Something is wrong
+            pkg_corrupt++;
         }
-
         gettimeofday(&tv_cur, NULL);
     }
 
+    ret = SEXIT_SUCCESS;
+
+error_out:
     // Store total received packets
     t_param->report->result->packets_received = pkg_count;
 
-    free(reflectedPacket);
+    if (pkg_corrupt > 0) {
+        print_warn("received and dropped %u incorrecly sized packets", pkg_corrupt);
+        /* if every packet received was corrupt, abort the test !*/
+        if (!pkg_count) {
+            print_err("all received packets were dropped for being incorrect, assuming software error");
+            ret = SEXIT_CTRLPROT_ERR;
+        }
+    }
 
-    return NULL;
+    free(reflectedPacket);
+    return_result = ret;
+    return &return_result;
 }
 
 static int twamp_test(TestParameters test_param) {
     struct timeval tv_cur;
     uint counter = 0;
     int send_resp = 0;
+    void *thread_retval = NULL;
+    int rc = SEXIT_SUCCESS;
+    int ret;
 
     UnauthPacket *packet = malloc(sizeof(UnauthPacket));
+    if (!packet) {
+       print_err("Error allocating memory for test packet to send");
+       return SEXIT_OUTOFRESOURCE;
+    }
     memset(packet, 0 , sizeof(UnauthPacket));
 
     pthread_t receiver_thread;
-    pthread_create(&receiver_thread, NULL, twamp_callback_thread, &test_param);
+    ret = pthread_create(&receiver_thread, NULL, twamp_callback_thread, &test_param);
+    if (ret) {
+       if (ret == EAGAIN) {
+          print_err("No resources to create reflected packets receiving thread");
+          rc = SEXIT_OUTOFRESOURCE;
+       } else {
+          print_err("Error creating reflected packets receiving thread");
+          rc = SEXIT_INTERNALERR;
+       }
+       goto err_out;
+    }
 
+    print_msg(MSG_DEBUG, "sending test packets...");
     // Sending test packets
-    gettimeofday(&tv_cur, NULL);
     while (counter < test_param.param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter++);
 
         // Set packet timestamp
+        gettimeofday(&tv_cur, NULL);
         Timestamp ts = timeval_to_timestamp(&tv_cur);
         encode_be_timestamp(&ts);
         packet->Time = ts;
@@ -563,32 +614,32 @@ static int twamp_test(TestParameters test_param) {
         /* TODO: send directly */
         send_resp = message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket));
         if (send_resp == -1) {
-            print_warn("message_send returned -1");
+            print_warn("message_send returned -1 for test packet %u", counter-1);
             counter--;
         }
         usleep(test_param.param.packets_interval_us);
-        gettimeofday(&tv_cur, NULL);
-    }
-
-    /* we expect to wait here on pthread_join */
-    if (pthread_join(receiver_thread, NULL) == 0) {
-        print_msg(MSG_DEBUG, "[THREAD] twamp_callback_thread ended OK!");
-    } else {
-        print_warn("[THREAD] twamp_callback_thread ended with problem!");
     }
 
     test_param.report->result->packets_sent = counter;
 
-    // FREE
-    free(packet);
+    /* we expect to wait here on pthread_join */
+    if (pthread_join(receiver_thread, &thread_retval) == 0) {
+        rc = (thread_retval) ? *(int *)thread_retval : SEXIT_SUCCESS;
+        if (rc == SEXIT_SUCCESS)
+           print_msg(MSG_DEBUG, "[THREAD] twamp_callback_thread ended OK!");
+    } else {
+        print_warn("[THREAD] twamp_callback_thread ended with problem!");
+        rc = SEXIT_INTERNALERR;
+    }
 
-    return 0;
+err_out:
+    free(packet);
+    return rc;
 }
 
 static int receive_reflected_packet(int socket, struct timeval *timeout,
-	UnauthReflectedPacket *reflectedPacket) {
-    int recv_size = 0, recv_total = 0;
-    uint8_t message[MAX_SIZE_MESSAGE];
+                                    UnauthReflectedPacket *reflectedPacket, int *recv_total) {
+    ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
     struct timeval tv_cur;
@@ -596,48 +647,39 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
 
+    *recv_total = 0;
+
     do {
-        memset(&message, 0, MAX_SIZE_MESSAGE);
         memcpy(&rset, &rset_master, sizeof(rset_master));
 
-	/* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
+        /* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
         fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
 
         if (fd_ready <= 0) {
             if (fd_ready == 0) {
-                print_msg(MSG_DEBUG, "receive_reflected_packet select timeout");
+                return SEXIT_MP_TIMEOUT;
             } else {
-                print_msg(MSG_DEBUG, "receive_reflected_packet select problem");
+                print_err("receive_reflected_packet select problem");
+                return SEXIT_FAILURE;
             }
-
-            break;
         } else {
             if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, message, MAX_SIZE_MESSAGE, 0);
+                recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC);
 
                 gettimeofday(&tv_cur, NULL);
 
                 // Caso recv apresente algum erro
-                if (recv_size <= 0) {
-                    if (recv_size == 0) {
-                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
-                        break;
-                    }
-
+                if (recv_size < 0) {
                     // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         continue;
                     } else {
-                        print_err("recv message problem: %s", strerror(errno));
-                        break;
+                        print_err("recv message problem receiving reflected packet: %s", strerror(errno));
+                        return SEXIT_FAILURE;
                     }
                 }
 
-                memcpy(reflectedPacket + recv_total, &message, recv_size);
-
-                recv_total += recv_size;
-
-                if (recv_total == sizeof(UnauthReflectedPacket)) {
+                if (recv_size == sizeof(UnauthReflectedPacket)) {
                     // Sender info
                     reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
                     decode_be_timestamp(&reflectedPacket->SenderTime);
@@ -647,17 +689,19 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
                     decode_be_timestamp(&reflectedPacket->RecvTime);
                     decode_be_timestamp(&reflectedPacket->Time);
 
-                    return recv_total;
+                    *recv_total = recv_size;
+                    return 0;
                 }
 
-                print_warn("recv_total different then expected");
+                print_warn("unexpected reflected packet size: %zd, ignoring packet", recv_size);
+                return 0;
             } else {
-                print_warn("socket not in rset");
+                print_warn("socket not in rset receiving reflected packet");
             }
         }
     } while ((timeout->tv_sec > 0) && (timeout->tv_usec > 0));
 
-    return -1;
+    return SEXIT_MP_TIMEOUT;
 }
 
 /* vim: set et ts=4 sw=4 : */
