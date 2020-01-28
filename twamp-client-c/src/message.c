@@ -41,6 +41,7 @@ int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetin
     fd_set rset, rset_master;
     struct timeval tv_timeo;
 
+    print_msg(MSG_DEBUG, "Sending server gretings message");
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
 
@@ -108,6 +109,7 @@ int message_server_start(int socket, int timeout, ServerStart *srvStart) {
     fd_set rset, rset_master;
     struct timeval tv_timeo;
 
+    print_msg(MSG_DEBUG, "Sending server start message");
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
 
@@ -174,6 +176,7 @@ int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
     fd_set rset, rset_master;
     struct timeval tv_timeo;
 
+    print_msg(MSG_DEBUG, "Sending acept session message");
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
 
@@ -239,6 +242,7 @@ int message_start_ack(int socket, int timeout, StartAck *strAck) {
     fd_set rset, rset_master;
     struct timeval tv_timeo;
 
+    print_msg(MSG_DEBUG, "Sending start ack message");
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
 
