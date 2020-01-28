@@ -1,3 +1,10 @@
+simet-ma (0.16.2) bionic; urgency=medium
+
+  * simet-ma version 0.16.2
+  * twamp: rework error paths and debug messages
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 28 Jan 2020 14:39:11 -0300
+
 simet-ma (0.16.1) unstable; urgency=medium
 
   * simet-ma version 0.16.1
