@@ -124,6 +124,12 @@ __simet_agent_attributes() {
 	[ -z "$SIMET_MAC_LABEL" ] && return 0
 	echo "\"attributes\":{\"mac_address\":\"$SIMET_MAC_LABEL\"},"
 }
+__simet_agent_environment() {
+	simet2_agentinfo && {
+		echo "\"agent_environment_name\":\"$SIMET2_AGENT_ENVNAME\","
+		echo "\"agent_environment_version\":\"$SIMET2_AGENT_ENVVERSION\","
+	}
+}
 
 __simet_create_agent_apicall() {
 	cat <<- EOFSCAG | \
@@ -135,6 +141,7 @@ __simet_create_agent_apicall() {
 	  || return 1
 	{ $*
 	  $(call __simet_agent_attributes)
+	  $(call __simet_agent_environment)
 	  "engine_name":"@SIMET_ENGINE_NAME@",
 	  "engine_version":"@PACKAGEVERSION@",
 	  "agent_family":"$SIMET2_AGENT_FAMILY" }
@@ -166,6 +173,7 @@ __simet_modify_agent_apicall() {
 	{
 	  $SC
 	  $(call __simet_agent_attributes)
+	  $(call __simet_agent_environment)
 	  "engine_name":"@SIMET_ENGINE_NAME@",
 	  "engine_version":"@PACKAGEVERSION@",
 	  "agent_family":"$SIMET2_AGENT_FAMILY",
