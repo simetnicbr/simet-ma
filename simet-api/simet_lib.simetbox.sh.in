@@ -48,8 +48,10 @@ get_http_useragent()
 
 # sets environment variables that match the environment
 simet2_agentinfo() {
-	SIMET2_AGENT_ENVNAME=$(sed -nE -e "/DISTRIB_DESCRIPTION/ { s/[^=]+=// ; s/^[\'\"]// ; s/[\'\"]$// ; p }" /etc/openwrt_release)
-	SIMET2_AGENT_ENVVERSION=$(cat /etc/openwrt_version)
+	SIMET2_AGENT_ENVNAME=$(sed -nE -e "/DISTRIB_DESCRIPTION/ { s/[^=]+=// ; s/^[\'\"]// ; s/[\'\"]$// ; p }" \
+		/etc/openwrt_release 2>/dev/null) || return $?
+	SIMET2_AGENT_ENVVERSION=$(cat /etc/openwrt_version 2>/dev/null) \
+		|| return $?
 	:
 }
 

@@ -40,7 +40,7 @@ get_http_useragent()
 # sets environment variables that match the environment
 simet2_agentinfo() {
 	SIMET2_AGENT_ENVNAME=$(lsb_release -s -i) || SIMET2_AGENT_ENVNAME="(generic)"
-	SIMET2_AGENT_ENVVERSION=$(lsb_release -s -d)
+	SIMET2_AGENT_ENVVERSION=$(lsb_release -s -d) || SIMET2_AGENT_ENVVERSION="unknown"
 	:
 }
 
