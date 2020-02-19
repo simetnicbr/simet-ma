@@ -144,7 +144,7 @@ SMA_SERVICES=
 call simet_ma_trap_setup
 
 # build inetup command, try to drop priviledges
-INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetupc -b $BOOTID"
+INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetconn-state -b $BOOTID"
 [ -r "$AGENT_TOKEN_FILE" ] && INETUP_ARGS="$INETUP_ARGS -j $(cat $AGENT_TOKEN_FILE)"
 [ -r "$AGENT_ID_FILE" ] && INETUP_ARGS="$INETUP_ARGS -d $(cat $AGENT_ID_FILE)"
 INETUPCMD="sudo -u $USER -g $USER -H -n"
