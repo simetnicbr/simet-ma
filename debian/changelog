@@ -1,4 +1,12 @@
-simet-ma (0.16.2) bionic; urgency=medium
+simet-ma (0.16.3) unstable; urgency=medium
+
+  * simet-ma version 0.16.3
+  * simet_register_ma: add missing fields (from agent-info metric)
+    to MA register procedure.  They were already sent when measuring.
+
+ -- SIMET <medicoes@simet.nic.br>  Wed, 19 Feb 2020 14:31:00 -0300
+
+simet-ma (0.16.2) unstable; urgency=medium
 
   * simet-ma version 0.16.2
   * twamp: rework error paths and debug messages
