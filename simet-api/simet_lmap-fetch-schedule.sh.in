@@ -146,7 +146,7 @@ simet_lmap_verifyconfig() {
 
 activateschedule() {
 	NEWSCHED_HASH=$(gethash "$OUTFILE")
-	[ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] && {
+	if [ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] ; then
 		call simet_lmap_verifyconfig $LMAP_CONFIG_PATH "$OUTFILE" || {
 			simet_log simet-lmapd daemon.err "illegal schedule received from controller"
 			return 1
@@ -157,8 +157,10 @@ activateschedule() {
 		}
 		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
 		call simet_lmap_reload_config || return 1
-		simet_log simet-ma daemon.notice "SIMET: schedule has changed"
-	}
+		simet_log simet-ma daemon.notice "SIMET schedule has changed"
+	else
+		simet_log simet-ma daemon.info "SIMET schedule unchanged"
+	fi
 	:
 }
 
@@ -201,7 +203,7 @@ getschedule() {
 		|| abend "failed to download schedule from controller"
 
 	activateschedule \
-		|| simet_log simet-lmapd daemon.err "failed to load/activate new schedule"
+		|| simet_log simet-lmapd daemon.info "keeping currently active schedule"
 
 	# always try to send state after downloading a schedule
 	call simet_lmap_sendstate \

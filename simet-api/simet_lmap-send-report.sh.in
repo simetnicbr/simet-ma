@@ -62,7 +62,10 @@ send_report_to_collector() {
 		-H "Authorization: Bearer $OLDAT" \
 		-H "Content-Type: application/yang.data+json" \
 		"$1" \
-	&& return 0
+	  && {
+		simet_log simet-ma daemon.info "LMAP report accepted by collector $1"
+		return 0
+	}
 	shift
     done
     return 1
