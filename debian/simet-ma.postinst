@@ -33,9 +33,6 @@ create_crond() {
 	# Renova autorização e identificação da sonda SIMET
 	$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
 
-	# Run the SIMET periodic measurements
-	# Executa a medição periódica do SIMET
-	$RND2 nicbr-simet if [ -x /opt/simet/bin/simet-ma_periodic.sh ] ; then /opt/simet/bin/simet-ma_periodic.sh >/dev/null 2>&1 || true ; fi
 	CRONDEOF
     :
 }
@@ -65,8 +62,12 @@ case "$1" in
 	  rm -f "$LMAP_SCHEDULE_FILE" ) 2>/dev/null >/dev/null <&- || true
 	rm -f /var/run/lmapd/*.json
 
-	#FIXME: the first time we need to change the contents of the
-	#generated crontab, the [ -e ] test must be replaced
+	#FIXME:
+	# replace the [ -e ] test below if changes the contents of the
+	# generated crontab are absolutely required.
+	#
+	#Changes that did not require it:
+	#  * simet-ma_periodic.sh removed from cron and package
         [ -e /etc/cron.d/simet-ma ] || create_crond > /etc/cron.d/simet-ma
     ;;
 

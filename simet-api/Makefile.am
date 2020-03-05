@@ -31,14 +31,13 @@ sbprefix = simetbox
 jsonfilter=jsonfilter
 theshell=/bin/sh
 else
-dist_bin_SCRIPTS = simet-ma_periodic.sh simet_lmap-fetch-schedule.sh
+dist_bin_SCRIPTS = simet_lmap-fetch-schedule.sh
 sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 endif
 
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
-EXTRA_DIST += simet-ma_periodic.sh.in
 
 dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh
 EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in
