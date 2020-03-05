@@ -4,20 +4,32 @@
 # main program source code.
 
 log_error(){
-  echo "ERROR: $1"
+  echo "ERROR: $*" >&2
 }
 
 log_info(){
-  echo "INFO: $1"
+  [ "$QUIET" != "true" ] && echo "INFO: $*"
+  :
+}
+
+log_notice(){
+  [ "$QUIET" != "true" ] && log_info "$@"
+  :
 }
 
 log_debug(){
-  if [ "$DEBUG" = "true" ]; then
-    echo "DEBUG: $1"
-  fi
+  [ "$DEBUG" = "true" ] && echo "DEBUG: $*"
+  :
 }
 
-log(){
-  log_info "$1"
+log_measurement(){
+  log_info "starting measurement task: $*"
+}
+log_verbose(){
+  [ "$VERBOSE" = "true" ] && log_info "$@"
+  :
+}
+log_important(){
+  QUIET= log_notice "$@"
 }
 # keep line

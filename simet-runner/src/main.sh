@@ -33,13 +33,9 @@
 # - sub-scripts
 ################################################################################
 
-log_info "Executing $0"
-
 main(){
   local _result="undefined"
   local _configured=0
-
-  log_info "$PACKAGE_STRING start"
 
   # read params
   while [ ! $# -eq 0 ]; do
@@ -55,6 +51,7 @@ main(){
         ;;
       --debug)
         DEBUG="true"
+        VERBOSE="true"
         ;;
       --test)
         if [ -n "$2" ] ; then
@@ -64,6 +61,14 @@ main(){
           exit 1
         fi
         shift
+        ;;
+      -v|--verbose)
+        VERBOSE="true"
+        QUIET="false"
+        ;;
+      -q|--quiet)
+        VERBOSE="false"
+        QUIET="true"
         ;;
     esac
     shift
@@ -75,11 +80,13 @@ main(){
     done
   fi
 
+  log_important "$PACKAGE_STRING starting..."
+
   _main_setup
   _main_orchestrate
   _main_cleanup
 
-  log_info "$PACKAGE_STRING end"
+  log_debug "$PACKAGE_STRING end"
 }
 
 _main_orchestrate(){ 
@@ -87,7 +94,7 @@ _main_orchestrate(){
   AGENT_ID="undefined"
   AGENT_TOKEN="undefined"
   authentication
-  log_debug "Authentication: AGENT_ID=$AGENT_ID AGENT_TOKEN=$AGENT_TOKEN"
+  log_debug "Authentication: AGENT_ID=$AGENT_ID"
 
   # 2. task service discovery
   local _discovered="false"
@@ -95,7 +102,7 @@ _main_orchestrate(){
   discover_next_peer
   while [ $? -eq 0 ]; do
     local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
-    log_info "Discovered measurement peer. Authorization attempt at $_auth_endpoint"
+    log_debug "authorization attempt at $_auth_endpoint"
     # 3. task authorization: try at successive peers, until first success 
     AUTHORIZATION_TOKEN=
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
@@ -106,9 +113,9 @@ _main_orchestrate(){
     discover_next_peer
   done
   if [ "$_discovered" = "true" ]; then
-    log_info "Peer discovery and authorization success: Selected peer: $_auth_endpoint"
+    log_notice "measurement peer: $_auth_endpoint"
   else
-    log_error "Peer discovery and authorization failure: Last attempt at peer: $_auth_endpoint"
+    log_error "Peer discovery and authorization failed"
     exit 1
   fi
 
@@ -125,12 +132,12 @@ _main_orchestrate(){
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TCPBW" ] ; then
     _task_tcpbw "4"
     sleep 3
-    log_debug "Refresh the authorization token, as each bandwidth measurement session (ipv4, ipv6) requires a unique token."
+    log_debug "Refresh the authorization token for ipv6."
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
     if [ $? -eq 0 ]; then
       _task_tcpbw "6"
     else
-      log_info "Skipping second bandwidth measurement (ipv6); authorization has been denied (server monitor)."
+      log_warn "skipping ipv6 throughput measurement: authorization has been denied"
     fi
   fi
 
@@ -143,7 +150,7 @@ _main_orchestrate(){
   _task_environment
 
   # 7. task report
-  log_info "Start task REPORT"
+  log_debug "Start task REPORT"
   export _report_dir="$BASEDIR/report"
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   report_template > "$_report_dir/result.json"
@@ -161,13 +168,13 @@ _main_orchestrate(){
     --verbose \
     "${_endpoint}measure" 2>&1
   ) || {
-    log "POST $_endpoint failed. See the HTTP Trace in the following log lines."
-    log "HTTP Trace: ${_resp}"
-    log_info "Task REPORT failed"
+    log_error "failed to submit LMAP report, measurement results will be lost"
+    log_debug "HTTP Trace: ${_resp}"
+    log_debug "Task REPORT failed"
     return 1
   }
-  log_info "Published $_report_dir/result.json report to $_endpoint"
-  log_info "End task REPORT"
+  log_notice "LMAP measurement report accepted by collector: $_endpoint"
+  log_debug "End task REPORT"
 }
 
 haspipefail(){
@@ -176,7 +183,7 @@ haspipefail(){
 }
 
 _task_environment(){
-  log_info "Start task agent environment"
+  log_debug "Start task agent environment"
   export _task_name="${LMAP_TASK_NAME_PREFIX}agent-info"
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/0metadata"
@@ -194,11 +201,11 @@ _task_environment(){
   else
     task_template > "$_task_dir/result.json"
   fi
-  log_info "End task agent environment"
+  log_debug "End task agent environment"
 }
 
 _task_geolocation(){
-  log_info "Start task geolocation"
+  log_debug "Start task geolocation"
   export _task_name="${LMAP_TASK_NAME_PREFIX}geolocation"
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/geolocation"
@@ -217,7 +224,7 @@ _task_geolocation(){
   else
     task_template > "$_task_dir/result.json"
   fi
-  log_info "End task geolocation"
+  log_debug "End task geolocation"
 }
 
 _task_twamp(){
@@ -230,7 +237,7 @@ _task_twamp(){
     log_info "Skipping task TWAMP IPv$_af"
     return 0
   fi
-  log_info "Start task TWAMP IPv$_af"
+  log_measurement "TWAMP IPv$_af"
   local _host=$( discover_service TWAMP HOST )
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
@@ -244,8 +251,7 @@ _task_twamp(){
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
-  log_debug "Executing: $TWAMPC -$_af -p $_port $_host > $_task_dir/tables/twamp.json"
-  if haspipefail ; then
+  if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
     eval "$TWAMPC -$_af -p $_port $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/twamp.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
@@ -265,7 +271,7 @@ _task_twamp(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_info "End Task TWAMP IPv$_af"
+  log_debug "End Task TWAMP IPv$_af"
 }
 
 _task_tcpbw(){
@@ -278,7 +284,7 @@ _task_tcpbw(){
     log_info "Skipping task TCPBW IPv$_af"
     return 0
   fi
-  log_info "Start task TCPBW IPv$_af"
+  log_measurement "TCPBW IPv$_af"
   local _host=$( discover_service TCPBW HOST )
   local _port=$( discover_service TCPBW PORT )
   local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
@@ -298,8 +304,7 @@ _task_tcpbw(){
   else
     tcpbwauth=
   fi
-  log_debug "Executing: $TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} > $_task_dir/tables/tcpbw.json"
-  if haspipefail ; then
+  if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
     eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
@@ -319,7 +324,7 @@ _task_tcpbw(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_info "End Task TCPBW IPv$_af"
+  log_debug "End Task TCPBW IPv$_af"
 }
 
 
@@ -369,8 +374,11 @@ _main_cleanup(){
 }
 
 _main_config(){
-  . "$1"
-  log_info "Loaded config '$1': AGENT_ID_FILE=$AGENT_ID_FILE AGENT_TOKEN_FILE=$AGENT_TOKEN_FILE API_SERVICE_DISCOVERY=$API_SERVICE_DISCOVERY AGENT_LOCK=$AGENT_LOCK TEMPLATE_DIR=$TEMPLATE_DIR LMAP_SCHEDULE=$LMAP_SCHEDULE LMAP_TASK_NAME_PREFIX=$LMAP_TASK_NAME_PREFIX TWAMPC=$TWAMPC TCPBWC=$TCPBWC JSONFILTER=$JSONFILTER"
+  . "$1" || {
+    log_error "Failed to load config file: $1"
+    exit 1
+  }
+  log_debug "Loaded config file: $1"
   local _msg=""
   if [ "$AGENT_ID_FILE" = "" ]; then _msg="$_msg AGENT_ID_FILE"; fi
   if [ "$AGENT_TOKEN_FILE" = "" ]; then _msg="$_msg AGENT_TOKEN_FILE"; fi
