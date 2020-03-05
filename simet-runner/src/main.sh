@@ -70,6 +70,9 @@ main(){
         VERBOSE="false"
         QUIET="true"
         ;;
+      --syslog)
+        LOG_TO_SYSLOG=true
+        ;;
     esac
     shift
   done

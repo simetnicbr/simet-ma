@@ -16,4 +16,4 @@ if [ ! -r "$AGENT_ID_FILE" ] || [ ! -r "$AGENT_TOKEN_FILE" ] ; then
 	@BINDIR@/simet_register_ma.sh
 fi
 
-exec @BINDIR@/simet-ma_run.sh "$@"
+exec @BINDIR@/simet-ma_run.sh --syslog "$@"
