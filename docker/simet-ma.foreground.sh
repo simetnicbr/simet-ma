@@ -91,9 +91,19 @@ call simet_ma_docker_volume_prepare
 # (security updates and SIMET engine updates, only)
 simet_ma_docker_ep_update() {
 	echo "SIMET-MA: checking for engine and security updates..."
+	rm -f /etc/apt/apt.conf.d/54nicbr-unattended-upgrade-disable-distro
 	apt-get -qq update && unattended-upgrades || true
 }
+simet_ma_docker_ep_postupdate() {
+	# Disable unattended-updates for everything but SIMET packages,
+	# due to procfs being half-broken inside a non-CAP_SYS_ADMIN container
+	cat <<- SIMETMADOCKEREPPU > /etc/apt/apt.conf.d/54nicbr-unattended-upgrade-disable-distro
+		#clear Unattended-Upgrade::Allowed-Origins;
+		#clear Unattended-Upgrade::Origins-Pattern;
+	SIMETMADOCKEREPPU
+}
 call simet_ma_docker_ep_update
+call simet_ma_docker_ep_postupdate
 
 # create virtual label for this instance
 simet_ma_docker_vlabel_setup() {
