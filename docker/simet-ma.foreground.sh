@@ -39,7 +39,7 @@ abend() {
 	exit $RC
 }
 
-# Load in SIMET-MA defaults
+# Load in SIMET-MA defaults and lib functions
 . /opt/simet/lib/simet/simet_lib.sh || abend "failed to load simet_lib component"
 
 ##
@@ -47,26 +47,6 @@ abend() {
 ##
 [ -r "$0.hooks" ] &&
 	. "$0.hooks"
-
-is_call_implemented() {
-	command -V "$1" > /dev/null 2>&1
-}
-call() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}_override" ; then
-		"${cmd}_override" "$@"
-        else
-		"${cmd}" "$@"
-	fi
-}
-call_hook() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}" ; then
-		"${cmd}" "$@"
-	fi
-}
 
 _simet_ma_exit() {
 	trap - SIGTERM SIGINT SIGQUIT
