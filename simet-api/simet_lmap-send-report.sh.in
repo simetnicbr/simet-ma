@@ -44,8 +44,9 @@ while [ $# -gt 0 ] ; do
 	shift
 done
 
-AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
+if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] ; then
+	abend "missing configuration: AGENT_ID_FILE or AGENT_TOKEN_FILE"
+fi
 LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
 
 [ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"

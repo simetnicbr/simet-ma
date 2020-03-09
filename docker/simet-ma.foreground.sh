@@ -33,6 +33,12 @@
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
+RC=1
+abend() {
+	echo "SIMET-MA: $*" >&2
+	exit $RC
+}
+
 ##
 ## Hook system
 ##
@@ -112,13 +118,11 @@ INETUP=/opt/simet/bin/inetupc
 REGISTER=/opt/simet/bin/simet_register_ma.sh
 SIMETRUN=/opt/simet/bin/simet-ma_run.sh
 
-# do not mess with these unless you know what you are doing
 [ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
 [ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
-AGENT_ID_FILE=${AGENT_ID_FILE:-/opt/simet/etc/simet/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-/opt/simet/etc/simet/agent.jwt}
-LMAP_AGENT_FILE=${LMAP_AGENT_FILE:-/opt/simet/etc/simet/lmap/agent-id.json}
-SIMET_INETUP_SERVER=${SIMET_INETUP_SERVER:-simet-monitor-inetup.simet.nic.br}
+[ -z "$AGENT_ID_FILE" ]    && abend "missing AGENT_ID_FILE in config"
+[ -z "$AGENT_TOKEN_FILE" ] && abend "missing AGENT_TOKEN_FILE in config"
+[ -z "$LMAP_AGENT_FILE" ]  && abend "missing LMAP_AGENT_FILE in config"
 BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 
 call_hook simet_ma_docker_env_setup

@@ -23,7 +23,6 @@ SIMET2_AGENT_FAMILY="system_service"
 
 [ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
-AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
 
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!

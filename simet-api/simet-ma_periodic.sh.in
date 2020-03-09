@@ -9,8 +9,6 @@ set -e
 
 [ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
-AGENT_ID_FILE=${AGENT_ID_FILE:-@SIMETCONFDIR@/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-@SIMETCONFDIR@/agent.jwt}
 
 if [ ! -r "$AGENT_ID_FILE" ] || [ ! -r "$AGENT_TOKEN_FILE" ] ; then
 	@BINDIR@/simet_register_ma.sh

@@ -23,7 +23,6 @@ SIMET2_AGENT_FAMILY="embedded"
 
 [ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
-AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
 
 SIMET_MAC_LABEL=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
 
