@@ -49,7 +49,7 @@ call_hook() {
 
 . @SIMETLIBDIR@/simet_lib.sh
 
-LMAP_RECONFIG=${LMAP_RECONFIG:=/etc/init.d/simet-lmapd reload}
+LMAP_RECONFIG=${LMAP_RECONFIG:-/etc/init.d/simet-lmapd reload}
 LMAPD=@BINDIR@/lmapd
 LMAPCTL=@BINDIR@/lmapctl
 
