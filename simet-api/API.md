@@ -334,6 +334,8 @@ into some details of the SIMET2 web API.
   manipulate local variables, etc.  As such, please read the script to
   know what hooks are available.
 
+  The hook implementation is provided by simet\_lib.sh.
+
 ### simet\_register\_ma.sh (in the future, maybe simetbox\_register\_ma.sh)
 
   <libdir>/simet/simet\_register\_ma-hooks.sh

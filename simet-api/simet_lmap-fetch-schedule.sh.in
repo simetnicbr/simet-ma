@@ -32,8 +32,7 @@ LMAPD=@BINDIR@/lmapd
 LMAPCTL=@BINDIR@/lmapctl
 
 # Load hooks and overrides
-[ -r @SIMETLIBDIR@/simet_register_ma-hooks.sh ] && . @SIMETLIBDIR@/simet_register_ma-hooks.sh
-[ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
+simet_load_hooks lmap-fetch-schedule
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 1000000"

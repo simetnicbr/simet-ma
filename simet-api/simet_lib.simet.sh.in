@@ -75,4 +75,9 @@ call_hook() {
 		"${cmd}" "$@"
 	fi
 }
+simet_load_hooks() {
+	[ -r "@SIMETLIBDIR@/simet_$1-hooks.sh" ]  && . "@SIMETLIBDIR@/simet_$1-hooks.sh"
+	[ -r "@SIMETCONFDIR@/simet_$1-hooks.sh" ] && . "@SIMETCONFDIR@/simet_$1-hooks.sh"
+	:
+}
 :
