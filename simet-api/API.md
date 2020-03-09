@@ -6,15 +6,17 @@ into some details of the SIMET2 web API.
 ## System-wide config
 
   <libdir>/simet/simet-ma.conf
+  <libdir>/simet/conf.d/*.conf
   <sysconfdir>/simet/simet-ma.conf
 
   $<VARIABLE> below refers to a variable set on the above files.  The
   file follows the VARIABLE="contents with spaces" syntax, "" is
   optional when the shell would accept it without quotes.
 
-  First, the one in libdir is read.  Then, the one in sysconfdir is read
-  (*if* it exists, it is not required to be there).  The last definition
-  for each variable "wins".
+  First, the simet-ma.conf file in libdir is read.  Then, any .conf files
+  inside the conf.d directory are read, in locale order.  Then, the one in
+  sysconfdir is read if it exists.  The last definition for each variable
+  "wins".
 
   The config files are not to be modifiable by the same user that runs
   the SIMET suite (unless it is running as root, which is also not

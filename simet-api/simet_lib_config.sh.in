@@ -2,5 +2,10 @@
 # SIMET-MA compatibility layer (shell script)
 
 [ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
+[ -d @SIMETLIBDIR@/conf.d ] && {
+	for i in @SIMETLIBDIR@/conf.d/*.conf ; do
+		[ -r "$i" ] && . "$i"
+	done
+}
 [ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
 :
