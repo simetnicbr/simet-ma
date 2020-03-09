@@ -39,6 +39,9 @@ abend() {
 	exit $RC
 }
 
+# Load in SIMET-MA defaults
+. /opt/simet/lib/simet/simet_lib.sh || abend "failed to load simet_lib component"
+
 ##
 ## Hook system
 ##
@@ -118,8 +121,6 @@ INETUP=/opt/simet/bin/inetupc
 REGISTER=/opt/simet/bin/simet_register_ma.sh
 SIMETRUN=/opt/simet/bin/simet-ma_run.sh
 
-[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
-[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
 [ -z "$AGENT_ID_FILE" ]    && abend "missing AGENT_ID_FILE in config"
 [ -z "$AGENT_TOKEN_FILE" ] && abend "missing AGENT_TOKEN_FILE in config"
 [ -z "$LMAP_AGENT_FILE" ]  && abend "missing LMAP_AGENT_FILE in config"

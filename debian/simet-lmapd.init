@@ -33,9 +33,9 @@ DAEMON_ARGS="-j"
 
 # not called on default init-d-script do_restart/reload
 do_start_prepare() {
-	[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
-	[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
-	if [ -z "$LMAP_QUEUE_DIR" ] || [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] ; then
+	RC=0
+	. /opt/simet/lib/simet/simet_lib_config.sh || RC=$?
+	if [ $RC -ne 0 ] || [ -z "$LMAP_QUEUE_DIR" ] || [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] ; then
 		echo "$0: required configuration missing, aborting..." >&2
 		return 1
 	fi

@@ -9,10 +9,9 @@
 test -f /opt/simet/bin/simet_register_ma.sh && /opt/simet/bin/simet_register_ma.sh >/dev/null
 
 # Attempt to contact the controller if the schedule is too old
-[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf || true
-[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf || true
-[ -n "$LMAP_SCHEDULE_FILE" ] \
-	&& [ -f /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
+. /opt/simet/lib/simet/simet_lib_config.sh \
+	&& [ -n "$LMAP_SCHEDULE_FILE" ] \
+	&& [ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
 	&& [ -n "$(find $LMAP_SCHEDULE_FILE -mtime +1)" ] \
 	&& /opt/simet/bin/simet_lmap-fetch-schedule.sh || true
 :

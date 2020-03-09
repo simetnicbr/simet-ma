@@ -21,8 +21,7 @@
 # preseed some variables
 SIMET2_AGENT_FAMILY="system_service"
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+. @SIMETLIBDIR@/simet_lib_config.sh
 
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!

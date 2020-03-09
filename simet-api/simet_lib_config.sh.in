@@ -1,0 +1,6 @@
+#!/bin/sh
+# SIMET-MA compatibility layer (shell script)
+
+[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
+[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+:

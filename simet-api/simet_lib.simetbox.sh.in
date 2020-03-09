@@ -21,8 +21,7 @@
 # preseed some variables
 SIMET2_AGENT_FAMILY="embedded"
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+. @SIMETLIBDIR@/simet_lib_config.sh
 
 SIMET_MAC_LABEL=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
 

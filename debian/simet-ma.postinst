@@ -63,9 +63,8 @@ case "$1" in
 	}
 
 	# Remove any downloaded schedule
-	( [ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf ;
-	  [ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf ;
-	  [ -f "$LMAP_SCHEDULE_FILE" ] && rm -f "$LMAP_SCHEDULE_FILE" ) 2>/dev/null >/dev/null <&- || true
+	( . /opt/simet/lib/simet/simet_lib_config.sh \
+	  && [ -f "$LMAP_SCHEDULE_FILE" ] && rm -f "$LMAP_SCHEDULE_FILE" ) 2>/dev/null >/dev/null <&- || true
 	rm -f /var/run/lmapd/*.json
 
 	#FIXME: the first time we need to change the contents of the

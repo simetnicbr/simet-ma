@@ -7,8 +7,7 @@
 
 set -e
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+. @SIMETLIBDIR@/simet_lib_config.sh
 
 if [ ! -r "$AGENT_ID_FILE" ] || [ ! -r "$AGENT_TOKEN_FILE" ] ; then
 	@BINDIR@/simet_register_ma.sh

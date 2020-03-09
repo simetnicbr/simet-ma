@@ -17,4 +17,5 @@ simet*_read_vlabel.sh
 simet*_register_vlabel.sh
 simet_create_vlabel.sh*
 simet_lib.sh*
+simet_lib_config.sh
 lmap-tasks/*.sh

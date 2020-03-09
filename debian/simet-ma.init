@@ -27,9 +27,9 @@ PIDFILE=/var/run/simet-inetupc.pid
 
 START_ARGS="-u $USER -c $USER --background --make-pidfile"
 
-[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
-[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
-if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || \
+RC=0
+. /opt/simet/lib/simet/simet_lib_config.sh || RC=$?
+if [ $RC -ne 0 ] || [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || \
    [ -z "$GEOLOC_CACHE" ] || [ -z "$SIMET_INETUP_SERVER" ] ; then
 	echo "$0: required configuration missing, aborting..." >&2
 	exit 1

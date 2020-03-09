@@ -144,9 +144,9 @@ CLEANFILES += conf/simet-ma.conf agent-version.txt
 simet_lib.sh.in : simet_lib.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
 
-dist_simetlib_SCRIPTS = simet_lib.sh
-EXTRA_DIST += simet_lib.simetbox.sh.in  simet_lib.simet.sh.in
-CLEANFILES += simet_lib.sh simet_lib.sh.in
+dist_simetlib_SCRIPTS = simet_lib.sh simet_lib_config.sh
+EXTRA_DIST += simet_lib.simetbox.sh.in  simet_lib.simet.sh.in simet_lib_config.sh.in
+CLEANFILES += simet_lib.sh simet_lib.sh.in simet_lib_config.sh
 
 dist_simetlmapregistry_DATA = registry.d/simet-ma_base-registry.json registry.d/simet-ma_tasklet-registry.json
 dist_simetlmapregistry_DATA += registry.d/simet.nic.br_subsystem-id.tag-registry.json
