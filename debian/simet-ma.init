@@ -20,12 +20,12 @@ DAEMON=/opt/simet/bin/inetupc
 NAME="inetupc"
 COMMAND_NAME="inetupc"
 DESC="SIMET Measurement Agent"
-USER=nicbr-simet
-GROUP=$USER
+SUSER=nicbr-simet
+SGROUP=$SUSER
 
 PIDFILE=/var/run/simet-inetupc.pid
 
-START_ARGS="-u $USER -c $USER --background --make-pidfile"
+START_ARGS="-u $SUSER -c $SUSER --background --make-pidfile"
 
 [ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
 [ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
@@ -44,10 +44,10 @@ DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
 do_start_prepare() {
 	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
 	GEO_DIR=$(dirname "${GEOLOC_CACHE}")
-	[ -n "$GEO_DIR" ] && mkdir -m 0750 -p "$GEO_DIR" && chgrp $GROUP "$GEO_DIR"
+	[ -n "$GEO_DIR" ] && mkdir -m 0750 -p "$GEO_DIR" && chgrp $SGROUP "$GEO_DIR"
 
 	# --name doesn't matter, as long as it doesn't match, and not too long
-	start-stop-daemon -c "$USER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
+	start-stop-daemon -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	:
 }
 
