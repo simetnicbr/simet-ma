@@ -65,6 +65,8 @@ do_stop_cmd_override() {
 }
 
 # init-d-script do_status() is broken when PIDFILE is set due to a bug
+# status_of_proc() requires CAP_SYS_ADMIN (due to the use of pidof -c)
+# should any issues with the pidfile happen (incorrect pid inside).
 do_status_override() {
-	status_of_proc "$DAEMON" "$NAME" -p "${PIDFILE}" || return $?
+	status_of_proc -p "${PIDFILE}" "$DAEMON" "$NAME" || return $?
 }
