@@ -58,8 +58,9 @@ RUN /usr/local/bin/simet-ma-prepare.sh && rm -f /usr/local/bin/simet-ma-prepare.
 
 #====== no system services may start (end) ======
 
-RUN rm -fr /usr/sbin/policy-rc.d /usr/local/bin/*
+RUN rm -fr /usr/local/bin/*
 COPY docker/simet-ma.foreground.sh* /opt/simet/bin/
+COPY docker/policy-rc.d /usr/sbin/
 
 VOLUME /opt/simet/etc/simet
 
