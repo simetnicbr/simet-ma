@@ -52,7 +52,7 @@ do_start_prepare() {
 }
 
 do_reload() {
-	invoke-rc.d --quiet simet-lmapd reload || true
+	invoke-rc.d simet-lmapd reload || true
 	# "reload" inetup by restarting it
 	do_restart || return $?
 }
