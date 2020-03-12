@@ -75,6 +75,21 @@ do_start_prepare() {
 
 # start-stop-daemon --exec requires CAP_SYS_ADMIN, no good inside a container
 
+# Return
+#   0 if daemon has been started
+#   1 if daemon was already running
+#   2 if daemon could not be started
+do_start_cmd_override() {
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name $NAME --test > /dev/null \
+	  || return 1
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name $NAME -- $DAEMON_ARGS \
+	  || return 2
+}
+
 do_reload() {
 	log_action_begin_msg "Validating $DESC configuration"
 	if $LMAPCTL validate >/dev/null 2>&1 ; then
