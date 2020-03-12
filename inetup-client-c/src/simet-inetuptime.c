@@ -1915,6 +1915,9 @@ int main(int argc, char **argv) {
 
         if (got_reload_signal && !got_exit_signal) {
             got_reload_signal = 0;
+            if (load_agent_data(agent_id_file, agent_token_file)) {
+                print_err("failed to reload agent identification credentials, using old");
+            }
             for (j = 0; j < servers_count; j++)
                 simet_uptime2_reconnect(servers[j]);
             /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
