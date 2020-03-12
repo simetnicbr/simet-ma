@@ -57,7 +57,9 @@ int  log_level = 2;
 const char *progname = PACKAGE_NAME;
 
 static struct simet_inetup_server **servers = NULL;
+static const char *agent_id_file = NULL;
 static const char *agent_id = NULL;
+static const char *agent_token_file = NULL;
 static const char *agent_token = NULL;
 static const char *boot_id = NULL;
 static const char *agent_mac = NULL;
@@ -1534,6 +1536,80 @@ static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
 }
 
 /*
+ * Configuration
+ */
+
+/* returns 0 ok, (-1, errno set) on error. *p unchanged on error */
+static int fread_agent_str(const char *path, const char ** const p)
+{
+    FILE *fp;
+    char *b;
+    int n, e;
+
+    assert(path && p);
+
+    fp = fopen(path, "r");
+    if (!fp)
+        return -1;
+
+    do {
+        n = fscanf(fp, " %256000ms ", &b);
+    } while (n == EOF && errno == EINTR);
+
+    e = (errno)? errno : EINVAL;
+    fclose(fp);
+
+    if (n == 1) {
+        *p = b;
+        return 0;
+    } else {
+        errno = e;
+        return -1;
+    }
+}
+
+static validate_nonempty(const char * const vname, const char * const v)
+{
+    if (!v || !v[0]) {
+        print_err("invalid %s: \"%s\"", vname, (v)? v : "");
+        return -1;
+    }
+    return 0;
+}
+
+static int load_agent_data(const char * const aid_path, const char * const atoken_path)
+{
+    const char *new_aid = agent_id;
+    const char *new_atok = agent_token;
+
+    if (aid_path) {
+        if (fread_agent_str(aid_path, &new_aid)) {
+            print_err("failed to read agent-id from %s: %s", aid_path, strerror(errno));
+            return -1;
+        } else if (validate_nonempty("agent-id", new_aid)) {
+            return -1;
+        }
+    }
+    if (atoken_path) {
+        if (fread_agent_str(atoken_path, &new_atok)) {
+            print_err("failed to read agent token from %s: %s", atoken_path, strerror(errno));
+            return -1;
+        } else if (validate_nonempty("agent token", new_atok)) {
+            return -1;
+        }
+    }
+
+    /* We only change agent-id,token as a set */
+    agent_id = new_aid;
+    agent_token = new_atok;
+
+    if (agent_id)
+        print_msg(MSG_NORMAL, "agent-id: %s", agent_id);
+
+    return 0;
+}
+
+/*
  * Command line and main executable
  */
 
@@ -1571,11 +1647,11 @@ static void print_usage(const char * const p, int mode)
             "\t-v\tverbose mode (repeat for increased verbosity)\n"
             "\t-q\tquiet mode (repeat for errors-only)\n"
             "\t-t\tinitial tcp protocol timeout in seconds\n"
-            "\t-d\tmeasurement agent id\n"
+            "\t-d\tpath to a file with the measurement agent id\n"
             "\t-m\tmeasurement agent hardcoded id\n"
             "\t-M\tmeasurement task name\n"
             "\t-b\tboot id (e.g. from /proc/sys/kernel/random/boot_id)\n"
-            "\t-j\taccess credentials\n"
+            "\t-j\tpath to a file with the access credentials\n"
             "\n"
             "server name: DNS name of server\n"
             "server port: TCP port on server\n"
@@ -1665,7 +1741,7 @@ int main(int argc, char **argv) {
             }
             break;
         case 'd':
-            agent_id = optarg;
+            agent_id_file = optarg;
             break;
         case 'm':
             agent_mac = optarg;
@@ -1677,7 +1753,7 @@ int main(int argc, char **argv) {
             boot_id = optarg;
             break;
         case 'j':
-            agent_token = optarg;
+            agent_token_file = optarg;
             break;
         case 'h':
             print_usage(progname, 1);
@@ -1712,6 +1788,11 @@ int main(int argc, char **argv) {
             uptimeserver_create(&servers[0], AF_INET) || uptimeserver_create(&servers[1], AF_INET6)) {
         print_err("out of memory");
         return SEXIT_OUTOFRESOURCE;
+    }
+
+    if (load_agent_data(agent_id_file, agent_token_file)) {
+        print_err("failed to read agent identification credentials");
+        return SEXIT_FAILURE;
     }
 
     /* state machine loop */
