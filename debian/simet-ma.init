@@ -36,8 +36,8 @@ BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 GEOLOC_CACHE=${GEOLOC_CACHE:-/var/run/simet/geoloc-cache.txt}
 
 DAEMON_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetconn-state -b $BOOTID"
-[ -r "$AGENT_TOKEN_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -j $(cat $AGENT_TOKEN_FILE)"
-[ -r "$AGENT_ID_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -d $(cat $AGENT_ID_FILE)"
+[ -n "$AGENT_TOKEN_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -j $AGENT_TOKEN_FILE"
+[ -n "$AGENT_ID_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -d $AGENT_ID_FILE"
 DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
 
 # not called by default init-d-script reload/restart
@@ -53,8 +53,11 @@ do_start_prepare() {
 
 do_reload() {
 	invoke-rc.d simet-lmapd reload || true
-	# "reload" inetup by restarting it
-	do_restart || return $?
+
+	log_daemon_msg "Reloading $DESC agent-id and credentials" "$NAME"
+	start-stop-daemon --stop --quiet --oknodo --signal HUP \
+		$STOP_ARGS --pidfile "${PIDFILE}" --name "${COMMAND_NAME}"
+	log_end_msg $?
 }
 
 # start-stop-daemon --exec requires CAP_SYS_ADMIN, no good inside a container.
