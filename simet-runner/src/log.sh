@@ -3,21 +3,51 @@
 # Source code fraction, for license information refer to the
 # main program source code.
 
+do_log(){
+  local pri="$1"
+  shift
+  [ -n "$LOG_TO_SYSLOG" ] && \
+    logger -t simet-ma -p "daemon.$pri" "$*"
+  case $pri in
+  err|error)
+    printf "%s: error: %s\n" "$0" "$*"
+    ;;
+  info|notice)
+    printf "%s: %s\n" "$0" "$*"
+    ;;
+  *)
+    printf "%s: %s: %s\n" "$0" "$pri" "$*"
+    ;;
+  esac
+}
+
 log_error(){
-  echo "ERROR: $1"
+  do_log err "$@" >&2
 }
 
 log_info(){
-  echo "INFO: $1"
+  [ "$QUIET" != "true" ] && do_log info "$@"
+  :
+}
+
+log_notice(){
+  [ "$QUIET" != "true" ] && do_log notice "$@"
+  :
 }
 
 log_debug(){
-  if [ "$DEBUG" = "true" ]; then
-    echo "DEBUG: $1"
-  fi
+  [ "$DEBUG" = "true" ] && do_log debug "$@"
+  :
 }
 
-log(){
-  log_info "$1"
+log_measurement(){
+  log_info "starting measurement task: $*"
+}
+log_verbose(){
+  [ "$VERBOSE" = "true" ] && log_info "$@"
+  :
+}
+log_important(){
+  do_log notice "$@"
 }
 # keep line

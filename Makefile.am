@@ -48,7 +48,7 @@ docker-build-prod: clean
 	docker build --network host -t simet-ma:nicbr -f docker/Dockerfile.reference-container .
 	@echo Image built from official simet-ma binaries and tagged as simet-ma:nicbr
 	@echo To run the image, do "make docker-nicbr-simetma" or run it directly:
-	@echo docker run --init -dt --rm --network host --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
+	@echo docker run --init -dt --rm --network host --cap-add NET_ADMIN --cap-add NET_RAW --mount source=simet-ma-id,target=/opt/simet/etc/simet simet-ma:nicbr
 
 docker-simetma:
 	docker run --init -dt --rm --network host --cap-add NET_ADMIN --cap-add NET_RAW \

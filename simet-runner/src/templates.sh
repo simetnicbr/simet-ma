@@ -17,14 +17,15 @@
 ################################################################################
 
 _cat_many() {
-  while [ $# -ge 2 ] ; do
-    cat "$1"
-    echo ","
+  comma=
+  while [ $# -gt 0 ] ; do
+    [ -s "$1" ] && grep -q "[^[:space:]]" "$1" && {
+      [ -n "$comma" ] && echo ","
+      cat "$1"
+      comma=1
+    }
     shift
   done
-  if [ $# -ne 0 ] ; then
-    cat "$1"
-  fi
   :
 }
 

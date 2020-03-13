@@ -46,7 +46,7 @@ authorization() {
  
   local _allowed=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measureAllowed")
   if [ $_allowed != "true" ]; then
-    log_info "Authorization request denied at: $_endpoint"
+    log_error "Authorization request denied at: $_endpoint"
     return 1
   fi
 

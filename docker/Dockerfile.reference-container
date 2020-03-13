@@ -53,6 +53,7 @@ COPY debian/etc.apt.conf.d/* /etc/apt/apt.conf.d/
 COPY debian/etc.apt.sources.list.d/* /etc/apt/sources.list.d/
 COPY docker/helpers/* /usr/local/bin/
 # Prepare container and install simet-ma for $DISTRO
+COPY docker/rsyslog.conf /etc/rsyslog.conf
 RUN /usr/local/bin/simet-ma-prepare.sh && rm -f /usr/local/bin/simet-ma-prepare.sh*
 
 #====== no system services may start (end) ======

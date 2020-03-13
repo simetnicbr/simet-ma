@@ -52,7 +52,7 @@ do_start_prepare() {
 }
 
 do_reload() {
-	invoke-rc.d --quiet simet-lmapd reload || true
+	invoke-rc.d simet-lmapd reload || true
 	# "reload" inetup by restarting it
 	do_restart || return $?
 }
@@ -63,8 +63,24 @@ do_stop_cmd_override() {
 	    $STOP_ARGS --pidfile "${PIDFILE}" --name "${COMMAND_NAME}" \
 	|| return $?
 }
+# Return
+#   0 if daemon has been started
+#   1 if daemon was already running
+#   2 if daemon could not be started
+do_start_cmd_override() {
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
+	  || return 1
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name "${COMMAND_NAME}" -- $DAEMON_ARGS \
+	  || return 2
+}
 
 # init-d-script do_status() is broken when PIDFILE is set due to a bug
+# status_of_proc() requires CAP_SYS_ADMIN (due to the use of pidof -c)
+# should any issues with the pidfile happen (incorrect pid inside).
 do_status_override() {
-	status_of_proc "$DAEMON" "$NAME" -p "${PIDFILE}" || return $?
+	status_of_proc -p "${PIDFILE}" "$DAEMON" "$NAME" || return $?
 }

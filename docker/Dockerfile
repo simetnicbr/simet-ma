@@ -102,6 +102,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
 
 COPY --from=0 /tmp/debs/ /tmp/debs/
 COPY docker/helpers/* /usr/local/bin/
+COPY docker/rsyslog.conf /etc/rsyslog.conf
 RUN /usr/local/bin/simet-ma-prepare.sh --localdebs /tmp/debs && rm -f /usr/local/bin/simet-ma-prepare.sh*
 
 #====== no system services may start (end) ======
