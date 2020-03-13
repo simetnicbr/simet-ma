@@ -25,37 +25,14 @@ abend() {
 	exit 1
 }
 
-is_call_implemented() {
-	command -V "$1" > /dev/null 2>&1
-}
-
-call() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}_override" ; then
-		"${cmd}_override" "$@"
-        else
-		"${cmd}" "$@"
-	fi
-}
-
-call_hook() {
-	cmd="$1"
-	shift
-	if is_call_implemented "${cmd}" ; then
-		"${cmd}" "$@"
-	fi
-}
-
 . @SIMETLIBDIR@/simet_lib.sh
 
-LMAP_RECONFIG=${LMAP_RECONFIG:=/etc/init.d/simet-lmapd reload}
+LMAP_RECONFIG=${LMAP_RECONFIG:-/etc/init.d/simet-lmapd reload}
 LMAPD=@BINDIR@/lmapd
 LMAPCTL=@BINDIR@/lmapctl
 
 # Load hooks and overrides
-[ -r @SIMETLIBDIR@/simet_register_ma-hooks.sh ] && . @SIMETLIBDIR@/simet_register_ma-hooks.sh
-[ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
+simet_load_hooks lmap-fetch-schedule
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 1000000"

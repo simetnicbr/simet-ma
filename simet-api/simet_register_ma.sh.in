@@ -46,8 +46,7 @@ V1_AGENT_TOKEN_FILE="@SIMETCONFDIR@/agent.jwt"
 SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
 
 # Load hooks and overrides
-[ -r @SIMETLIBDIR@/simet_register_ma-hooks.sh ] && . @SIMETLIBDIR@/simet_register_ma-hooks.sh
-[ -r @SIMETCONFDIR@/simet_register_ma-hooks.sh ] && . @SIMETCONFDIR@/simet_register_ma-hooks.sh
+simet_load_hooks register_ma
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 4000"

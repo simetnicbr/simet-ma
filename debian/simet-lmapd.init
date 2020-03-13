@@ -33,12 +33,12 @@ DAEMON_ARGS="-j"
 
 # not called on default init-d-script do_restart/reload
 do_start_prepare() {
-	[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
-	[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
-	LMAP_QUEUE_DIR="${LMAP_QUEUE_DIR:-/var/spool/lmapd/queue}"
-	LMAP_SCHEDULE_FILE="${LMAP_SCHEDULE_FILE:-/var/run/lmapd/lmap-schedule.json}"
-	LMAP_AGENT_FILE="${LMAP_AGENT_FILE:-/opt/simet/etc/simet/lmap/agent-id.json}"
-
+	RC=0
+	. /opt/simet/lib/simet/simet_lib_config.sh || RC=$?
+	if [ $RC -ne 0 ] || [ -z "$LMAP_QUEUE_DIR" ] || [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] ; then
+		echo "$0: required configuration missing, aborting..." >&2
+		return 1
+	fi
 	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
 
 	mkdir -p "$PID_DIR"

@@ -21,9 +21,7 @@
 # preseed some variables
 SIMET2_AGENT_FAMILY="system_service"
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
-AGENT_VERSION_FILE=${AGENT_VERSION_FILE:-@SIMETLIBDIR@/agent-version.txt}
+. @SIMETLIBDIR@/simet_lib_config.sh
 
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
@@ -76,5 +74,15 @@ call_hook() {
 	if is_call_implemented "${cmd}" ; then
 		"${cmd}" "$@"
 	fi
+}
+simet_load_hooks() {
+	[ -r "@SIMETLIBDIR@/simet_$1-hooks.sh" ]  && . "@SIMETLIBDIR@/simet_$1-hooks.sh"
+	[ -d @SIMETLIBDIR@/conf.d ] && {
+		for i in @SIMETLIBDIR@/conf.d/*.common.hook @SIMETLIBDIR@/conf.d/*.$1.hook ; do
+			[ -r "$i" ] && . "$i"
+		done
+	}
+	[ -r "@SIMETCONFDIR@/simet_$1-hooks.sh" ] && . "@SIMETCONFDIR@/simet_$1-hooks.sh"
+	:
 }
 :

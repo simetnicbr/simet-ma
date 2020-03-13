@@ -27,13 +27,14 @@ PIDFILE=/var/run/simet-inetupc.pid
 
 START_ARGS="-u $USER -c $USER --background --make-pidfile"
 
-[ -r /opt/simet/lib/simet/simet-ma.conf ] && . /opt/simet/lib/simet/simet-ma.conf
-[ -r /opt/simet/etc/simet/simet-ma.conf ] && . /opt/simet/etc/simet/simet-ma.conf
-AGENT_ID_FILE=${AGENT_ID_FILE:-/opt/simet/etc/simet/agent-id}
-AGENT_TOKEN_FILE=${AGENT_TOKEN_FILE:-/opt/simet/etc/simet/agent.jwt}
-SIMET_INETUP_SERVER=${SIMET_INETUP_SERVER:-simet-monitor-inetup.simet.nic.br}
+RC=0
+. /opt/simet/lib/simet/simet_lib_config.sh || RC=$?
+if [ $RC -ne 0 ] || [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || \
+   [ -z "$GEOLOC_CACHE" ] || [ -z "$SIMET_INETUP_SERVER" ] ; then
+	echo "$0: required configuration missing, aborting..." >&2
+	exit 1
+fi
 BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
-GEOLOC_CACHE=${GEOLOC_CACHE:-/var/run/simet/geoloc-cache.txt}
 
 DAEMON_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetconn-state -b $BOOTID"
 [ -n "$AGENT_TOKEN_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -j $AGENT_TOKEN_FILE"
