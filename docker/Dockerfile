@@ -110,6 +110,7 @@ RUN /usr/local/bin/simet-ma-prepare.sh --localdebs /tmp/debs && rm -f /usr/local
 RUN rm -fr /tmp/debs /usr/local/bin/*
 COPY docker/*.sh* /opt/simet/bin/
 COPY docker/policy-rc.d /usr/sbin/
+COPY version /opt/simet/lib/simet/container-version.txt
 
 VOLUME /opt/simet/etc/simet
 
