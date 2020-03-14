@@ -1,6 +1,6 @@
 #!/bin/bash
 # Execute a simet-ma SIMET2 agent in foreground
-# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+# Copyright (c) 2019,2020 NIC.br <medicoes@simet.nic.br>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,10 +28,19 @@
 #                           SIMET_CRON_DISABLE
 #
 # Command line:
-#   will be passed as-is to simet-runner.
+#   will be passed as-is to simet-runner in SIMET_RUN_TEST mode.
+#   this will change in the future.
 
 set -e
+set -o pipefail
+
 export DEBIAN_FRONTEND=noninteractive
+
+# Normalize environment variables
+[ -n "$SIMET_RUN_TEST" ] && {
+	SIMET_CRON_DISABLE=true
+	SIMET_INETUP_DISABLE=true
+}
 
 RC=1
 abend() {
@@ -64,15 +73,15 @@ simet_ma_trap_setup() {
 call_hook simet_ma_docker_ep_init
 
 # Handle early issues with filesystem permissions on persistent volumes
-USER=nicbr-simet
+SUSER=nicbr-simet
 simet_ma_ephemeral_dirs() {
 	[ -d /var/run/simet ] || mkdir -p -m 0750 /var/run/simet
-	chgrp $USER /var/run/simet
+	chgrp $SUSER /var/run/simet
 	:
 }
 simet_ma_docker_volume_prepare() {
-	find /opt/simet \! \( -user root -o -user $USER \) -exec chown $USER:$USER {} \+
-	find /opt/simet \! \( -group root -o -group $USER \) -exec chgrp $USER {} \+
+	find /opt/simet \! \( -user root -o -user $SUSER \) -exec chown $SUSER:$SUSER {} \+
+	find /opt/simet \! \( -group root -o -group $SUSER \) -exec chgrp $SUSER {} \+
 	:
 }
 call simet_ma_ephemeral_dirs
@@ -82,9 +91,19 @@ call simet_ma_docker_volume_prepare
 # (security updates and SIMET engine updates, only)
 simet_ma_docker_ep_update() {
 	echo "SIMET-MA: checking for engine and security updates..."
+	rm -f /etc/apt/apt.conf.d/54nicbr-unattended-upgrade-disable-distro
 	apt-get -qq update && unattended-upgrades || true
 }
+simet_ma_docker_ep_postupdate() {
+	# Disable unattended-updates for everything but SIMET packages,
+	# due to procfs being half-broken inside a non-CAP_SYS_ADMIN container
+	cat <<- SIMETMADOCKEREPPU > /etc/apt/apt.conf.d/54nicbr-unattended-upgrade-disable-distro
+		#clear Unattended-Upgrade::Allowed-Origins;
+		#clear Unattended-Upgrade::Origins-Pattern;
+	SIMETMADOCKEREPPU
+}
 call simet_ma_docker_ep_update
+call simet_ma_docker_ep_postupdate
 
 # create virtual label for this instance
 simet_ma_docker_vlabel_setup() {
@@ -103,7 +122,6 @@ SIMETRUN=/opt/simet/bin/simet-ma_run.sh
 [ -z "$AGENT_ID_FILE" ]    && abend "missing AGENT_ID_FILE in config"
 [ -z "$AGENT_TOKEN_FILE" ] && abend "missing AGENT_TOKEN_FILE in config"
 [ -z "$LMAP_AGENT_FILE" ]  && abend "missing LMAP_AGENT_FILE in config"
-BOOTID=$(cat /proc/sys/kernel/random/boot_id) || true
 
 call_hook simet_ma_docker_env_setup
 
@@ -112,9 +130,10 @@ simet_ma_docker_register() {
 	[ "$SIMET_REFRESH_AGENTID" = "true" ] && \
 		rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE"
 
+	ENVLIST=$(env | sed -n -e '/^SIMET/{s/=.*//;H}' -e '${x;s/\n/,/g;s/^,//;s/,$//;p}')
 	echo "SIMET-MA: attempting agent registration..."
 	while [ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] ; do
-		sudo -u $USER -g $USER -H -n $REGISTER || {
+		sudo --preserve-env="$ENVLIST" -u $SUSER -g $SUSER -H -n $REGISTER -- --boot || {
 			echo "SIMET-MA: agent registration failed, will retry in 120 seconds"
 			sleep 120
 		}
@@ -127,37 +146,34 @@ call simet_ma_docker_register
 SMA_SERVICES=
 call simet_ma_trap_setup
 
-# build inetup command, try to drop priviledges
-INETUP_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetconn-state -b $BOOTID"
-[ -n "$AGENT_TOKEN_FILE" ] && INETUP_ARGS="$INETUP_ARGS -j $AGENT_TOKEN_FILE"
-[ -n "$AGENT_ID_FILE" ] && INETUP_ARGS="$INETUP_ARGS -d $AGENT_ID_FILE"
-INETUPCMD="sudo -u $USER -g $USER -H -n"
-
-[ "$SIMET_CRON_DISABLE" != "true" ] && [ -z "$SIMET_RUN_TEST" ] && {
+if [ "$SIMET_CRON_DISABLE" != "true" ] ; then
+	echo "SIMET-MA: starting in-container services..."
 	service rsyslog start
+	SMA_SERVICES="rsyslog $SMA_SERVICES"
 	if [ -r /etc/cron.d/simet-ma ] ; then
 		echo "SIMET-MA: starting cron to run management tasks in background..."
 		service cron start
-		SMA_SERVICES="cron ${SMA_SERVICES}"
+		SMA_SERVICES="cron $SMA_SERVICES"
+	fi
+	if [ "$SIMET_INETUP_DISABLE" != "true" ] ; then
+		echo "SIMET-MA: starting inetup measurement service..."
+		service simet-ma start
+		SMA_SERVICES="simet-ma $SMA_SERVICES"
 	fi
 	echo "SIMET-MA: starting LMAP scheduler..."
 	service simet-lmapd start
-	SMA_SERVICES="simet-lmapd ${SMA_SERVICES}"
-}
-
-if [ -z "$SIMET_RUN_TEST" ] ; then
-	echo "SIMET-MA: main loop start."
-	while true; do
-		if [ "$SIMET_INETUP_DISABLE" != "true" ] && [ -n "$INETUP" ] ; then
-			$INETUPCMD $INETUP $INETUP_ARGS $SIMET_INETUP_SERVER &
-			wait $! && exit 0
-			sleep 1
-		else
-			sleep 365d
-		fi
-	done
+	SMA_SERVICES="simet-lmapd $SMA_SERVICES"
 else
-	# We are not running inetup, so do a test run instead
-	exec $SIMETRUN --test $SIMET_RUN_TEST "$@"
+	if [ -n "$SIMET_RUN_TEST" ] ; then
+		SIMET_RUN_TEST="--test $SIMET_RUN_TEST"
+	fi
+	exec $SIMETRUN $SIMET_RUN_TEST "$@"
 fi
+
+echo "SIMET-MA: measurement agent is ready"
+
+# wait around, procesing signals.  It could be forever,
+# but we do want to force a container restart every so often
+# e.g. because we can only fully update with a restart
+sleep 15d & wait $!
 :

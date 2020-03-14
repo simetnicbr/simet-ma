@@ -31,13 +31,21 @@ This will create a simet-ma:local (or simet-ma:nicbr) image with simet-ma
 installed inside.  Some environment variables may be set to create images with
 an specific purpose, please refer to the Dockerfiles for details.
 
-NOTE: the "reference container" version *auto-upgrades* the simet-ma
-components inside it.
+NOTE: the "reference container" version *auto-upgrades* the simet-ma components
+inside it.  It also exits every so often, so that it can try to at least apply
+security updates to itself (it does so at container start/restart).
+
+It is best to arrange for a "docker pull" when the reference container exits,
+though, as that will update everything.
+
+
+NIC.br distributes the reference container image (for docker pull) at:
+https://docker-download.simet.nic.br/medidor-simet/simet-ma:latest
 
 
 To run the full simet-ma agent, with identity (agent-id, group-id, vlabel)
 persistence:
-docker run --init -dt --rm \
+docker run --init -dt --rm --restart=unless-stopped \
            --network host --cap-add NET_ADMIN --cap-add NET_RAW \
            --mount source=simet-ma-id,target=/opt/simet/etc/simet \
 	   simet-ma:local
