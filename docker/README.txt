@@ -64,7 +64,7 @@ docker exec -it <simet-ma:local container> cat /var/log/syslog
 
 To trigger an immediate measurement run:
 docker exec -u nicbr-simet:nicbr-simet -it <simet-ma:local container> \
-            /opt/simet/bin/simet-ma_periodic.sh <options>
+            /opt/simet/bin/simet-ma_run.sh <options>
 
 
 CALIBRATION SETUP (internal)
