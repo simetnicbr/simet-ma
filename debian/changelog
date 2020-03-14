@@ -1,3 +1,38 @@
+simet-ma (0.16.4) unstable; urgency=medium
+
+  * simet-ma version 0.16.4
+  * simet-runner: ignore empty/whitespace JSON, fixes measurement
+    failure reports
+  * deb: simet-ma.init: avoid start-stop-daemon --exec on start,
+    it is incompatible with unpriv containers (CAP_SYS_ADMIN)
+  * deb: simet-ma.init: fix status action
+  * docker: add the simet-ma version file to the container
+  * docker: disable unattended-upgrades of distro packages *after*
+    an initial update at container start.  We can't trust service
+    reload/restart without CAP_SYS_ADMIN to always work
+  * docker: die every 15 days (to force restart, and get updates)
+  * docker: redirect syslog to docker stdout/stderr
+  * inetup: use files to get agent-id and token (CLI API CHANGE)
+  * inetup: reload agent-id and token on SIGHUP
+  * deb: simet-ma.init: implement reload and show simet-lmapd reload
+  * deb: remove cronjob that was causing measurements to be run twice
+  * simet-ma: remove simet-ma_periodic.sh
+  * simet-api: implement lib/simet/simet_lib_config.sh
+  * simet-api: consolidate config and hook loading
+  * deb: use simet_lib_config.sh where simet-ma config is required
+  * simet-api: implement lib/simet/conf.d/*.conf
+  * simet-api: implement lib/simet/conf.d/*.hook
+  * simet-runner: log to syslog
+  * simet-ma: several log message/verbosity changes to everything
+  * docker: refactor foreground runner and run inetup as a service,
+    this fixes token/agent-id change and simet-ma package updates
+  * docker: add policy-rc.d to support simet-ma,lmapd package updates
+    properly
+  * docker: document better the need for CAP_NET_ADMIN, CAP_NET_RAW,
+    and --restart
+
+ -- SIMET <medicoes@simet.nic.br>  Sat, 14 Mar 2020 16:08:51 -0300
+
 simet-ma (0.16.3) unstable; urgency=medium
 
   * simet-ma version 0.16.3
