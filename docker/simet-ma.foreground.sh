@@ -54,6 +54,7 @@ abend() {
 ##
 ## Hook system
 ##
+[ -r "$0.hooks" ] && . "$0.hooks"
 simet_load_hooks docker_ma
 
 _simet_ma_exit() {
