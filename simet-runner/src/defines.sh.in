@@ -8,5 +8,6 @@ PACKAGE_VERSION="@RUNNERVERSION@"
 PACKAGE_STRING="@RUNNERSTRING@"
 SIMET_ENGINE_NAME="nic_simet2_simet-ma"
 SIMET_CONFIG_FILES="@SIMETLIBDIR@/simet-ma.conf @SIMETLIBDIR@/conf.d/*.conf @SIMETCONFDIR@/simet-ma.conf"
+TRACEROUTE_HELPER=$(find -L @SIMETLMAPBINDIR@ -type f -name '*traceroute' | sed -n -e '1 {p;q}' )
 
 # keep line

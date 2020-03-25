@@ -15,6 +15,7 @@
 
 simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
+simetlmapbindir=$(simetlibdir)/lmap/bin
 
 if SIMETBOX_BUILD
 usetheshell=/bin/sh
@@ -36,6 +37,7 @@ version: $(top_srcdir)/version.sh
 # .sh.in files go in EXTRA_DIST, the corresponding .sh goes in _sources and CLEANFILES
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
+	    -e "s!@SIMETLMAPBINDIR@!$(simetlmapbindir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    -e "s!@RUNNERNAME@!$(PACKAGE_NAME)!g" -e "s!@RUNNERVERSION@!$(PACKAGE_VERSION)!g" \
