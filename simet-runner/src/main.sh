@@ -125,10 +125,12 @@ _main_orchestrate(){
   ## start of a measurement run
   ## if RUN_ONLY_TASK is set, we only run that one
 
-  # 4. task twamp
+  # 4. task twamp + traceroute
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
     _task_twamp "4"
+    _task_traceroute "4"
     _task_twamp "6"
+    _task_traceroute "6"
   fi
 
   # 5. task bw tcp

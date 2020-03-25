@@ -52,6 +52,7 @@ simetma_sources = src/defines.sh \
 		src/task_geolocation.sh \
 		$(agentinfo) \
 		src/task_environment.sh \
+		src/task_traceroute.sh \
 		src/templates.sh \
 		src/main.sh
 
