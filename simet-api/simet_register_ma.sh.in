@@ -341,6 +341,49 @@ simet_pairing_flow() {
 	fi
 }
 
+__consume_tokens_api_output() {
+	SID=$($JSONFILTER -i "$OUTFILE" -e "VTK=@.access_tokens.view_results") \
+		|| abend "illegal response from agent-registry service"
+	eval "$SID" || abend "internal error"
+
+	printf "%s" "$VTK" > $AGENT_VTK_FILE || \
+		simet_log simet-ma daemon.err "SIMET-MA: failed to store view_results token"
+
+	simet_log simet-ma daemon.info "SIMET: view_results token updated"
+
+	: > "$OUTFILE"
+	:
+}
+
+#overridable
+simet_update_tokens() {
+	AGENT_ID="$1"
+	AGENT_TOKEN="$2"
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
+		-H "Authorization: Bearer ${AGENT_TOKEN}" \
+		-X GET -o "$OUTFILE" -w "%{http_code}" \
+		"${API_SIMET_AGENT_REG}/v2/agents/${AGENT_ID}/access_tokens" ) || return 1
+	case "$APIRES" in
+	204)
+		simet_log simet-ma daemon.err "server doesn't know our agent-id!"
+		;;
+	401)
+		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
+		;;
+	403)
+		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
+		;;
+	200)
+		__consume_tokens_api_output
+		return 0
+		;;
+	500|400|404)
+		simet_log simet-ma daemon.err "SIMET2 agent registry service unavailable"
+		;;
+        esac
+	return 1
+}
+
 gettoken() {
 	OLDAT=
 	OLDAID=
@@ -367,6 +410,12 @@ gettoken() {
 	fi
 
 	call simet_pairing_flow
+
+	if call simet_update_tokens "$AID" "$AT" ; then
+		call_hook access_tokens_updated || true
+	else
+		simet_log simet-ma daemon.err "SIMET: failed to retrieve access tokens"
+	fi
 
 	rm -f "$OUTFILE"
 	OUTFILE=
