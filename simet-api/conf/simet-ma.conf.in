@@ -11,6 +11,9 @@ AGENT_TOKEN_LOCK=@LOCALSTATEDIR@/lock/simet-agent-token.lock
 AGENT_LOCK=@LOCALSTATEDIR@/lock/simet-ma.lock
 AGENT_VERSION_FILE=@SIMETLIBDIR@/agent-version.txt
 
+SIMET_RUNSTATE_DIR=@SIMETRUNDIR@
+AGENT_VTK_FILE=@LOCALSTATEDIR@/run/simet/agent-vtk
+
 LMAP_AGENT_FILE=@SIMETCONFDIR@/lmap/agent-id.json
 LMAP_CHANNEL_URL=https://api.simet.nic.br/controller
 LMAP_SCHEDULE_FILE=@LOCALSTATEDIR@/run/lmapd/lmap-schedule.json
@@ -23,7 +26,7 @@ TEMPLATE_DIR=@SIMETLIBDIR@
 SIMET_INETUP_SERVER=simet-monitor-inetup.simet.nic.br
 
 API_SIMET_GEO=https://api.simet.nic.br/geolocation
-GEOLOC_CACHE=@LOCALSTATEDIR@/run/simet/geoloc-cache.txt
+GEOLOC_CACHE="$SIMET_RUNSTATE_DIR/geoloc-cache.txt"
 
 LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
