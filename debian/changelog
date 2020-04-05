@@ -1,3 +1,13 @@
+simet-ma (0.16.5) unstable; urgency=medium
+
+  * simet-ma version 0.16.5
+  * simet_register_ma: retrieve the view_results token (VTK) and store it.
+    The MA's UI will need this token to retrieve SIMET2 measurement results.
+  * docker: restore the $0.hook functionality, it is really useful to
+    variants.
+
+ -- SIMET <medicoes@simet.nic.br>  Sat, 04 Apr 2020 22:04:06 -0300
+
 simet-ma (0.16.4) unstable; urgency=medium
 
   * simet-ma version 0.16.4
