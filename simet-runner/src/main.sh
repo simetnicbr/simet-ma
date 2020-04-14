@@ -31,11 +31,24 @@
 # Dependencies:
 # - curl
 # - sub-scripts
+# - flock
 ################################################################################
+
+_main_locked(){
+  log_important "$PACKAGE_STRING starting..."
+
+  _main_setup
+  _main_orchestrate
+  _main_cleanup
+
+  log_debug "$PACKAGE_STRING end"
+}
 
 main(){
   local _result="undefined"
   local _configured=0
+
+  SETLOCK="true"
 
   # read params
   while [ ! $# -eq 0 ]; do
@@ -73,6 +86,12 @@ main(){
       --syslog)
         LOG_TO_SYSLOG=true
         ;;
+      --no-lock)
+        SETLOCK="false"
+        ;;
+      --lock)
+        SETLOCK="true"
+        ;;
     esac
     shift
   done
@@ -83,13 +102,27 @@ main(){
     done
   fi
 
-  log_important "$PACKAGE_STRING starting..."
+  if [ $SETLOCK != "true" ] || [ -z "$AGENT_LOCK" ] ; then
+    _main_locked || return $?
+    return 0
+  fi
 
-  _main_setup
-  _main_orchestrate
-  _main_cleanup
-
-  log_debug "$PACKAGE_STRING end"
+  [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || {
+    log_error "cannot create $AGENT_LOCK"
+    exit 1
+  }
+  (
+    for i in 1 2 3 4 5 ; do
+      flock -n -x 9 && {
+        _main_locked || exit $?
+        exit 0
+      }
+      sleep 1
+    done
+    log_error "Measurement lock is already taken, exiting..."
+    exit 1
+  ) <&- 9< "$AGENT_LOCK" || return $?
+  :
 }
 
 _main_orchestrate(){ 
