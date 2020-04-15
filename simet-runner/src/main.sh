@@ -248,7 +248,7 @@ _task_twamp(){
   export _task_name="${LMAP_TASK_NAME_PREFIX}twamp" # " twampc 1.2.3-ABC " => "twampc"
   export _task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
-  export _task_action="packettrain_udp_ipv${_af}_to_nearest_available_peer"
+  export _task_action="packettrain-udp_to-simet-measurement-peer_ip$_af"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
@@ -296,7 +296,7 @@ _task_tcpbw(){
   export _task_name="${LMAP_TASK_NAME_PREFIX}tcp-bandwidth" # " tcpbw 1.2.3-ABC " => "tcpbw"
   export _task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
-  export _task_action="bandwidth_tcp_ipv${_af}_to_nearest_available_peer"
+  export _task_action="bandwidth-tcp_to-simet-measurement-peer_ip$_af"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
