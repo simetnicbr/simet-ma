@@ -56,24 +56,31 @@ CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 
 # LMAP wrapped tasklet links we want to create
 if SIMETBOX_BUILD
-tasklets = v__fping -help_UDP-traceroute_traceroute -help_UDP-traceroute_traceroute6 -help__ping -help__ping6 -help__nslookup v__drill v__dig
+traceroute_tasklets = -help_ICMP-traceroute_traceroute
+traceroute_tasklets += -help_UDP-traceroute_udp-traceroute -help_ICMP-traceroute_icmp-traceroute
+tasklets = v__fping -help__ping -help__ping6 -help__nslookup v__drill v__dig
 else
-tasklets = v__fping V_UDP-traceroute_traceroute V_UDP-traceroute_traceroute6 V__ping V__ping6 version__nslookup v__drill v__dig
+traceroute_tasklets = V_ICMP-traceroute_traceroute
+traceroute_tasklets += V_UDP-traceroute_udp-traceroute V_ICMP-traceroute_icmp-traceroute
+tasklets = v__fping V__ping V__ping6 version__nslookup v__drill v__dig
 endif
 
-dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh
-EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in
+dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh lmap-tasks/lmap-traceroute-wrapper.sh
+EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in lmap-tasks/lmap-traceroute-wrapper.sh.in
 CLEANFILES += $(dist_simetlmapbin_SCRIPTS)
 
 # automake will nicely "resolve" our symlinks, thus wasting space.
 # we use the install-exec-hook to create the symlinks to lmap-wrapper.sh
 tasklets_ln := $(patsubst %,lmap-task-%,$(tasklets))
 
+# and the same for the traceroute wrapper
+traceroute_tasklets_ln := $(patsubst %,lmap-task-%,$(traceroute_tasklets))
+
 # Dynamically build the registry of tasklets and their tasks
 registry.d/simet-ma_tasklet-registry.json :
 	{ echo '{"ietf-lmap-control:lmap":{"capabilities":{' ; \
 	echo ' "tasks":{"task":[' ; \
-	{ for i in $(tasklets) ; do \
+	{ for i in $(tasklets) $(traceroute_tasklets) ; do \
 		tn1="$${i#*_}" ; tn="simet.nic.br_tool_$${tn1#*_}" ; \
 		pn="lmap-task-$${i}" ; \
 		echo "  {\"name\":\"$${tn}\",\"program\":\"$(simetlmapbindir)/$${pn}\"}," ; \
@@ -83,7 +90,7 @@ registry.d/simet-ma_tasklet-registry.json :
 
 config.d/simet-ma_tasklet-config.json :
 	{ echo '{"ietf-lmap-control:lmap":{"tasks":{"task":[' ; \
-	{ for i in $(tasklets) ; do \
+	{ for i in $(tasklets) $(traceroute_tasklets) ; do \
 		tn1="$${i#*_}" ; tn="simet.nic.br_tool_$${tn1#*_}" ; \
 		pn="lmap-task-$${i}" ; \
 		echo "  {\"name\":\"$${tn}\"," ; \
@@ -136,6 +143,10 @@ install-exec-hook:
 	cd "$(DESTDIR)$(simetlmapbindir)" && \
 		for i in $(tasklets_ln) ; do \
 			ln -sf lmap-wrapper.sh "$$i" ; \
+		done
+	cd "$(DESTDIR)$(simetlmapbindir)" && \
+		for i in $(traceroute_tasklets_ln) ; do \
+			ln -sf lmap-traceroute-wrapper.sh "$$i" ; \
 		done
 
 dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-default-schedule.json
