@@ -22,6 +22,9 @@ into some details of the SIMET2 web API.
   the SIMET suite (unless it is running as root, which is also not
   advised).
 
+  WARNING: modifying the paths is almost always unsafe: system integration
+  may break (such integration is outside the scope of these config files).
+
 ## API version
 
   The full agent version (e.g. simet-ma/<version>) is available
@@ -320,9 +323,9 @@ into some details of the SIMET2 web API.
      agent token, LMAP config, and so on.  Take the exclusive lock
      when doing a non-atomic update.
 
-  Locks are empty files, locked using flock.  Beware permission issues
-  with the lock directory and lock files when scripts are run with
-  different privilege levels (e.g. root and a non-privileged user).
+  Locks are empty files, locked using flock(2).  Beware permission
+  issues with the lock directory and lock files when scripts are run
+  with different privilege levels (e.g. root and a non-privileged user).
 
 
 ## Hooks
