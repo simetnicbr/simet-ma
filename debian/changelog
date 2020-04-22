@@ -1,3 +1,14 @@
+simet-ma (0.16.6) unstable; urgency=medium
+
+  * simet-ma version 0.16.6
+  * simet-runner: change twamp, tcpbw LMAP report action names
+    and add an ICMP traceroute to complement TWAMP measurements
+  * simet-runner: implement AGENT_LOCK and add --lock, --no-lock
+    options to simet-ma_run.sh.
+  * simet-api: rework locking, move locks to /var/lock/simet/
+
+ -- SIMET <medicoes@simet.nic.br>  Tue, 21 Apr 2020 23:22:42 -0300
+
 simet-ma (0.16.5) unstable; urgency=medium
 
   * simet-ma version 0.16.5
