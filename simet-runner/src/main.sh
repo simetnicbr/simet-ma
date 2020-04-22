@@ -31,11 +31,24 @@
 # Dependencies:
 # - curl
 # - sub-scripts
+# - flock
 ################################################################################
+
+_main_locked(){
+  log_important "$PACKAGE_STRING starting..."
+
+  _main_setup
+  _main_orchestrate
+  _main_cleanup
+
+  log_debug "$PACKAGE_STRING end"
+}
 
 main(){
   local _result="undefined"
   local _configured=0
+
+  SETLOCK="true"
 
   # read params
   while [ ! $# -eq 0 ]; do
@@ -73,6 +86,12 @@ main(){
       --syslog)
         LOG_TO_SYSLOG=true
         ;;
+      --no-lock)
+        SETLOCK="false"
+        ;;
+      --lock)
+        SETLOCK="true"
+        ;;
     esac
     shift
   done
@@ -83,13 +102,27 @@ main(){
     done
   fi
 
-  log_important "$PACKAGE_STRING starting..."
+  if [ $SETLOCK != "true" ] || [ -z "$AGENT_LOCK" ] ; then
+    _main_locked || return $?
+    return 0
+  fi
 
-  _main_setup
-  _main_orchestrate
-  _main_cleanup
-
-  log_debug "$PACKAGE_STRING end"
+  [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || {
+    log_error "cannot create $AGENT_LOCK"
+    exit 1
+  }
+  (
+    for i in 1 2 3 4 5 ; do
+      flock -n -x 9 && {
+        _main_locked || exit $?
+        exit 0
+      }
+      sleep 1
+    done
+    log_error "Measurement lock is already taken, exiting..."
+    exit 1
+  ) <&- 9< "$AGENT_LOCK" || return $?
+  :
 }
 
 _main_orchestrate(){ 
@@ -125,10 +158,12 @@ _main_orchestrate(){
   ## start of a measurement run
   ## if RUN_ONLY_TASK is set, we only run that one
 
-  # 4. task twamp
+  # 4. task twamp + traceroute
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
     _task_twamp "4"
+    _task_traceroute "4"
     _task_twamp "6"
+    _task_traceroute "6"
   fi
 
   # 5. task bw tcp
@@ -248,7 +283,7 @@ _task_twamp(){
   export _task_name="${LMAP_TASK_NAME_PREFIX}twamp" # " twampc 1.2.3-ABC " => "twampc"
   export _task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
-  export _task_action="packettrain_udp_ipv${_af}_to_nearest_available_peer"
+  export _task_action="packettrain-udp_to-simet-measurement-peer_ip$_af"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
@@ -296,7 +331,7 @@ _task_tcpbw(){
   export _task_name="${LMAP_TASK_NAME_PREFIX}tcp-bandwidth" # " tcpbw 1.2.3-ABC " => "tcpbw"
   export _task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
   export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
-  export _task_action="bandwidth_tcp_ipv${_af}_to_nearest_available_peer"
+  export _task_action="bandwidth-tcp_to-simet-measurement-peer_ip$_af"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","

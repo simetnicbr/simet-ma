@@ -44,7 +44,9 @@ DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
 # not called by default init-d-script reload/restart
 do_start_prepare() {
 	# used for the geolocation cache and ephemeral tokens
-	[ -n "$SIMET_RUNSTATE_DIR" ] && mkdir -m 0750 -p "$SIMET_RUNSTATE_DIR" && chgrp $SGROUP "$SIMET_RUNSTATE_DIR"
+	[ -n "$SIMET_RUNSTATE_DIR" ] && mkdir -m 0770 -p "$SIMET_RUNSTATE_DIR" && chgrp $SGROUP "$SIMET_RUNSTATE_DIR"
+	# locks and pidfiles
+	[ -n "$SIMET_LOCK_DIR" ] && mkdir -m 0770 -p "$SIMET_LOCK_DIR" && chgrp $SGROUP "$SIMET_LOCK_DIR"
 
 	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
 	# --name doesn't matter, as long as it doesn't match, and not too long

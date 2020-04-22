@@ -83,7 +83,7 @@ discover_service() {
     REPORT)
       _service="collector"
     ;;
-    TWAMP)
+    TWAMP|TRACEROUTE)
       _service="twamp"
     ;;
     TCPBW)

@@ -1,0 +1,26 @@
+#!/bin/sh
+# SIMET LMAP wrapping helper script (traceroute)
+# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+# Distributed under the GPLv3+ license with additional terms and permissions
+
+MYPATH=$(readlink -f "$0") ; MYSELF=$(basename "$0")
+TN1="${MYSELF#lmap-task-}" ; VC="${TN1%%_*}"
+TN2="${TN1#*_}" ; TOOL="${TN2#*_}" ; METRIC="${TN2%%_*}"
+
+case "$METRIC" in
+icmp*|ICMP*)
+	PROTO="-I"
+	;;
+udp*|UDP*)
+	PROTO=
+	;;
+*)
+	echo "$MYPATH: ($0): unsupported protocol in metric: $METRIC" >&2
+	exit 1
+	;;
+esac
+
+#Force tool to traceroute, so that we can have tasklets like icmp-traceroute, etc.
+TOOL=traceroute
+
+exec "@BINDIR@/simet_lmap-stdout-wrapper.sh" exec "$TOOL" "-$VC" "$METRIC" $PROTO "$@"

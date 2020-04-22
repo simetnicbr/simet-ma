@@ -4,16 +4,18 @@
 # Distributed under the GPLv3+ license with additional terms and permissions
 #
 # usage: symlink this script to the real tool's name, prefixed with
-# lmap-task-{option}_, where {option} would be v for -v, -version for --version
+# lmap-task-{option}_{metric}_, where {option} would be v for -v, -version for --version
+# and metric can be empty (default) or the metric to be used.
 #
-# example: to call traceroute, which has --version:
-#             ln -s <this script> lmap-task--version_traceroute
+# example: to call traceroute, which has --version and a specific metric:
+#             ln -s <this script> lmap-task--version_UDP-traceroute_traceroute
 #          to call fping, which has -v:
-#             ln -s (our name) lmap-task-v_fping
-MYPATH=$(readlink -f "$0") ; MYDIR=$(dirname "$MYPATH")
-MYSELF=$(basename "$0") ; TN1="${MYSELF#lmap-task-}" ; VC="${TN1%%_*}"
+#             ln -s (our name) lmap-task-v__fping
+
+MYPATH=$(readlink -f "$0") ; MYSELF=$(basename "$0")
+TN1="${MYSELF#lmap-task-}" ; VC="${TN1%%_*}"
 TN2="${TN1#*_}" ; TOOL="${TN2#*_}" ; METRIC="${TN2%%_*}"
-[ -n "$TOOL" ] && [ -x "$MYDIR/$MYTOOL" ] && \
+[ -n "$TOOL" ] && \
 	exec "@BINDIR@/simet_lmap-stdout-wrapper.sh" exec "$TOOL" "-$VC" "$METRIC" "$@"
 echo "$MYPATH: ($0): unknown or unlisted tool: $TOOL" >&2
 exit 1
