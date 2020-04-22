@@ -16,7 +16,7 @@
 # for details.
 
 # stdin: the input
-# stout: the output  (should be discarded on exit status non-zero)
+# stdout: the output  (should be discarded on exit status non-zero)
 # stderr: any errors (will be empty on exit status zero)
 
 # no parameters - direct filter
