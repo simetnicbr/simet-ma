@@ -41,6 +41,19 @@ DAEMON_ARGS="-M ${LMAP_TASK_NAME_PREFIX}inetconn-state -b $BOOTID"
 [ -n "$AGENT_ID_FILE" ] && DAEMON_ARGS="$DAEMON_ARGS -d $AGENT_ID_FILE"
 DAEMON_ARGS="$DAEMON_ARGS $SIMET_INETUP_SERVER"
 
+# Argh!
+fix_traceroute() {
+    command -v setcap >/dev/null 2>&1 && {
+	TR=$(command -v traceroute) || return 0
+	REALTR=$(readlink -e "$TR") || return 0
+	setcap -q -v cap_net_raw+ep "$REALTR" || {
+	    echo "$0: WARNING: giving $REALTR CAP_NET_RAW capabilities for non-root ICMP tracerouting" >&2
+	    setcap -q cap_net_raw+ep "$REALTR" || echo "$0: failed to change $REALTR capabilities" >&2
+        }
+    }
+    :
+}
+
 # not called by default init-d-script reload/restart
 do_start_prepare() {
 	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
@@ -72,6 +85,8 @@ do_stop_cmd_override() {
 #   1 if daemon was already running
 #   2 if daemon could not be started
 do_start_cmd_override() {
+	fix_traceroute
+
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
 	    $START_ARGS \
 	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \

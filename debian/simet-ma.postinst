@@ -41,6 +41,19 @@ create_crond() {
     :
 }
 
+fix_traceroute() {
+    # Unbreak traceroute, this violates Debian policy but...
+    command -v setcap >/dev/null 2>&1 && {
+	TR=$(command -v traceroute) || return 0
+	REALTR=$(readlink -e "$TR") || return 0
+	setcap -q -v cap_net_raw+ep "$REALTR" || {
+	    echo "$0: WARNING: giving $REALTR CAP_NET_RAW capabilities for non-root ICMP tracerouting" >&2
+	    setcap -q cap_net_raw+ep "$REALTR" || echo "$0: failed to change $REALTR capabilities" >&2
+        }
+    }
+    :
+}
+
 case "$1" in
     configure)
         adduser --quiet --system --group --no-create-home --home /opt/simet \
@@ -58,6 +71,8 @@ case "$1" in
 		echo "SIMET-MA: agent virtual label is: $VLABEL" >&2
 		logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
 	}
+
+	fix_traceroute
 
 	# Remove any downloaded schedule
 	( . /opt/simet/lib/simet/simet_lib_config.sh \
