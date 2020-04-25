@@ -34,6 +34,7 @@ LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
 LMAP_SCHEDULE="anatel-resolution-574"
 LMAP_TASK_NAME_PREFIX="simet.nic.br_"
+GEOLOCATE=@BINDIR@/simet_geolocation.sh
 TWAMPC=@BINDIR@/twampc
 TCPBWC=@BINDIR@/tcpbwc
 JSONFILTER=@JSONFILTER@

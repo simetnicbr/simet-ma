@@ -21,8 +21,8 @@
 ################################################################################
 
 authentication() {
-  AGENT_ID=$( _authentication_agent_id ) 
-  AGENT_TOKEN=$( _authentication_agent_token ) 
+  AGENT_ID=$( _authentication_agent_id ) || exit $?
+  AGENT_TOKEN=$( _authentication_agent_token ) || exit $?
 }
 
 _authentication_agent_id(){
