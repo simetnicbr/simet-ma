@@ -7,7 +7,7 @@ simet-ma (0.16.6) unstable; urgency=medium
     options to simet-ma_run.sh.
   * simet-api: rework locking, move locks to /var/lock/simet/
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 21 Apr 2020 23:22:42 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 21 Apr 2020 23:22:42 -0300
 
 simet-ma (0.16.5) unstable; urgency=medium
 
@@ -17,7 +17,7 @@ simet-ma (0.16.5) unstable; urgency=medium
   * docker: restore the $0.hook functionality, it is really useful to
     variants.
 
- -- SIMET <medicoes@simet.nic.br>  Sat, 04 Apr 2020 22:04:06 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sat, 04 Apr 2020 22:04:06 -0300
 
 simet-ma (0.16.4) unstable; urgency=medium
 
@@ -52,7 +52,7 @@ simet-ma (0.16.4) unstable; urgency=medium
   * docker: document better the need for CAP_NET_ADMIN, CAP_NET_RAW,
     and --restart
 
- -- SIMET <medicoes@simet.nic.br>  Sat, 14 Mar 2020 16:08:51 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sat, 14 Mar 2020 16:08:51 -0300
 
 simet-ma (0.16.3) unstable; urgency=medium
 
@@ -60,14 +60,14 @@ simet-ma (0.16.3) unstable; urgency=medium
   * simet_register_ma: add missing fields (from agent-info metric)
     to MA register procedure.  They were already sent when measuring.
 
- -- SIMET <medicoes@simet.nic.br>  Wed, 19 Feb 2020 14:31:00 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 19 Feb 2020 14:31:00 -0300
 
 simet-ma (0.16.2) unstable; urgency=medium
 
   * simet-ma version 0.16.2
   * twamp: rework error paths and debug messages
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 28 Jan 2020 14:39:11 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 28 Jan 2020 14:39:11 -0300
 
 simet-ma (0.16.1) unstable; urgency=medium
 
@@ -81,7 +81,7 @@ simet-ma (0.16.1) unstable; urgency=medium
     return status is non-zero, and in that case also add the stderr
     output to the report.
 
- -- SIMET <medicoes@simet.nic.br>  Thu, 16 Jan 2020 13:46:37 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 16 Jan 2020 13:46:37 -0300
 
 simet-ma (0.15.7) unstable; urgency=medium
 
@@ -91,7 +91,7 @@ simet-ma (0.15.7) unstable; urgency=medium
   * geolocation: fix mawk compatibility
   * geolocation: periodically run as root
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 10 Dec 2019 12:35:00 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 10 Dec 2019 12:35:00 -0300
 
 simet-ma (0.15.6) unstable; urgency=medium
 
@@ -99,14 +99,14 @@ simet-ma (0.15.6) unstable; urgency=medium
   * SIMETBOX: register the MAC address along the agent-id
     to aid user support and preseeded MA grouping
 
- -- SIMET <medicoes@simet.nic.br>  Mon, 09 Dec 2019 23:48:58 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 09 Dec 2019 23:48:58 -0300
 
 simet-ma (0.15.5) unstable; urgency=medium
 
   * simet-ma version 0.15.5
   * docker: ensure file onwership is correct in persistent volume
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 03 Dec 2019 14:26:32 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 03 Dec 2019 14:26:32 -0300
 
 simet-ma (0.15.4) unstable; urgency=medium
 
@@ -118,7 +118,7 @@ simet-ma (0.15.4) unstable; urgency=medium
   * tcpbw: zero-copy discard during downloads using MSG_TRUNC
   * deb: initscript fixes
 
- -- SIMET <medicoes@simet.nic.br>  Sun, 01 Dec 2019 16:40:24 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 01 Dec 2019 16:40:24 -0300
 
 simet-ma (0.15.3) unstable; urgency=medium
 
@@ -134,7 +134,7 @@ simet-ma (0.15.3) unstable; urgency=medium
   * docker: cleanly terminate inetup and lmapd on container stop
   * docker: clean before build
 
- -- SIMET <medicoes@simet.nic.br>  Fri, 22 Nov 2019 14:00:26 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 22 Nov 2019 14:00:26 -0300
 
 simet-ma (0.15.2) unstable; urgency=medium
 
@@ -144,7 +144,7 @@ simet-ma (0.15.2) unstable; urgency=medium
     format requirements at the moment
   * lmapd: use twampc -r1 for simet.nic.br_twampc
 
- -- SIMET <medicoes@simet.nic.br>  Mon, 11 Nov 2019 09:25:26 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 11 Nov 2019 09:25:26 -0300
 
 simet-ma (0.15.1) unstable; urgency=medium
 
@@ -155,7 +155,7 @@ simet-ma (0.15.1) unstable; urgency=medium
   * twampc: remove the dead "-d device_id" parameter
   * lmap report helpers: render reports in UTC
 
- -- SIMET <medicoes@simet.nic.br>  Fri, 08 Nov 2019 12:51:24 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 08 Nov 2019 12:51:24 -0300
 
 simet-ma (0.15.0) unstable; urgency=medium
 
@@ -163,7 +163,7 @@ simet-ma (0.15.0) unstable; urgency=medium
   * add a "production" version of the simet-ma running in a docker
     container
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 29 Oct 2019 14:54:34 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 29 Oct 2019 14:54:34 -0300
 
 simet-ma (0.14.6) unstable; urgency=medium
 
@@ -171,7 +171,7 @@ simet-ma (0.14.6) unstable; urgency=medium
   * fix registration of an MA that is paired (/var/run/simet might
     not exist in some MAs at the time simet_register_ma first runs.
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 29 Oct 2019 11:09:29 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 29 Oct 2019 11:09:29 -0300
 
 simet-ma (0.14.5) unstable; urgency=medium
 
@@ -181,7 +181,7 @@ simet-ma (0.14.5) unstable; urgency=medium
     this is cheaper and does not require busybox config changes in
     older openwrt.
 
- -- SIMET <medicoes@simet.nic.br>  Mon, 07 Oct 2019 13:56:13 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 07 Oct 2019 13:56:13 -0300
 
 simet-ma (0.14.4) unstable; urgency=medium
 
@@ -191,7 +191,7 @@ simet-ma (0.14.4) unstable; urgency=medium
   * simet-api, simet-runner: add some lmap metadata tags in reports that
     were missing (engine-name,version;task-version)
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 13 Aug 2019 14:22:39 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 13 Aug 2019 14:22:39 -0300
 
 simet-ma (0.14.2) unstable; urgency=medium
 
@@ -200,14 +200,14 @@ simet-ma (0.14.2) unstable; urgency=medium
     virtual label when one does not exist yet, and log it to
     stderr and syslog (via "logger")
 
- -- SIMET <medicoes@simet.nic.br>  Thu, 08 Aug 2019 15:37:28 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 08 Aug 2019 15:37:28 -0300
 
 simet-ma (0.14.1) unstable; urgency=medium
 
   * simet-ma version 0.14.1
   * simet_register_ma: create etc/simet/lmap dir if missing
 
- -- SIMET <medicoes@simet.nic.br>  Fri, 02 Aug 2019 16:50:48 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 02 Aug 2019 16:50:48 -0300
 
 simet-ma (0.14.0) unstable; urgency=medium
 
@@ -223,7 +223,7 @@ simet-ma (0.14.0) unstable; urgency=medium
   * recommend iw, iproute2 for geolocation using wifi
   * handle Debian Jessie's lack of logger --no-act
 
- -- SIMET <medicoes@simet.nic.br>  Thu, 01 Aug 2019 16:20:23 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 01 Aug 2019 16:20:23 -0300
 
 simet-ma (0.13.2) unstable; urgency=medium
 
@@ -231,14 +231,14 @@ simet-ma (0.13.2) unstable; urgency=medium
   * New simet_geolocation.sh, simet.nic.br_geolocation LMAP handling
   * Several fixes to the generic stdout LMAP tasklets
 
- -- SIMET <medicoes@simet.nic.br>  Thu, 25 Apr 2019 11:48:11 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 25 Apr 2019 11:48:11 -0300
 
 simet-ma (0.13.1) unstable; urgency=medium
 
   * simet-ma version 0.13.1
   * Sync debian/copyright with COPYING
 
- -- SIMET <medicoes@simet.nic.br>  Thu, 11 Apr 2019 16:15:20 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 11 Apr 2019 16:15:20 -0300
 
 simet-ma (0.13.0) unstable; urgency=medium
 
@@ -250,7 +250,7 @@ simet-ma (0.13.0) unstable; urgency=medium
     example "container-based measurement agent"
   * deb packages: start-stop-daemon fixes
 
- -- SIMET <medicoes@simet.nic.br>  Tue, 09 Apr 2019 12:34:21 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 09 Apr 2019 12:34:21 -0300
 
 simet-ma (0.12.0) unstable; urgency=medium
 
@@ -259,10 +259,10 @@ simet-ma (0.12.0) unstable; urgency=medium
     Downloads schedule from controller, exports state to controller
     Requires simet-lmapd 0.12.0 or later
 
- -- SIMET <medicoes@simet.nic.br>  Wed, 27 Mar 2019 09:22:30 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 27 Mar 2019 09:22:30 -0300
 
 simet-ma (0.9.3) unstable; urgency=medium
 
   * simet-ma version 0.9.3
 
- -- SIMET <medicoes@simet.nic.br>  Fri, 15 Mar 2019 13:43:07 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 15 Mar 2019 13:43:07 -0300

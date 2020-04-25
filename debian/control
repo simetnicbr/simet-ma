@@ -1,12 +1,12 @@
 Source: simet-ma
 Section: net
 Priority: optional
-Maintainer: Equipe SIMET <medicoes@simet.nic.br>
+Maintainer: NIC.br SIMET Team <medicoes@simet.nic.br>
 Build-Depends: debhelper (>= 9), cmake, pkg-config, libjson-c-dev, libcurl4-gnutls-dev | libcurl-dev, lsb-release
 Standards-Version: 4.1.0
 Homepage: https://simet.nic.br/projetos/
-#Vcs-Browser: https://salsa.debian.org/debian/simet-ma
-#Vcs-Git: https://salsa.debian.org/debian/simet-ma.git
+Vcs-Browser: https://github.com/simetnicbr/simet-ma
+Vcs-Git: https://github.com/simetnicbr/simet-ma.git
 
 Package: simet-ma
 Architecture: any
