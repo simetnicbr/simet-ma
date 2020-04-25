@@ -1,3 +1,16 @@
+simet-ma (0.16.7) unstable; urgency=medium
+
+  * simet-ma version 0.16.7
+  * deb: use "NIC.br SIMET Team" as the maintainer name
+  * deb, docker: install libcap2-bin (for setcap, getcap)
+  * deb, docker: force CAP_NET_RAW+ep on system traceroute,
+    ICMP traceroute needs this
+  * simet-api: teach simet-runner to find simet_geolocation.sh
+    when it is not on path
+  * simet-runner: properly abort when unregistered
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sat, 25 Apr 2020 18:12:33 -0300
+
 simet-ma (0.16.6) unstable; urgency=medium
 
   * simet-ma version 0.16.6
