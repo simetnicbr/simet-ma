@@ -45,7 +45,7 @@ https://docker-download.simet.nic.br/medidor-simet/simet-ma:latest
 
 To run the full simet-ma agent, with identity (agent-id, group-id, vlabel)
 persistence:
-docker run --init -dt --rm --restart=unless-stopped \
+docker run --init -dt --restart=unless-stopped \
            --network host --cap-add NET_ADMIN --cap-add NET_RAW \
            --mount source=simet-ma-id,target=/opt/simet/etc/simet \
 	   simet-ma:local
