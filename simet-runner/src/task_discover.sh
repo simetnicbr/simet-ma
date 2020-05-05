@@ -47,6 +47,23 @@
 #
 ################################################################################
 
+_report_servicelist_output() {
+  export _task_name="${LMAP_TASK_NAME_PREFIX}servicelist-output"
+  export _task_version="$PACKAGE_VERSION"
+  export _task_dir="$BASEDIR/report/0metadata-servicelist"
+  export _task_action="report_servicelist"
+  export _task_parameters='{ }'
+  export _task_options='[]'
+  export _task_extra_tags='"simet.nic.br_subsystem-id:simet2_std-v1",'
+  export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  export _task_status="0"
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  mkdir -p "$_task_dir/tables"
+  task_json_template "$BASEDIR/services.json" \
+	  "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_ServiceList-output__Multiple_Raw" \
+	  "services_json" > "$_task_dir/result.json" || :
+}
+
 discover_init() {
   GLOBAL_STATE_CURRENT_PEER=-1
   if [ -n "$SIMET_SERVICELIST_OVERRIDE" ] ; then
@@ -57,7 +74,7 @@ discover_init() {
     log_debug "Overriding services.json by command line request"
     return    
   fi
-  curl -L -s "$API_SERVICE_DISCOVERY" > $BASEDIR/services.json
+  curl -L -s "$API_SERVICE_DISCOVERY" > "$BASEDIR/services.json" && _report_servicelist_output
 }
 
 discover_next_peer() {

@@ -57,6 +57,50 @@ EOF2TASKTEMPLATE
   :
 }
 
+# task_json_template "filename" "URN" "column name" ... > tables/result.json
+task_json_template(){
+  cat << EOF1TASKJSONTEMPLATE
+{
+  "schedule": "$REPORT_SCHEDULE",
+  "action": "$_task_action",
+  "task": "$_task_name",
+  "parameters": $_task_parameters,
+  "option": $_task_options,
+  "conflict": [],
+  "tag": [ $_task_extra_tags
+    "simet.nic.br_engine-name:${SIMET_ENGINE_NAME}",
+    "simet.nic.br_engine-version:$_task_version",
+    "simet.nic.br_task-version:$_task_version"${REPORT_MAC_ADDRESS_TAG_ENTRY}
+  ],
+  "event": "$REPORT_EVENT",
+  "start": "$_task_start",
+  "end": "$_task_end",
+  "status": $_task_status,
+  "table": [
+EOF1TASKJSONTEMPLATE
+
+  while [ $# -ge 3 ] ; do
+    FN="$1"
+    FURN="$2"
+    FCOL="$3"
+    shift 3
+
+    echo "{\"function\":[{\"uri\":\"$FURN\"}],"
+    echo " \"column\":[\"$FCOL\"],\"row\":["
+    sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/^/{"value":["/' -e '$ s/$/"]}/' -e '$! s/$/"]},/' -e 's/[[:cntrl:]]*//g' \
+      < "$FN"
+  echo ']}'
+  [ $# -gt 0 ] && echo ','
+  :
+  done
+
+  cat << EOF2TASKJSONTEMPLATE
+  ]
+}
+EOF2TASKJSONTEMPLATE
+  :
+}
+
 report_template(){
   cat << EOF1REPORTTEMPLATE
 { "ietf-lmap-report:report": {
