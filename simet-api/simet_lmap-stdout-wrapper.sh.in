@@ -25,6 +25,9 @@
 #      $3 - tool commands to get a version string out of it
 #      $4 - metric field, or - for default
 #      $5.. - tool parameters
+# $1: execok - same as exec, but always return status 0
+# $1: exec21 - same as exec, but redirect stderr to stdout (as in 2>&1)
+# $1: exec21ok - same as exec21, but always return status 0
 # $1: wrap
 #      $2 - tool name that was executed and its version
 #      $3 - metric field, or - for default
@@ -54,19 +57,45 @@ do_wrap() {
     echo ' "column":["output_line"],"row":['
     shift
     { [ $# -gt 0 ] && { echo "$1" ; shift ; echo "$*" ; } ; cat ; } |
-	sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/^/{"value":["/' -e '$ s/$/"]}/' -e '$! s/$/"]},/' -e 's/[[:cntrl:]]*//g'
+        sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/^/{"value":["/' -e '$ s/$/"]}/' -e '$! s/$/"]},/' -e 's/[[:cntrl:]]*//g'
     echo ']}'
     :
 }
 
 METRIC=
-if [ "$1" = "exec" ] ; then
-    shift ; TOOL=$(command -v $1) || abend "command $1 not found in PATH $PATH"
+DOEXIT0=
+DOREDIR=
+DOEXEC=
+case "$1" in
+exec21ok)
+    DOEXIT0=1
+    DOREDIR=1
+    DOEXEC=1
+    ;;
+exec21)
+    DOREDIR=1
+    DOEXEC=1
+    ;;
+execok)
+    DOEXIT0=1
+    DOEXEC=1
+    ;;
+exec)
+    DOEXEC=1
+    ;;
+esac
+if [ -n "$DOEXEC" ] ; then
+    shift ; TOOL=$(command -v "$1") || abend "command $1 not found in PATH $PATH"
     shift ; TOOLVER=
-    [ $# -gt 0 ] && { TOOLVER=$( { $TOOL $1 2>&1 || true ; } | sed -e '/^[[:blank:]]*$/ d' | sed -e '1 q' ) ; shift ; }
-    [ $# -gt 0 ] && { METRIC=$1 ; shift ; }
+    [ $# -gt 0 ] && { TOOLVER=$( { $TOOL "$1" 2>&1 || true ; } | sed -e '/^[[:blank:]]*$/ d' | sed -e '1 q' ) ; shift ; }
+    [ $# -gt 0 ] && { METRIC="$1" ; shift ; }
     RC=0
-    $TOOL "$@" | do_wrap "$METRIC" "$TOOL ($TOOLVER)" "$*" || RC=$?
+    if [ -n "$DOREDIR" ] ; then
+        $TOOL "$@" 2>&1 | do_wrap "$METRIC" "$TOOL ($TOOLVER)" "$*" || RC=$?
+    else
+        $TOOL "$@" | do_wrap "$METRIC" "$TOOL ($TOOLVER)" "$*" || RC=$?
+    fi
+    [ -n "$DOEXIT0" ] && exit 0
     exit $RC
 fi
 
