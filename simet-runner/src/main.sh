@@ -26,7 +26,7 @@
 #
 # Execution (after build):
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
-# [--test TWAMP|TCPBW|GEOLOC]
+# [--test TWAMP|TCPBW|GEOLOC] [--all-peers]
 #
 # Dependencies:
 # - curl
@@ -49,6 +49,7 @@ main(){
   local _configured=0
 
   SETLOCK="true"
+  ALLPEERS=0
 
   # read params
   while [ ! $# -eq 0 ]; do
@@ -74,6 +75,10 @@ main(){
           exit 1
         fi
         shift
+        ;;
+      --all-peers)
+        log_warn "--all-peers is for internal NIC.br use, results may be discarded by SIMET"
+        ALLPEERS=1
         ;;
       -v|--verbose)
         VERBOSE="true"
@@ -127,27 +132,34 @@ main(){
 
 # test number can be empty, or 1.. when testing multiple peers in the same run
 _main_run(){
-  local _test_number="$1"
+  local _tstid_prefix=
+  [ -n "$1" ] && {
+    _tstid_prefix=$(printf '%03d-' "$1") || {
+      log_error "internal error: illegal test number: $1"
+      exit 1
+    }
+  }
 
-  ## start of a measurement run
+  log_notice "measurement peer: $_auth_endpoint"
+  [ -n "$_tstid_prefix" ] && log_debug "measurement prefix for report: $_tstid_prefix"
+
   ## if RUN_ONLY_TASK is set, we only run that one
-
   # 4. task twamp + traceroute
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
-    _task_twamp "4"
-    _task_traceroute "4"
-    _task_twamp "6"
-    _task_traceroute "6"
+    _task_twamp "4" "$_tstid_prefix"
+    _task_traceroute "4" "$_tstid_prefix"
+    _task_twamp "6" "$_tstid_prefix"
+    _task_traceroute "6" "$_tstid_prefix"
   fi
 
   # 5. task bw tcp
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TCPBW" ] ; then
-    _task_tcpbw "4"
+    _task_tcpbw "4" "$_tstid_prefix"
     sleep 3
     log_debug "Refresh the authorization token for ipv6."
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
     if [ $? -eq 0 ]; then
-      _task_tcpbw "6"
+      _task_tcpbw "6" "$_tstid_prefix"
     else
       log_warn "skipping ipv6 throughput measurement: authorization has been denied"
     fi
@@ -163,6 +175,9 @@ _main_orchestrate(){
 
   # 2. task service discovery
   local _discovered="false"
+  local _loopcounter=1
+  local _collector_endpoint=
+
   discover_init
   discover_next_peer
   while [ $? -eq 0 ]; do
@@ -173,19 +188,24 @@ _main_orchestrate(){
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
     if [ $? -eq 0 ]; then
       _discovered="true"
-      break
+
+      # per-peer test run
+      if [ $ALLPEERS -eq 0 ] ; then
+        _main_run
+        break
+      fi
+
+      _main_run $_loopcounter && \
+         [ -z "$_collector_endpoint" ] && \
+	   _collector_endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
+      _loopcounter=$((_loopcounter + 1))
     fi
     discover_next_peer
   done
-  if [ "$_discovered" = "true" ]; then
-    log_notice "measurement peer: $_auth_endpoint"
-  else
+  if [ "$_discovered" != "true" ]; then
     log_error "Peer discovery and authorization failed"
     exit 1
   fi
-
-  # per-peer test run
-  _main_run ""
 
   # once-per-run measurements
 
@@ -201,7 +221,11 @@ _main_orchestrate(){
   export _report_dir="$BASEDIR/report"
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   report_template > "$_report_dir/result.json"
-  local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
+  if [ -n "$_collector_endpoint" ] ; then
+    local _endpoint="$_collector_endpoint"
+  else
+    local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
+  fi
   _resp=$(curl \
     --request POST \
     --header "Content-Type: application/yang.data+json" \
@@ -275,6 +299,7 @@ _task_geolocation(){
 
 _task_twamp(){
   local _af="$1"
+  local _tst_prefix="$2"
   if [[ "$_af" != "4" && "$_af" != "6" ]]; then
     log_error "Aborting task TWAMP IPvX. Unknown address familiy '$_af'."
     return 1
@@ -290,8 +315,8 @@ _task_twamp(){
   set -f && set -- $_about && set +f
   export _task_name="${LMAP_TASK_NAME_PREFIX}twamp" # " twampc 1.2.3-ABC " => "twampc"
   export _task_version=$2 # " twampc 1.2.3-ABC " => "1.2.3-ABC"
-  export _task_dir="$BASEDIR/report/twamp-ipv$_af" 
-  export _task_action="packettrain-udp_to-simet-measurement-peer_ip$_af"
+  export _task_dir="$BASEDIR/report/twamp-${_tst_prefix}ipv$_af"
+  export _task_action="packettrain-udp_to-simet-measurement-peer_${_tst_prefix}ip$_af"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
@@ -322,6 +347,7 @@ _task_twamp(){
 
 _task_tcpbw(){
   local _af="$1"
+  local _tst_prefix="$2"
   if [[ "$_af" != "4" && "$_af" != "6" ]]; then
     log_error "Aborting task TCPBW IPvX. Unknown address familiy '$_af'."
     return 1
@@ -338,8 +364,8 @@ _task_tcpbw(){
   set -f && set -- $_about && set +f
   export _task_name="${LMAP_TASK_NAME_PREFIX}tcp-bandwidth" # " tcpbw 1.2.3-ABC " => "tcpbw"
   export _task_version=$2 # " tcpbw 1.2.3-ABC " => "1.2.3-ABC"
-  export _task_dir="$BASEDIR/report/tcpbw-ipv$_af" 
-  export _task_action="bandwidth-tcp_to-simet-measurement-peer_ip$_af"
+  export _task_dir="$BASEDIR/report/tcpbw-${_tst_prefix}ipv$_af"
+  export _task_action="bandwidth-tcp_to-simet-measurement-peer_${_tst_prefix}ip$_af"
   export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","

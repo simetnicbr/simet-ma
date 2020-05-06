@@ -6,6 +6,7 @@
 # Connected to twamp, so enabled/disabled through TWAMP
 _task_traceroute(){
   local _af="$1"
+  local _tst_prefix="$2"
   if [[ "$_af" != "4" && "$_af" != "6" ]]; then
     log_error "Aborting task traceroute IPvX. Unknown address familiy '$_af'."
     return 1
@@ -19,8 +20,8 @@ _task_traceroute(){
 
   export _task_name="${LMAP_TASK_NAME_PREFIX}tool_traceroute"
   export _task_version="$PACKAGE_VERSION"
-  export _task_dir="$BASEDIR/report/traceroute-ipv$_af"
-  export _task_action="traceroute_to-simet-measurement-peer_ip$_af"
+  export _task_dir="$BASEDIR/report/traceroute-${_tst_prefix}ipv$_af"
+  export _task_action="traceroute_to-simet-measurement-peer_${_tst_prefix}ip$_af"
   export _task_parameters='{ "host": "'$_host'" }'
   export _task_options='[]'
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
