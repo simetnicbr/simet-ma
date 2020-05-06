@@ -125,6 +125,35 @@ main(){
   :
 }
 
+# test number can be empty, or 1.. when testing multiple peers in the same run
+_main_run(){
+  local _test_number="$1"
+
+  ## start of a measurement run
+  ## if RUN_ONLY_TASK is set, we only run that one
+
+  # 4. task twamp + traceroute
+  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
+    _task_twamp "4"
+    _task_traceroute "4"
+    _task_twamp "6"
+    _task_traceroute "6"
+  fi
+
+  # 5. task bw tcp
+  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TCPBW" ] ; then
+    _task_tcpbw "4"
+    sleep 3
+    log_debug "Refresh the authorization token for ipv6."
+    authorization "$_auth_endpoint" "$AGENT_TOKEN"
+    if [ $? -eq 0 ]; then
+      _task_tcpbw "6"
+    else
+      log_warn "skipping ipv6 throughput measurement: authorization has been denied"
+    fi
+  fi
+}
+
 _main_orchestrate(){ 
   # 1. task authentication
   AGENT_ID="undefined"
@@ -155,36 +184,16 @@ _main_orchestrate(){
     exit 1
   fi
 
-  ## start of a measurement run
-  ## if RUN_ONLY_TASK is set, we only run that one
+  # per-peer test run
+  _main_run ""
 
-  # 4. task twamp + traceroute
-  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
-    _task_twamp "4"
-    _task_traceroute "4"
-    _task_twamp "6"
-    _task_traceroute "6"
-  fi
-
-  # 5. task bw tcp
-  if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TCPBW" ] ; then
-    _task_tcpbw "4"
-    sleep 3
-    log_debug "Refresh the authorization token for ipv6."
-    authorization "$_auth_endpoint" "$AGENT_TOKEN"
-    if [ $? -eq 0 ]; then
-      _task_tcpbw "6"
-    else
-      log_warn "skipping ipv6 throughput measurement: authorization has been denied"
-    fi
-  fi
+  # once-per-run measurements
 
   # 6. task geolocation
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "GEOLOC" ] ; then
     _task_geolocation
   fi
 
-  # end of a measurement run
   _task_environment
 
   # 7. task report
