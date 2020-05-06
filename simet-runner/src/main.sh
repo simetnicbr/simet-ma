@@ -193,12 +193,11 @@ _main_orchestrate(){
   export _lmap_report_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   report_template > "$_report_dir/result.json"
   local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
-  local _report=$( cat "$_report_dir/result.json" )
   _resp=$(curl \
     --request POST \
     --header "Content-Type: application/yang.data+json" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
-    --data "$_report"  \
+    --data "@$_report_dir/result.json"  \
     --silent \
     --fail \
     --location \
