@@ -8,7 +8,10 @@
   { "name":"ma-local_default-periodic-test-run",
     "start":"every-four-hours",
     "execution-mode":"sequential",
-    "action":[{"name":"simet.nic.br_basic-tests","task":"simet.nic.br_basic-tests"}]
+    "action":[
+      {"name":"simet.nic.br_basic-tests","task":"simet.nic.br_basic-tests"},
+      {"name":"simet.nic.br_srvlist-mp-latency","task":"simet.nic.br_srvlist-mp-latency"}
+    ]
   },
   { "name":"ma-local_periodic_report",
     "start":"every-hour",
