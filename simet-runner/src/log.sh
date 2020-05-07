@@ -12,6 +12,9 @@ do_log(){
   err|error)
     printf "%s: error: %s\n" "$0" "$*"
     ;;
+  warning)
+    printf "%s: warning: %s\n" "$0" "$*"
+    ;;
   info|notice)
     printf "%s: %s\n" "$0" "$*"
     ;;
@@ -23,6 +26,10 @@ do_log(){
 
 log_error(){
   do_log err "$@" >&2
+}
+
+log_warn(){
+  do_log warning "$@" >&2
 }
 
 log_info(){
