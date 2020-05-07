@@ -18,7 +18,8 @@
 
 _helper_measurement_context_tag() {
   _task_ctx_tag=
-  [ -n "$MEASUREMENT_CONTEXT" ] && _task_ctx_tag="simet.nic.br_measurement-context:$MEASUREMENT_CONTEXT,"
+  [ -n "$MEASUREMENT_CONTEXT" ] && \
+    _task_ctx_tag="\"simet.nic.br_measurement-context:$MEASUREMENT_CONTEXT\","
   :
 }
 

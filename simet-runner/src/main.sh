@@ -26,7 +26,7 @@
 #
 # Execution (after build):
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
-# [--test TWAMP|TCPBW|GEOLOC] [--all-peers]
+# [--test TWAMP|TWAMPFAST|TCPBW|GEOLOC] [--all-peers] [--peer-reachability]
 #
 # Dependencies:
 # - curl
@@ -69,10 +69,14 @@ main(){
         VERBOSE="true"
         ;;
       --test)
+        [ -n "$MEASUREMENT_CONTEXT" ] && {
+          log_error "--test cannot be used with specific measurement contexts"
+          exit 1
+        }
         if [ -n "$2" ] ; then
           RUN_ONLY_TASK="$2"
         else
-          log_error "--test requires a test name as a parameter: TWAMP, TCPBW, GEOLOC"
+          log_error "--test requires a test name as a parameter: TWAMP, TWAMPFAST, TCPBW, GEOLOC"
           exit 1
         fi
         shift
@@ -80,6 +84,11 @@ main(){
       --all-peers)
         log_warn "--all-peers is for internal NIC.br use, results may be discarded by SIMET"
         ALLPEERS=1
+        ;;
+      --peer-reachability)
+        ALLPEERS=1
+        RUN_ONLY_TASK="TWAMPFAST"
+        MEASUREMENT_CONTEXT="every-mp-from-servicelist"
         ;;
       -v|--verbose)
         VERBOSE="true"
@@ -150,6 +159,11 @@ _main_run(){
     _task_twamp "4" "$_tstid_prefix"
     _task_traceroute "4" "$_tstid_prefix"
     _task_twamp "6" "$_tstid_prefix"
+    _task_traceroute "6" "$_tstid_prefix"
+  elif [ "$RUN_ONLY_TASK" = "TWAMPFAST" ] ; then
+    _task_twamp "4" "$_tstid_prefix" $TWAMPFAST_OPT
+    _task_traceroute "4" "$_tstid_prefix"
+    _task_twamp "6" "$_tstid_prefix" $TWAMPFAST_OPT
     _task_traceroute "6" "$_tstid_prefix"
   fi
 
@@ -301,6 +315,8 @@ _task_geolocation(){
 _task_twamp(){
   local _af="$1"
   local _tst_prefix="$2"
+  shift 2
+  local _twamp_opts="$*"
   if [[ "$_af" != "4" && "$_af" != "6" ]]; then
     log_error "Aborting task TWAMP IPvX. Unknown address familiy '$_af'."
     return 1
@@ -325,11 +341,11 @@ _task_twamp(){
   mkdir -p "$_task_dir/tables"
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TWAMPC -$_af -p $_port $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/twamp.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TWAMPC $_twamp_opts -$_af -p $_port $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/twamp.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TWAMPC -$_af -p $_port $_host >\"$_task_dir/tables/twamp.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TWAMPC $_twamp_opts -$_af -p $_port $_host >\"$_task_dir/tables/twamp.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
