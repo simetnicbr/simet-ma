@@ -50,6 +50,7 @@ main(){
 
   SETLOCK="true"
   ALLPEERS=0
+  MEASUREMENT_CONTEXT=
 
   # read params
   while [ ! $# -eq 0 ]; do
