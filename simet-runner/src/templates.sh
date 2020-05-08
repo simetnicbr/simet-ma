@@ -16,6 +16,13 @@
 #
 ################################################################################
 
+_helper_measurement_context_tag() {
+  _task_ctx_tag=
+  [ -n "$MEASUREMENT_CONTEXT" ] && \
+    _task_ctx_tag="\"simet.nic.br_measurement-context:$MEASUREMENT_CONTEXT\","
+  :
+}
+
 _cat_many() {
   comma=
   while [ $# -gt 0 ] ; do
@@ -30,6 +37,7 @@ _cat_many() {
 }
 
 task_template(){
+  _helper_measurement_context_tag
   cat << EOF1TASKTEMPLATE
 {
   "schedule": "$REPORT_SCHEDULE",
@@ -38,7 +46,7 @@ task_template(){
   "parameters": $_task_parameters,
   "option": $_task_options,
   "conflict": [],
-  "tag": [ $_task_extra_tags
+  "tag": [ $_task_extra_tags $_task_ctx_tag
     "simet.nic.br_engine-name:${SIMET_ENGINE_NAME}",
     "simet.nic.br_engine-version:$_task_version",
     "simet.nic.br_task-version:$_task_version"${REPORT_MAC_ADDRESS_TAG_ENTRY}
@@ -59,6 +67,7 @@ EOF2TASKTEMPLATE
 
 # task_json_template "filename" "URN" "column name" ... > tables/result.json
 task_json_template(){
+  _helper_measurement_context_tag
   cat << EOF1TASKJSONTEMPLATE
 {
   "schedule": "$REPORT_SCHEDULE",
@@ -67,7 +76,7 @@ task_json_template(){
   "parameters": $_task_parameters,
   "option": $_task_options,
   "conflict": [],
-  "tag": [ $_task_extra_tags
+  "tag": [ $_task_extra_tags $_task_ctx_tag
     "simet.nic.br_engine-name:${SIMET_ENGINE_NAME}",
     "simet.nic.br_engine-version:$_task_version",
     "simet.nic.br_task-version:$_task_version"${REPORT_MAC_ADDRESS_TAG_ENTRY}
