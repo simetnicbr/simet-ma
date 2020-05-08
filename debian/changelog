@@ -1,3 +1,17 @@
+simet-ma (0.16.8) unstable; urgency=medium
+
+  * simet-ma version 0.16.7
+  * simet-runner: fix sending of large reports to collector
+  * simet-runner: add log_warn(), fixes IPv6 TCPBW error path
+  * simet-runner: add new all-serverlist-MPs latency measurement
+  * simet-runner: record in report the list of MPs received from SIMET2
+  * simet-api: run the new all-serverlist-MPs latency measurement after the
+    basic measurement finishes in the default LMAP schedule
+  * simet-api: fix the LMAP tool wrapping for fping
+  * docker: do not use --rm and --restart at the same time
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 08 May 2020 10:15:43 -0300
+
 simet-ma (0.16.7) unstable; urgency=medium
 
   * simet-ma version 0.16.7
