@@ -26,7 +26,7 @@
 #
 # Execution (after build):
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
-# [--test TWAMP|TWAMPFAST|TCPBW|GEOLOC] [--all-peers] [--peer-reachability]
+# [--test TWAMP|TWAMPFAST|TCPBW|GEOLOC] [--peer-reachability]
 #
 # Dependencies:
 # - curl
@@ -80,10 +80,6 @@ main(){
           exit 1
         fi
         shift
-        ;;
-      --all-peers)
-        log_warn "--all-peers is for internal NIC.br use, results may be discarded by SIMET"
-        ALLPEERS=1
         ;;
       --peer-reachability)
         ALLPEERS=1
