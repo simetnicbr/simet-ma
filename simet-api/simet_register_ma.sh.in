@@ -348,7 +348,7 @@ __consume_tokens_api_output() {
 		|| abend "illegal response from agent-registry service"
 	eval "$SID" || abend "internal error"
 
-	printf "%s" "$VTK" > $AGENT_VTK_FILE || \
+	printf "%s" "$VTK" > "$AGENT_VTK_FILE" || \
 		simet_log simet-ma daemon.err "SIMET-MA: failed to store view_results token"
 
 	simet_log simet-ma daemon.info "SIMET: view_results token updated"
