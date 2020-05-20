@@ -112,7 +112,7 @@ __simet_consume_api_output() {
 
 	[ x"$AID" != x"$OLDAID" ] && {
 		echo "$AID" > "$AGENT_ID_FILE"
-		write_lmap_agent "$AID"
+		call write_lmap_agent "$AID" || :
 		# OUTFILE not valid anymore!
 	}
 	[ x"$AT"  != x"$OLDAT"  ] && echo "$AT" > "$AGENT_TOKEN_FILE"
