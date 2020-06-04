@@ -24,6 +24,8 @@
 set -e
 set -o pipefail
 
+umask 0022
+
 RC=1
 OUTFILE=
 abend() {
