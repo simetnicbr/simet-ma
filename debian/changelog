@@ -1,6 +1,14 @@
+simet-ma (0.16.9) unstable; urgency=medium
+
+  * simet-ma version 0.16.9
+  * simet-api: simet-register-ma: force umask 0022, corrects issue
+    on SIMETBox/OpenWRT rpcd, which sets too restrictive an umask
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 04 Jun 2020 23:18:53 -0300
+
 simet-ma (0.16.8) unstable; urgency=medium
 
-  * simet-ma version 0.16.7
+  * simet-ma version 0.16.8
   * simet-runner: fix sending of large reports to collector
   * simet-runner: add log_warn(), fixes IPv6 TCPBW error path
   * simet-runner: add new all-serverlist-MPs latency measurement
