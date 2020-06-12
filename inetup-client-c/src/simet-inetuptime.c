@@ -673,7 +673,7 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
 }
 
 static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
-                               const uint16_t msgtype, const uint32_t msgsize,
+                               const uint16_t msgtype, const size_t msgsize,
                                const char * const msgdata)
 {
     struct simet_inetup_msghdr hdr;
@@ -689,7 +689,7 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
 
     memset(&hdr, 0, sizeof(hdr));
     hdr.message_type = htons(msgtype);
-    hdr.message_size = htonl(msgsize);
+    hdr.message_size = htonl(msgsize); /* safe, < SIMET_UPTIME2_MAXDATASIZE */
 
     if (tcpaq_queue(s, &hdr, sizeof(hdr), 1) || tcpaq_queue(s, (void *)msgdata, msgsize, 1)) {
         /* should not happen, but if it does, try to recover */
@@ -851,7 +851,7 @@ err_exit:
 static int xx_maconfig_getuint(struct simet_inetup_server * const s,
                         struct json_object * const jconf,
                         const char * const param_name,
-                        unsigned int *param,
+                        unsigned int * const param,
                         const unsigned int low, const unsigned int high)
 {
     struct json_object *jo;
@@ -861,8 +861,9 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
             errno = 0;
             int64_t val = json_object_get_int64(jo);
             if (errno == 0 && val >= low && val <= high) {
-                if (*param != val) {
-                    *param = val;
+                const unsigned int uival = (unsigned int)val; /* safe: 0 <= low <= val <= high <= UINT_MAX */
+                if (*param != uival) {
+                    *param = uival;
                     protocol_info(s, "ma_config: set %s to %u", param_name, *param);
                 }
                 return 1;
