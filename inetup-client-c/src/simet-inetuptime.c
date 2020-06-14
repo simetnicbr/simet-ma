@@ -57,6 +57,7 @@ int  log_level = 2;
 const char *progname = PACKAGE_NAME;
 
 static struct simet_inetup_server **servers = NULL;
+static struct simet_inetup_server *telemetry_server = NULL;
 static const char *agent_id_file = NULL;
 static const char *agent_id = NULL;
 static const char *agent_token_file = NULL;
@@ -1193,6 +1194,39 @@ err_exit:
 }
 
 /*
+ * telemetry/measurement stream tracking
+ */
+
+/* returns true if s is the main telemetry server */
+static inline int is_telemetry_server(struct simet_inetup_server * const s)
+{
+    return (telemetry_server == s && s
+            && s->state == SIMET_INETUP_P_C_MAINLOOP) ? 1 : 0;
+}
+/* ensures s is not the main telemetry server anymore */
+static int decline_as_telemetry_server(struct simet_inetup_server * const s)
+{
+    if (s && s == telemetry_server) {
+        telemetry_server = NULL;
+        protocol_trace(s, "no longer the main telemetry server");
+    }
+}
+/* propose s as the main telemetry server, s must be in MAINLOOP state */
+static void propose_as_telemetry_server(struct simet_inetup_server * const s)
+{
+    if (s && s->state == SIMET_INETUP_P_C_MAINLOOP) {
+        if (telemetry_server && telemetry_server->state == SIMET_INETUP_P_C_MAINLOOP)
+            return; /* no reason to change it */
+        telemetry_server = s;
+        protocol_trace(s, "selected as main telemetry server");
+    }
+}
+static inline int need_telemetry_server(void)
+{
+    return (!telemetry_server || telemetry_server->state != SIMET_INETUP_P_C_MAINLOOP);
+}
+
+/*
  * SIMET2 Uptime2 connection lifetime messages and handling
  */
 
@@ -1207,6 +1241,8 @@ static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
         protocol_trace(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
         s->state = SIMET_INETUP_P_C_RECONNECT;
         s->backoff_clock = reltime();
+
+        decline_as_telemetry_server(s);
     }
 }
 
@@ -1218,6 +1254,8 @@ static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
             s->state != SIMET_INETUP_P_C_SHUTDOWN) {
         s->state = SIMET_INETUP_P_C_DISCONNECT;
         s->disconnect_clock = 0;
+
+        decline_as_telemetry_server(s);
 
         protocol_info(s, "client disconnecting...");
     }
@@ -1251,6 +1289,8 @@ static int uptimeserver_refresh(struct simet_inetup_server * const s)
     } else {
         simet_uptime2_keepalive_update(s);
         s->state = SIMET_INETUP_P_C_MAINLOOP;
+        /* do this only after s->state is set to MAINLOOP */
+        propose_as_telemetry_server(s);
     }
 
     /* FIXME: this is correct, but not being done the right way */
@@ -1893,6 +1933,9 @@ int main(int argc, char **argv) {
                     protocol_trace(s, "assuming measurement peer is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
                 }
+
+                if (need_telemetry_server())
+                    propose_as_telemetry_server(s);
 
                 /* process return channel messages */
                 while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
