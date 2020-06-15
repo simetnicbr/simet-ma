@@ -89,6 +89,9 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
  * helpers
  */
 
+/* lets not blind the type system just to squash a false-positive */
+static inline void free_constchar(const char *p) { free((void *)p); }
+
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s);
 
 static time_t timeout_to_keepalive(const time_t timeout) __attribute__((__pure__));
@@ -1607,8 +1610,14 @@ static int load_agent_data(const char * const aid_path, const char * const atoke
     }
 
     /* We only change agent-id,token as a set */
-    agent_id = new_aid;
-    agent_token = new_atok;
+    if (agent_id != new_aid) {
+        free_constchar(agent_id);
+        agent_id = new_aid;
+    }
+    if (agent_token != new_atok) {
+        free_constchar(agent_token);
+        agent_token = new_atok;
+    }
 
     if (agent_id)
         print_msg(MSG_NORMAL, "agent-id: %s", agent_id);
