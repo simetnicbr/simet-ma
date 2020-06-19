@@ -34,10 +34,11 @@
 #define SIMET_UPTIME2_DISCONNECT_BACKOFF 1    /* connection tries before can reconnect to same peer */
 
 /* SIMET2 Uptime2 protocol constants */
-#define SIMET_INETUP_P_MSGTYPE_CONNECT    0x0000U
-#define SIMET_INETUP_P_MSGTYPE_KEEPALIVE  0x0001U
-#define SIMET_INETUP_P_MSGTYPE_EVENTS     0x0002U
-#define SIMET_INETUP_P_MSGTYPE_MACONFIG   0x0003U
+#define SIMET_INETUP_P_MSGTYPE_CONNECT      0x0000U
+#define SIMET_INETUP_P_MSGTYPE_KEEPALIVE    0x0001U
+#define SIMET_INETUP_P_MSGTYPE_EVENTS       0x0002U
+#define SIMET_INETUP_P_MSGTYPE_MACONFIG     0x0003U
+#define SIMET_INETUP_P_MSGTYPE_DISCONNECT   0x0004U
 #define SIMET_ENGINE_NAME "nic_simet2_simet-ma"
 
 enum simet_inetup_protocol_state {

@@ -75,6 +75,8 @@ static const int simet_uptime2_request_remotekeepalive = 1;
 static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
 static volatile int got_reload_signal = 0;  /* SIGHUP */
 
+static int got_disconnect_msg = 0;          /* MSG_DISCONNECT */
+
 #define BACKOFF_LEVEL_MAX 8
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
     { 1, 10, 10, 30, 30, 60, 60, 300 };
@@ -1042,11 +1044,21 @@ err_exit:
     return res;
 }
 
+static int simet_uptime2_msghdl_serverdisconnect(struct simet_inetup_server * const s,
+                    const struct simet_inetup_msghdr * const hdr,
+                    const void * const data)
+{
+    protocol_info(s, "received global disconnection message from server");
+    got_disconnect_msg = 1;
+    return 1;
+}
+
 /* State: MAINLOOP */
 const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
-    { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE, .handler = NULL },
-    { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,  .handler = &simet_uptime2_msghdl_maconfig },
-    { .type = SIMET_INETUP_P_MSGTYPE_EVENTS,    .handler = &simet_uptime2_msghdl_serverevents },
+    { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE,  .handler = NULL },
+    { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,   .handler = &simet_uptime2_msghdl_maconfig },
+    { .type = SIMET_INETUP_P_MSGTYPE_EVENTS,     .handler = &simet_uptime2_msghdl_serverevents },
+    { .type = SIMET_INETUP_P_MSGTYPE_DISCONNECT, .handler = &simet_uptime2_msghdl_serverdisconnect },
     { .type = SIMET_INETUP_MSGHANDLER_EOL }
 };
 
@@ -1109,10 +1121,18 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - client drains return channel (server->client)
      *    - client ignores unknown messages
      *    - client accepts MA_CONFIG message from server
+     *
+     * Protocol v2: msg-disconnect capability
+     *    - client accepts MSG_DISCONNECT (global disconnect)
+     *      Disconnects (cleanly) from all servers, all protocols
+     *      Switches immediately to worst-case backoff timer
+     *      Tries to reconnect at worst-case backoff
+     *      Continues measuring/collecting events (where supported)
      */
     if (simet_uptime2_request_remotekeepalive) {
         json_object_array_add(jcap, json_object_new_string("server-keepalive"));
     }
+    json_object_array_add(jcap, json_object_new_string("msg-disconnect"));
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -1815,8 +1835,17 @@ int main(int argc, char **argv) {
     do {
         time_t minwait = 300;
         unsigned int j, num_shutdown;
+        int queued_msg_disconnect;
 
         num_shutdown = 0;
+
+        /* safe semanthics if it is ever made volatile/MT */
+        queued_msg_disconnect = 0;
+        if (got_disconnect_msg) {
+            queued_msg_disconnect = 1;
+            got_disconnect_msg = 0;
+        }
+
         for (j = 0; j < servers_count; j++) {
             struct simet_inetup_server *s = servers[j];
             int wait = 0;
@@ -1836,6 +1865,12 @@ int main(int argc, char **argv) {
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
+                if (queued_msg_disconnect) {
+                    s->backoff_level = BACKOFF_LEVEL_MAX-1;
+                    s->backoff_clock = reltime();
+                    protocol_trace(s, "global disconnect: will attempt to reconnect in %u seconds",
+                            backoff_times[s->backoff_level]);
+                }
                 wait = uptimeserver_connect(s, server_name, server_port);
                 servers_pollfds[j].fd = s->socket;
                 break;
@@ -1845,6 +1880,14 @@ int main(int argc, char **argv) {
                 wait = uptimeserver_refresh(s);
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
+                if (queued_msg_disconnect) {
+                    /* FIXME: queue a server-told-us-to-disconnect event to report later */
+                    s->backoff_level = BACKOFF_LEVEL_MAX-1;
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
                 if (s->backoff_reset_clock &&
                         !timer_check_full(s->backoff_reset_clock, s->server_timeout * 2)) {
                     protocol_trace(s, "assuming measurement peer is willing to provide service, backoff timer reset");
@@ -1853,6 +1896,9 @@ int main(int argc, char **argv) {
 
                 /* process return channel messages */
                 while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
+                if (got_disconnect_msg)
+                    break;
 
                 if (!uptimeserver_remotetimeout(s)) {
                     /* remote keepalive timed out */
@@ -1902,6 +1948,9 @@ int main(int argc, char **argv) {
 
         if (num_shutdown >= servers_count && got_exit_signal)
             break;
+
+        if (got_disconnect_msg)
+            minwait = 0;
 
         if (minwait > 0) {
             /* optimized for a small number of servers */
