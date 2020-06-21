@@ -130,7 +130,7 @@ static time_t reltime(void)
 
 /* returns: 0 = expired, otherwise seconds left to time out
  * written for clarity, and no integer overflows */
-static time_t timer_check(const time_t timestamp, const time_t rel_timeout)
+static time_t timer_check_full(const time_t timestamp, const time_t rel_timeout)
 {
     if (timestamp <= 0 || rel_timeout <= 0)
         return 0; /* timer expired as fail-safe */
@@ -140,6 +140,13 @@ static time_t timer_check(const time_t timestamp, const time_t rel_timeout)
     const time_t now_rel = now - timestamp;
     return (rel_timeout > now_rel)? rel_timeout - now_rel : 0;
 }
+/* same as timer_check, but saturates at INT_MAX */
+static int timer_check(const time_t timestamp, const time_t rel_timeout)
+{
+    const time_t dt = timer_check_full(timestamp, rel_timeout);
+    return (dt <= INT_MAX) ? (int) dt : INT_MAX;
+}
+
 
 /* For simet2 inetup protocol purposes */
 static const char *str_ip46(int ai_family)
@@ -400,7 +407,7 @@ static int tcpaq_send_timeout(struct simet_inetup_server * const s, time_t timeo
     const time_t tstart = reltime();
     int rc = -EAGAIN;
 
-    while (rc && !tcpaq_is_queue_empty(s) && timer_check(tstart, timeout)) {
+    while (rc && !tcpaq_is_queue_empty(s) && timer_check_full(tstart, timeout)) {
         rc = tcpaq_send_nowait(s);
     }
 
@@ -1238,9 +1245,9 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
     time_t interval = (s->server_timeout) ?
                             timeout_to_keepalive(s->server_timeout) :
                             INT_MAX;
-    time_t waittime_left = timer_check(s->keepalive_clock, interval);
+    time_t waittime_left = timer_check_full(s->keepalive_clock, interval);
     if (waittime_left > timeout_to_timefuzz(s->server_timeout))
-        return waittime_left;
+        return (waittime_left <= INT_MAX) ? (int) waittime_left : INT_MAX;
 
     if (simet_uptime2_msg_keepalive(s)) {
         simet_uptime2_reconnect(s);
@@ -1259,8 +1266,7 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
     if (!s->remote_keepalive_clock || !s->remote_keepalives_enabled)
         return 1; /* we are not depending on remote keepalives */
 
-    time_t waittime_left = timer_check(s->remote_keepalive_clock, s->client_timeout);
-    return (waittime_left > 0);
+    return (timer_check_full(s->remote_keepalive_clock, s->client_timeout) > 0);
 }
 
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
@@ -1319,7 +1325,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     assert(s->socket == -1);
 
     /* Backoff timer */
-    time_t waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
+    int waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
     if (waittime_left > 0)
         return waittime_left;
     s->backoff_clock = reltime();
@@ -1830,7 +1836,7 @@ int main(int argc, char **argv) {
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (s->backoff_reset_clock &&
-                        timer_check(s->backoff_reset_clock, s->server_timeout * 2) == 0) {
+                        !timer_check_full(s->backoff_reset_clock, s->server_timeout * 2)) {
                     protocol_trace(s, "assuming measurement peer is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
                 }
