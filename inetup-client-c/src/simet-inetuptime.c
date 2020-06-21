@@ -1568,7 +1568,7 @@ static int fread_agent_str(const char *path, const char ** const p)
     }
 }
 
-static validate_nonempty(const char * const vname, const char * const v)
+static int validate_nonempty(const char * const vname, const char * const v)
 {
     if (!v || !v[0]) {
         print_err("invalid %s: \"%s\"", vname, (v)? v : "");
