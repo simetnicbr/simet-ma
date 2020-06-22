@@ -896,9 +896,10 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
  * MA_CONFIG message:
  *
  * { "config": {
- *   "capabilities-enabled": [ "..." ]
- *   "client-timeout": 60
- *   "server-timeout": 60
+ *   "capabilities-enabled": [ "..." ],
+ *   "client-timeout-seconds": 60,
+ *   "server-timeout-seconds": 60,
+ *   "measurement-period-seconds": 300
  *    } }
  *
  * all fields optional.  fields completely override previous settings.
@@ -963,6 +964,7 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
     if (xx_maconfig_getuint(s, jconf, "client-timeout-seconds", &s->client_timeout, 0, 86400) > 0)
         xx_set_tcp_timeouts(s);
     xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
+    xx_maconfig_getuint(s, jconf, "measurement-period-seconds", &s->measurement_period, 0, 86400);
 
     res = 1;
 
@@ -1139,11 +1141,17 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *      Switches immediately to worst-case backoff timer
      *      Tries to reconnect at worst-case backoff
      *      Continues measuring/collecting events (where supported)
+     *
+     * Protocol v2: msg-measurement capability
+     *    - client will send MEASUREMENT messages when needed
+     *    - client processes optional measurement-period-seconds
+     *      parameter in MA_CONFIG
      */
     if (simet_uptime2_request_remotekeepalive) {
         json_object_array_add(jcap, json_object_new_string("server-keepalive"));
     }
     json_object_array_add(jcap, json_object_new_string("msg-disconnect"));
+    json_object_array_add(jcap, json_object_new_string("msg-measurement"));
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -1224,7 +1232,7 @@ static void decline_as_telemetry_server(struct simet_inetup_server * const s)
 /* propose s as the main telemetry server, s must be in MAINLOOP state */
 static void propose_as_telemetry_server(struct simet_inetup_server * const s)
 {
-    if (s && s->state == SIMET_INETUP_P_C_MAINLOOP) {
+    if (s && s->state == SIMET_INETUP_P_C_MAINLOOP && s->measurement_period) {
         if (telemetry_server && telemetry_server->state == SIMET_INETUP_P_C_MAINLOOP)
             return; /* no reason to change it */
         telemetry_server = s;
