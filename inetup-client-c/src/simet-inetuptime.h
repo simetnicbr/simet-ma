@@ -33,11 +33,15 @@
 #define SIMET_UPTIME2_SHORTEST_KEEPALIVE (SIMET_UPTIME2_SHORTEST_TIMEOUT / 2)
 #define SIMET_UPTIME2_DISCONNECT_BACKOFF 1    /* connection tries before can reconnect to same peer */
 
+#define SIMET_UPTIME2_DFL_MSR_PERIOD     300  /* desired base measurement period, seconds */
+
 /* SIMET2 Uptime2 protocol constants */
-#define SIMET_INETUP_P_MSGTYPE_CONNECT    0x0000U
-#define SIMET_INETUP_P_MSGTYPE_KEEPALIVE  0x0001U
-#define SIMET_INETUP_P_MSGTYPE_EVENTS     0x0002U
-#define SIMET_INETUP_P_MSGTYPE_MACONFIG   0x0003U
+#define SIMET_INETUP_P_MSGTYPE_CONNECT      0x0000U
+#define SIMET_INETUP_P_MSGTYPE_KEEPALIVE    0x0001U
+#define SIMET_INETUP_P_MSGTYPE_EVENTS       0x0002U
+#define SIMET_INETUP_P_MSGTYPE_MACONFIG     0x0003U
+#define SIMET_INETUP_P_MSGTYPE_DISCONNECT   0x0004U
+#define SIMET_INETUP_P_MSGTYPE_MEASUREMENT  0x0005U
 #define SIMET_ENGINE_NAME "nic_simet2_simet-ma"
 
 enum simet_inetup_protocol_state {
@@ -96,9 +100,10 @@ struct simet_inetup_server {
     unsigned int peer_noconnect_ttl;
 
     /* server-configurable parameters */
-    unsigned int client_timeout; /* client times out the server, seconds */
-    unsigned int server_timeout; /* server times out the client, seconds */
-    int remote_keepalives_enabled;    /* capability server-keepalives */
+    unsigned int client_timeout;     /* client times out the server, seconds */
+    unsigned int server_timeout;     /* server times out the client, seconds */
+    int remote_keepalives_enabled;           /* capability server-keepalives */
+    unsigned int measurement_period;    /* base (desired) measurement period */
 };
 
 /* message handler, returns 0 if not handled, < 0 error, 1 if handled */

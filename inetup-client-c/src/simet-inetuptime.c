@@ -53,10 +53,13 @@
 #include <json.h>
 #endif
 
+#include "sys-linux.h"
+
 int  log_level = 2;
 const char *progname = PACKAGE_NAME;
 
 static struct simet_inetup_server **servers = NULL;
+static struct simet_inetup_server *telemetry_server = NULL;
 static const char *agent_id_file = NULL;
 static const char *agent_id = NULL;
 static const char *agent_token_file = NULL;
@@ -64,6 +67,8 @@ static const char *agent_token = NULL;
 static const char *boot_id = NULL;
 static const char *agent_mac = NULL;
 static const char *task_name = NULL;
+static const char *monitor_netdev_file = NULL;
+static const char *monitor_netdev = NULL;
 
 static unsigned int simet_uptime2_tcp_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
 
@@ -74,6 +79,8 @@ static const int simet_uptime2_request_remotekeepalive = 1;
 
 static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
 static volatile int got_reload_signal = 0;  /* SIGHUP */
+
+static int got_disconnect_msg = 0;          /* MSG_DISCONNECT */
 
 #define BACKOFF_LEVEL_MAX 8
 static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
@@ -88,6 +95,9 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 /*
  * helpers
  */
+
+/* lets not blind the type system just to squash a false-positive */
+static inline void free_constchar(const char *p) { free((void *)p); }
 
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s);
 
@@ -130,7 +140,7 @@ static time_t reltime(void)
 
 /* returns: 0 = expired, otherwise seconds left to time out
  * written for clarity, and no integer overflows */
-static time_t timer_check(const time_t timestamp, const time_t rel_timeout)
+static time_t timer_check_full(const time_t timestamp, const time_t rel_timeout)
 {
     if (timestamp <= 0 || rel_timeout <= 0)
         return 0; /* timer expired as fail-safe */
@@ -140,6 +150,13 @@ static time_t timer_check(const time_t timestamp, const time_t rel_timeout)
     const time_t now_rel = now - timestamp;
     return (rel_timeout > now_rel)? rel_timeout - now_rel : 0;
 }
+/* same as timer_check, but saturates at INT_MAX */
+static int timer_check(const time_t timestamp, const time_t rel_timeout)
+{
+    const time_t dt = timer_check_full(timestamp, rel_timeout);
+    return (dt <= INT_MAX) ? (int) dt : INT_MAX;
+}
+
 
 /* For simet2 inetup protocol purposes */
 static const char *str_ip46(int ai_family)
@@ -202,6 +219,11 @@ static struct json_object * xx_json_object_new_in64_as_str(const int64_t v)
 }
 #endif
 
+static int fits_u64_i64(const uint64_t v64u, int64_t * const p64d)
+{
+    *p64d = v64u & INT64_MAX;
+    return !!(v64u <= INT64_MAX);
+}
 
 /*
  * Signal handling
@@ -400,7 +422,7 @@ static int tcpaq_send_timeout(struct simet_inetup_server * const s, time_t timeo
     const time_t tstart = reltime();
     int rc = -EAGAIN;
 
-    while (rc && !tcpaq_is_queue_empty(s) && timer_check(tstart, timeout)) {
+    while (rc && !tcpaq_is_queue_empty(s) && timer_check_full(tstart, timeout)) {
         rc = tcpaq_send_nowait(s);
     }
 
@@ -666,7 +688,7 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
 }
 
 static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
-                               const uint16_t msgtype, const uint32_t msgsize,
+                               const uint16_t msgtype, const size_t msgsize,
                                const char * const msgdata)
 {
     struct simet_inetup_msghdr hdr;
@@ -682,7 +704,7 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
 
     memset(&hdr, 0, sizeof(hdr));
     hdr.message_type = htons(msgtype);
-    hdr.message_size = htonl(msgsize);
+    hdr.message_size = htonl(msgsize); /* safe, < SIMET_UPTIME2_MAXDATASIZE */
 
     if (tcpaq_queue(s, &hdr, sizeof(hdr), 1) || tcpaq_queue(s, (void *)msgdata, msgsize, 1)) {
         /* should not happen, but if it does, try to recover */
@@ -844,7 +866,7 @@ err_exit:
 static int xx_maconfig_getuint(struct simet_inetup_server * const s,
                         struct json_object * const jconf,
                         const char * const param_name,
-                        unsigned int *param,
+                        unsigned int * const param,
                         const unsigned int low, const unsigned int high)
 {
     struct json_object *jo;
@@ -854,8 +876,9 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
             errno = 0;
             int64_t val = json_object_get_int64(jo);
             if (errno == 0 && val >= low && val <= high) {
-                if (*param != val) {
-                    *param = val;
+                const unsigned int uival = (unsigned int)val; /* safe: 0 <= low <= val <= high <= UINT_MAX */
+                if (*param != uival) {
+                    *param = uival;
                     protocol_info(s, "ma_config: set %s to %u", param_name, *param);
                 }
                 return 1;
@@ -873,9 +896,10 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
  * MA_CONFIG message:
  *
  * { "config": {
- *   "capabilities-enabled": [ "..." ]
- *   "client-timeout": 60
- *   "server-timeout": 60
+ *   "capabilities-enabled": [ "..." ],
+ *   "client-timeout-seconds": 60,
+ *   "server-timeout-seconds": 60,
+ *   "measurement-period-seconds": 300
  *    } }
  *
  * all fields optional.  fields completely override previous settings.
@@ -940,6 +964,7 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
     if (xx_maconfig_getuint(s, jconf, "client-timeout-seconds", &s->client_timeout, 0, 86400) > 0)
         xx_set_tcp_timeouts(s);
     xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
+    xx_maconfig_getuint(s, jconf, "measurement-period-seconds", &s->measurement_period, 0, 86400);
 
     res = 1;
 
@@ -1031,11 +1056,22 @@ err_exit:
     return res;
 }
 
+static int simet_uptime2_msghdl_serverdisconnect(struct simet_inetup_server * const s,
+                    const struct simet_inetup_msghdr * const hdr,
+                    const void * const data)
+{
+    protocol_info(s, "received global disconnection message from server");
+    got_disconnect_msg = 1;
+    return 1;
+}
+
 /* State: MAINLOOP */
 const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
-    { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE, .handler = NULL },
-    { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,  .handler = &simet_uptime2_msghdl_maconfig },
-    { .type = SIMET_INETUP_P_MSGTYPE_EVENTS,    .handler = &simet_uptime2_msghdl_serverevents },
+    { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE,   .handler = NULL },
+    { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,    .handler = &simet_uptime2_msghdl_maconfig },
+    { .type = SIMET_INETUP_P_MSGTYPE_EVENTS,      .handler = &simet_uptime2_msghdl_serverevents },
+    { .type = SIMET_INETUP_P_MSGTYPE_DISCONNECT,  .handler = &simet_uptime2_msghdl_serverdisconnect },
+    { .type = SIMET_INETUP_P_MSGTYPE_MEASUREMENT, .handler = NULL },
     { .type = SIMET_INETUP_MSGHANDLER_EOL }
 };
 
@@ -1098,10 +1134,24 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - client drains return channel (server->client)
      *    - client ignores unknown messages
      *    - client accepts MA_CONFIG message from server
+     *
+     * Protocol v2: msg-disconnect capability
+     *    - client accepts MSG_DISCONNECT (global disconnect)
+     *      Disconnects (cleanly) from all servers, all protocols
+     *      Switches immediately to worst-case backoff timer
+     *      Tries to reconnect at worst-case backoff
+     *      Continues measuring/collecting events (where supported)
+     *
+     * Protocol v2: msg-measurement capability
+     *    - client will send MEASUREMENT messages when needed
+     *    - client processes optional measurement-period-seconds
+     *      parameter in MA_CONFIG
      */
     if (simet_uptime2_request_remotekeepalive) {
         json_object_array_add(jcap, json_object_new_string("server-keepalive"));
     }
+    json_object_array_add(jcap, json_object_new_string("msg-disconnect"));
+    json_object_array_add(jcap, json_object_new_string("msg-measurement"));
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -1162,6 +1212,277 @@ err_exit:
 }
 
 /*
+ * telemetry/measurement stream tracking
+ */
+
+/* returns true if s is the main telemetry server */
+static inline int is_telemetry_server(struct simet_inetup_server * const s)
+{
+    return (telemetry_server == s && s
+            && s->state == SIMET_INETUP_P_C_MAINLOOP) ? 1 : 0;
+}
+/* ensures s is not the main telemetry server anymore */
+static void decline_as_telemetry_server(struct simet_inetup_server * const s)
+{
+    if (s && s == telemetry_server) {
+        telemetry_server = NULL;
+        protocol_trace(s, "no longer the main telemetry server");
+    }
+}
+/* propose s as the main telemetry server, s must be in MAINLOOP state */
+static void propose_as_telemetry_server(struct simet_inetup_server * const s)
+{
+    if (s && s->state == SIMET_INETUP_P_C_MAINLOOP && s->measurement_period) {
+        if (telemetry_server && telemetry_server->state == SIMET_INETUP_P_C_MAINLOOP)
+            return; /* no reason to change it */
+        telemetry_server = s;
+        protocol_trace(s, "selected as main telemetry server");
+    }
+}
+static inline int need_telemetry_server(void)
+{
+    return (!telemetry_server || telemetry_server->state != SIMET_INETUP_P_C_MAINLOOP);
+}
+
+/*
+ * MEASUREMENT messages:
+ *
+ * { "measurements": [
+ *   { "name": "<measurement name>",
+ *     "timestamp-seconds": <event timestamp trunctated to seconds>,
+ *     "timestamp-microssecond-from-seconds": <event timestamp microsseconds, 0-999999>
+ *     ... (measurement data fields depend on <measurement name>)
+ *   }, ...
+ *   ] }
+ *
+ *
+ * Warning: we use struct timeval to carry the timestamps, but they *must* be *already*
+ * normalized so that microsecconds is not bigger than 999999 usec.
+ */
+
+/* t1 comes earlier than t2, dtx and drx are the deltas */
+static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * const s,
+        const time_t t1_s, const long int t1_us, const time_t t2_s, const long int t2_us,
+        const uint64_t tx, const uint64_t rx,
+        const uint64_t dtx, const uint64_t drx)
+{
+    json_object *jroot;
+    json_object *jarray;
+    json_object *jo;
+    int rc = -ENOMEM;
+    int64_t itx, irx, idtx, idrx;
+
+    if (!s)
+        return -EINVAL;
+
+    if (!fits_u64_i64(dtx, &idtx) || !fits_u64_i64(drx, &idrx)) {
+        protocol_trace(s, "wan_txrx: rx and/or tx delta too large, skipping");
+        return -EINVAL;
+    }
+
+    /* these would not recover without a reboot, otherwise */
+    itx = tx & INT64_MAX;
+    irx = rx & INT64_MAX;
+
+    protocol_trace(s, "wan_txrx: sending measurement message");
+
+    jo = json_object_new_object();
+    jroot = json_object_new_object();
+    jarray = json_object_new_array();
+    if (!jroot || !jarray || !jo)
+        goto err_exit;
+
+    json_object_object_add(jo, "name", json_object_new_string("wan_txrx"));
+    json_object_object_add(jo, "tx_bytes", json_object_new_int64(itx));
+    json_object_object_add(jo, "rx_bytes", json_object_new_int64(irx));
+    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(t2_s));
+    json_object_object_add(jo, "timestamp-microsseconds-since-second", json_object_new_int64(t2_us));
+    json_object_object_add(jo, "since-timestamp-seconds", json_object_new_int64(t1_s));
+    json_object_object_add(jo, "since-timestamp-microsseconds-since-second", json_object_new_int64(t1_us));
+    json_object_object_add(jo, "tx_delta_bytes", json_object_new_int64(idtx));
+    json_object_object_add(jo, "rx_delta_bytes", json_object_new_int64(idrx));
+
+    if (json_object_array_add(jarray, jo))
+        goto err_exit;
+    jo = NULL;
+
+    json_object_object_add(jroot, "measurements", jarray);
+    jarray = NULL;
+
+    const char *jsonstr = json_object_to_json_string(jroot);
+    if (jsonstr) {
+        /* protocol_trace(s, "measurement message: %s", jsonstr); */
+        rc = xx_simet_uptime2_sndmsg(s, SIMET_INETUP_P_MSGTYPE_MEASUREMENT, strlen(jsonstr), jsonstr);
+        if (!rc)
+            simet_uptime2_keepalive_update(s);
+    } else {
+        rc = -EFAULT;
+    }
+
+    /* free(jsonstr); -- not! it is managed by json-c */
+
+err_exit:
+    json_object_put(jo);
+    json_object_put(jarray);
+    json_object_put(jroot);
+
+    return rc;
+}
+
+/*
+ * SIMET2 Uptime2 measurements
+ */
+
+static struct m_wantxrx_data {
+    int initialized;
+    int enabled;
+    void * sys_context;
+    struct timespec last_t;
+    uint64_t last_tx;
+    uint64_t last_rx;
+} m_wantxrx_data;
+
+/* returns 1 if enabled, 0 if not enabled */
+static int xx_simet_uptime2_m_wantxrx_reconfig(const int enable_measurement)
+{
+    if (!enable_measurement || !monitor_netdev) {
+        if (m_wantxrx_data.enabled)
+            print_msg(MSG_DEBUG, "wan_txrx: disabled by configuration");
+        m_wantxrx_data.enabled = 0;
+        return 0;
+    }
+
+    if (!os_netdev_bytecount_supported()) {
+        print_msg(MSG_DEBUG, "wan_txrx: disabled: netdev monitoring not supported");
+        return 0;
+    }
+
+    /* try to enable it */
+
+    if (!m_wantxrx_data.initialized) {
+        if (os_netdev_init(monitor_netdev, &m_wantxrx_data.sys_context)) {
+            goto err_exit;
+        }
+        m_wantxrx_data.initialized = 1;
+    } else {
+        int rc = os_netdev_change(monitor_netdev, m_wantxrx_data.sys_context);
+        if (rc > 0 && m_wantxrx_data.enabled) {
+            /* no change to netdev and already enabled: do nothing */
+            return 1;
+        } else if (rc < 0) {
+            goto err_exit;
+        }
+    }
+
+    if (clock_gettime(CLOCK_MONOTONIC, &m_wantxrx_data.last_t) ||
+        os_get_netdev_counters(&m_wantxrx_data.last_tx, &m_wantxrx_data.last_rx,
+                m_wantxrx_data.sys_context)) {
+        goto err_exit;
+    }
+
+    /* success, we have our first data point */
+    print_msg(MSG_DEBUG,"wan_txrx: now monitoring netdev %s", monitor_netdev);
+    m_wantxrx_data.enabled = 1;
+    return 1;
+
+err_exit:
+    print_warn("wan_txrx: disabled: failed to setup netdev monitoring");
+    if (m_wantxrx_data.initialized) {
+        m_wantxrx_data.initialized = 0;
+        os_netdev_done(m_wantxrx_data.sys_context);
+        m_wantxrx_data.sys_context = NULL;
+    }
+    m_wantxrx_data.enabled = 0;
+    return 0;
+}
+static void xx_simet_uptime2_m_wantxrx_init(void)
+{
+    memset(&m_wantxrx_data, 0, sizeof(m_wantxrx_data));
+    /* the important ones:
+    m_wanttxrx_data.sys_context = NULL;
+    m_wanttxrx_data.enabled = 0;
+    m_wanttxrx_data.initialized = 0;
+    */
+}
+static void xx_simet_uptime2_m_wantxrx_done(void)
+{
+    if (m_wantxrx_data.enabled) {
+        m_wantxrx_data.enabled = 0;
+        os_netdev_done(m_wantxrx_data.sys_context);
+        m_wantxrx_data.sys_context = NULL;
+    }
+}
+
+/* call from mainloop, returns wait time to (next?) measurement */
+static int run_measurement_wantxrx(struct simet_inetup_server * const s)
+{
+    struct timespec now;
+    uint64_t tx, rx;
+    int rc;
+
+    if (!m_wantxrx_data.enabled || !is_telemetry_server(s) || !s->measurement_period)
+        return INT_MAX;
+
+    rc = timer_check(m_wantxrx_data.last_t.tv_sec, s->measurement_period);
+    if (rc > 0)
+        return rc;
+
+    if (os_get_netdev_counters(&tx, &rx, m_wantxrx_data.sys_context) || clock_gettime(CLOCK_MONOTONIC, &now))
+        return (s->measurement_period <= INT_MAX) ? (int) s->measurement_period : INT_MAX; /* skip data point */
+
+    /* we assume a new enough kernel with 64bit counters, so no rollover at 2^32 */
+    /* if there is a counter reset, we reset to recover and lose the sample */
+
+    rc = 0;
+    if (m_wantxrx_data.last_tx <= tx && m_wantxrx_data.last_rx <= rx) {
+        rc = simet_uptime2_msg_measurement_wantxrx(s,
+                m_wantxrx_data.last_t.tv_sec, m_wantxrx_data.last_t.tv_nsec / 1000,
+                now.tv_sec, now.tv_nsec / 1000,
+                tx, rx, tx - m_wantxrx_data.last_tx, rx - m_wantxrx_data.last_rx);
+        if (rc == -EINVAL || rc == -ENOMEM || rc == -ENOTSUP || rc == -ERANGE)
+            rc = 0; /* we need to reset and skip sample */
+    }
+
+    if (!rc) {
+        /* we either sent the measurement message, or need to reset */
+        m_wantxrx_data.last_t = now;
+        m_wantxrx_data.last_tx = tx;
+        m_wantxrx_data.last_rx = rx;
+    }
+
+    return (s->measurement_period <= INT_MAX) ? (int) s->measurement_period : INT_MAX;
+}
+
+/* called right after init, and after reloading MA-side config */
+static void simet_uptime2_measurements_reconfig(void)
+{
+    int try_to_enable = !!(monitor_netdev != NULL);
+
+    xx_simet_uptime2_m_wantxrx_reconfig(try_to_enable);
+}
+
+static void simet_uptime2_measurements_disable_netdev(void)
+{
+    free_constchar(monitor_netdev);
+    monitor_netdev = NULL;
+    xx_simet_uptime2_m_wantxrx_reconfig(0);
+}
+
+/* protocol streams not yet setup at this point, but MA-side
+ * configuration has been loaded */
+static void simet_uptime2_measurements_global_init(void)
+{
+    xx_simet_uptime2_m_wantxrx_init();
+    simet_uptime2_measurements_reconfig();
+}
+
+/* protocol streams already destroyed at this point */
+static void simet_uptime2_measurements_global_done(void)
+{
+    xx_simet_uptime2_m_wantxrx_done();
+}
+
+/*
  * SIMET2 Uptime2 connection lifetime messages and handling
  */
 
@@ -1176,6 +1497,8 @@ static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
         protocol_trace(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
         s->state = SIMET_INETUP_P_C_RECONNECT;
         s->backoff_clock = reltime();
+
+        decline_as_telemetry_server(s);
     }
 }
 
@@ -1187,6 +1510,8 @@ static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
             s->state != SIMET_INETUP_P_C_SHUTDOWN) {
         s->state = SIMET_INETUP_P_C_DISCONNECT;
         s->disconnect_clock = 0;
+
+        decline_as_telemetry_server(s);
 
         protocol_info(s, "client disconnecting...");
     }
@@ -1220,6 +1545,8 @@ static int uptimeserver_refresh(struct simet_inetup_server * const s)
     } else {
         simet_uptime2_keepalive_update(s);
         s->state = SIMET_INETUP_P_C_MAINLOOP;
+        /* do this only after s->state is set to MAINLOOP */
+        propose_as_telemetry_server(s);
     }
 
     /* FIXME: this is correct, but not being done the right way */
@@ -1238,9 +1565,9 @@ static int uptimeserver_keepalive(struct simet_inetup_server * const s)
     time_t interval = (s->server_timeout) ?
                             timeout_to_keepalive(s->server_timeout) :
                             INT_MAX;
-    time_t waittime_left = timer_check(s->keepalive_clock, interval);
+    time_t waittime_left = timer_check_full(s->keepalive_clock, interval);
     if (waittime_left > timeout_to_timefuzz(s->server_timeout))
-        return waittime_left;
+        return (waittime_left <= INT_MAX) ? (int) waittime_left : INT_MAX;
 
     if (simet_uptime2_msg_keepalive(s)) {
         simet_uptime2_reconnect(s);
@@ -1259,8 +1586,7 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
     if (!s->remote_keepalive_clock || !s->remote_keepalives_enabled)
         return 1; /* we are not depending on remote keepalives */
 
-    time_t waittime_left = timer_check(s->remote_keepalive_clock, s->client_timeout);
-    return (waittime_left > 0);
+    return (timer_check_full(s->remote_keepalive_clock, s->client_timeout) > 0);
 }
 
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
@@ -1319,7 +1645,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     assert(s->socket == -1);
 
     /* Backoff timer */
-    time_t waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
+    int waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
     if (waittime_left > 0)
         return waittime_left;
     s->backoff_clock = reltime();
@@ -1334,6 +1660,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     /* per-server configuration data defaults */
     s->server_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
     s->client_timeout = simet_uptime2_tcp_timeout;
+    s->measurement_period = SIMET_UPTIME2_DFL_MSR_PERIOD;
     s->remote_keepalives_enabled = 0;
 
     memset(&ai, 0, sizeof(ai));
@@ -1568,7 +1895,7 @@ static int fread_agent_str(const char *path, const char ** const p)
     }
 }
 
-static validate_nonempty(const char * const vname, const char * const v)
+static int validate_nonempty(const char * const vname, const char * const v)
 {
     if (!v || !v[0]) {
         print_err("invalid %s: \"%s\"", vname, (v)? v : "");
@@ -1600,12 +1927,38 @@ static int load_agent_data(const char * const aid_path, const char * const atoke
     }
 
     /* We only change agent-id,token as a set */
-    agent_id = new_aid;
-    agent_token = new_atok;
+    if (agent_id != new_aid) {
+        free_constchar(agent_id);
+        agent_id = new_aid;
+    }
+    if (agent_token != new_atok) {
+        free_constchar(agent_token);
+        agent_token = new_atok;
+    }
 
     if (agent_id)
         print_msg(MSG_NORMAL, "agent-id: %s", agent_id);
 
+    return 0;
+}
+
+static int load_netdev_file(const char * const netdev_name_path)
+{
+    const char * netdev_name = monitor_netdev;
+
+    if (netdev_name_path) {
+        if (fread_agent_str(netdev_name_path, &netdev_name)) {
+            print_err("failed to read network device name from %s: %s", netdev_name_path, strerror(errno));
+            return -1;
+        } else if (validate_nonempty("network device to monitor", netdev_name)) {
+            return -1;
+        }
+    }
+
+    if (monitor_netdev != netdev_name) {
+        free_constchar(monitor_netdev);
+        monitor_netdev = netdev_name;
+    }
     return 0;
 }
 
@@ -1704,6 +2057,12 @@ static void sanitize_std_fds(void)
    fix_fds(STDERR_FILENO, O_RDWR);
 }
 
+static void ml_update_wait(int * const pwait, const int nwait)
+{
+    if (nwait >= 0 && nwait < *pwait)
+        *pwait = nwait;
+}
+
 int main(int argc, char **argv) {
     const char *server_name = NULL;
     const char *server_port = "22000";
@@ -1717,7 +2076,7 @@ int main(int argc, char **argv) {
 
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:m:M:b:j:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:m:M:b:j:i:")) != -1) {
         switch (option) {
         case 'v':
             if (log_level < 1)
@@ -1754,6 +2113,9 @@ int main(int argc, char **argv) {
             break;
         case 'j':
             agent_token_file = optarg;
+            break;
+        case 'i':
+            monitor_netdev_file = optarg;
             break;
         case 'h':
             print_usage(progname, 1);
@@ -1794,13 +2156,27 @@ int main(int argc, char **argv) {
         print_err("failed to read agent identification credentials");
         return SEXIT_FAILURE;
     }
+    if (load_netdev_file(monitor_netdev_file)) {
+        print_err("failed to read network device name to monitor, disabling functionality");
+    }
+
+    simet_uptime2_measurements_global_init();
 
     /* state machine loop */
     do {
         time_t minwait = 300;
         unsigned int j, num_shutdown;
+        int queued_msg_disconnect;
 
         num_shutdown = 0;
+
+        /* safe semanthics if it is ever made volatile/MT */
+        queued_msg_disconnect = 0;
+        if (got_disconnect_msg) {
+            queued_msg_disconnect = 1;
+            got_disconnect_msg = 0;
+        }
+
         for (j = 0; j < servers_count; j++) {
             struct simet_inetup_server *s = servers[j];
             int wait = 0;
@@ -1820,6 +2196,12 @@ int main(int argc, char **argv) {
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
+                if (queued_msg_disconnect) {
+                    s->backoff_level = BACKOFF_LEVEL_MAX-1;
+                    s->backoff_clock = reltime();
+                    protocol_trace(s, "global disconnect: will attempt to reconnect in %u seconds",
+                            backoff_times[s->backoff_level]);
+                }
                 wait = uptimeserver_connect(s, server_name, server_port);
                 servers_pollfds[j].fd = s->socket;
                 break;
@@ -1829,14 +2211,28 @@ int main(int argc, char **argv) {
                 wait = uptimeserver_refresh(s);
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
+                if (queued_msg_disconnect) {
+                    /* FIXME: queue a server-told-us-to-disconnect event to report later */
+                    s->backoff_level = BACKOFF_LEVEL_MAX-1;
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
                 if (s->backoff_reset_clock &&
-                        timer_check(s->backoff_reset_clock, s->server_timeout * 2) == 0) {
+                        !timer_check_full(s->backoff_reset_clock, s->server_timeout * 2)) {
                     protocol_trace(s, "assuming measurement peer is willing to provide service, backoff timer reset");
                     simet_uptime2_backoff_reset(s);
                 }
 
+                if (need_telemetry_server())
+                    propose_as_telemetry_server(s);
+
                 /* process return channel messages */
                 while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
+                if (got_disconnect_msg)
+                    break;
 
                 if (!uptimeserver_remotetimeout(s)) {
                     /* remote keepalive timed out */
@@ -1846,8 +2242,11 @@ int main(int argc, char **argv) {
                     break;
                 }
 
-                /* state change messages go here */
-                wait = uptimeserver_keepalive(s);
+                /* measurement and event messages go here */
+                wait = run_measurement_wantxrx(s);
+                /* ml_update_wait(&wait, ...); */
+
+                ml_update_wait(&wait, uptimeserver_keepalive(s));
                 break;
 
             case SIMET_INETUP_P_C_DISCONNECT:
@@ -1887,6 +2286,9 @@ int main(int argc, char **argv) {
         if (num_shutdown >= servers_count && got_exit_signal)
             break;
 
+        if (got_disconnect_msg)
+            minwait = 0;
+
         if (minwait > 0) {
             /* optimized for a small number of servers */
             int poll_res = poll(servers_pollfds, servers_count, minwait * 1000U);
@@ -1918,11 +2320,17 @@ int main(int argc, char **argv) {
             if (load_agent_data(agent_id_file, agent_token_file)) {
                 print_err("failed to reload agent identification credentials, using old");
             }
+            if (load_netdev_file(monitor_netdev_file)) {
+                simet_uptime2_measurements_disable_netdev();
+            }
+            simet_uptime2_measurements_reconfig();
             for (j = 0; j < servers_count; j++)
                 simet_uptime2_reconnect(servers[j]);
             /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
         }
     } while (1);
+
+    simet_uptime2_measurements_global_done();
 
     if (got_exit_signal)
         print_msg(MSG_NORMAL, "received exit signal %d, exiting...", got_exit_signal);
