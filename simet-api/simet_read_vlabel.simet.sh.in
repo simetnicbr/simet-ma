@@ -17,5 +17,9 @@ abend() {
 [ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
 [ -r "$AGENT_VLABEL_FILE" ] || RC=20 abend "MA is missing its virtual label"
 
-sed -n -e "1 {p;q}" "$AGENT_VLABEL_FILE"
+VLABEL=$(sed -n -e "1 {p;q}" "$AGENT_VLABEL_FILE") || RC=3 abend "failed to read virtual label"
+[ -z "$VLABEL" ] && exit 0
+[ "$VLABEL" = "DISABLED" ] && exit 0
+
+printf '%s\n' "$VLABEL"
 :
