@@ -21,5 +21,8 @@ VLABEL=$(sed -n -e "1 {p;q}" "$AGENT_VLABEL_FILE") || RC=3 abend "failed to read
 [ -z "$VLABEL" ] && exit 0
 [ "$VLABEL" = "DISABLED" ] && exit 0
 
+[ -n "$SIMET_MAC_LABEL" ] && grep -q "^MAC[[:blank:]]${SIMET_MAC_LABEL}[[:blank:]]" "$AGENT_VLABEL_FILE" \
+	|| RC=20 abend "MA virtual label invalid: MAC address changed"
+
 printf '%s\n' "$VLABEL"
 :

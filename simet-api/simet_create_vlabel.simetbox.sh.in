@@ -3,13 +3,15 @@
 ## OpenWRT/SIMETBOX version
 ## Copyright (c) 2019 NIC.br
 ##
-## If a virtual label is not present in the persistent storage, create one
-## and return on stdout.
+## If a virtual label is not present in the persistent storage (or it
+## is otherwise invalid), create one and return on stdout.
 ##
 ## Otherwise, return the existing virtual label on stdout.
 
-# If we already have it, output it and exit
+# If we already have it, or it is disabled, output it and exit
 @BINDIR@/simet_read_vlabel.sh 2>/dev/null && exit 0
+
+umask 0022
 
 set -e
 set -o pipefail
@@ -21,6 +23,15 @@ abend() {
   exit "$RC"
 }
 
+. @SIMETLIBDIR@/simet_lib.sh
+
+[ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
+[ -z "$SIMET_MAC_LABEL" ] && RC=3 abend "MA failed to retrieve its main MAC address"
+
+[ -r "${AGENT_VERSION_FILE}" ] && AGENT_VERSION=$(cat "${AGENT_VERSION_FILE}") || AGENT_VERSION=
+[ -z "$AGENT_VERSION" ] && AGENT_VERSION="simet-ma/unknown"
+
+SIMETBOX_VERSION=$(get_simet_box_version.sh 2>/dev/null) || SIMETBOX_VERSION="unknown"
 
 openwrt_read_invariant_seed() {
   # This is a hack, it is not perfect, and not that secure.
@@ -40,7 +51,7 @@ openwrt_read_invariant_seed() {
   [ -z "$SBXSEED" ] \
     && RC=3 abend "md5sum empty?!"
   # FIXME: compress to base64, an md5sum becomes 8 characters
-  echo $SBXSEED | tr -dc 0-9a-zA-Z
+  printf '%s' "$SBXSEED" | tr -dc 0-9a-zA-Z
   :
 }
 
@@ -51,13 +62,24 @@ openwrt_generate_vlabel() {
   :
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
-[ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
+simetbox_output_vlabel_file() {
+  #2nd line (or later) must be ^MAC[:blank:]<mac>[:blank:]...
+  printf '%s\n' "$SIMET2_VLABEL"
+  for i in $(simet_get_persistent_macs) ; do
+    printf 'MAC %s "%s" "%s"\n' "$i" "$AGENT_VERSION" "$SIMETBOX_VERSION"
+  done
+}
 
 SIMET2_VLABEL=$(openwrt_generate_vlabel)
 [ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA could not create its virtual label"
-echo "$SIMET2_VLABEL" > "$AGENT_VLABEL_FILE" \
+
+[ -r "$AGENT_VLABEL_FILE" ] && {
+  OLDLABEL=$(sed -n -e '1 {p;q}' "$AGENT_VLABEL_FILE") || OLDLABEL=
+  [ -n "$OLDLABEL" ] && [ "$OLDLABEL" != "$SIMET2_VLABEL" ] && \
+    mv -f "$AGENT_VLABEL_FILE" "${AGENT_VLABEL_FILE}.${SIMETBOX_VERSION}.bkp"
+}
+simetbox_output_vlabel_file > "$AGENT_VLABEL_FILE" \
   || RC=1 abend "Could not write virtual label to persistent storage"
 
-echo "$SIMET2_VLABEL"
+printf '%s\n' "$SIMET2_VLABEL"
 :
