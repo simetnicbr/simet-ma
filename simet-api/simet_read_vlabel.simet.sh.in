@@ -1,15 +1,13 @@
 #!/bin/bash
 ## simet_read_vlabel.sh - retrieve the SIMET2 virtual label
-## Copyright (c) 2019 NIC.br
+## Copyright (c) 2019,2020 NIC.br
 ##
 ## Retrieves to stdout the SIMET2 virtual label, if one already exists
 
 set -e
 set -o pipefail
 
-OUTFILE=
 abend() {
-  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
   echo "$0: error: $*" >&2
   exit "$RC"
 }
@@ -19,5 +17,5 @@ abend() {
 [ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
 [ -r "$AGENT_VLABEL_FILE" ] || RC=20 abend "MA is missing its virtual label"
 
-cat "$AGENT_VLABEL_FILE"
+sed -n -e "1 {p;q}" "$AGENT_VLABEL_FILE"
 :
