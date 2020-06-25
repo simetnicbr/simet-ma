@@ -75,8 +75,11 @@ SIMET2_VLABEL=$(openwrt_generate_vlabel)
 
 [ -r "$AGENT_VLABEL_FILE" ] && {
   OLDLABEL=$(sed -n -e '1 {p;q}' "$AGENT_VLABEL_FILE") || OLDLABEL=
-  [ -n "$OLDLABEL" ] && [ "$OLDLABEL" != "$SIMET2_VLABEL" ] && \
+  [ -n "$OLDLABEL" ] && [ "$OLDLABEL" != "$SIMET2_VLABEL" ] && {
     mv -f "$AGENT_VLABEL_FILE" "${AGENT_VLABEL_FILE}.${SIMETBOX_VERSION}.bkp"
+    # signal other layers we detected a problem
+    [ -d "$SIMET_RUNSTATE_DIR" ] && touch "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
+  }
 }
 simetbox_output_vlabel_file > "$AGENT_VLABEL_FILE" \
   || RC=1 abend "Could not write virtual label to persistent storage"

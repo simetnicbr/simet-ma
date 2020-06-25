@@ -285,6 +285,8 @@ __simet_invalidate_all() {
 	__invalidate_tokens
 	[ -n "$V1_AGENT_ID_FILE" ] && rm -f "$V1_AGENT_ID_FILE"
 	[ -n "$V1_AGENT_TOKEN_FILE" ] && rm -f "$V1_AGENT_TOKEN_FILE"
+
+	[ -d "$SIMET_RUNSTATE_DIR" ] && rm -f "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
 }
 
 #overidable
@@ -444,6 +446,18 @@ simet_update_tokens() {
 	return 1
 }
 
+#overridable
+# return 0 if ID is foreign/cloned, NZ otherwise
+# $1: 1 if vlabel OK, 0 if vlabel was foreign (and has been fixed)
+simet_detect_cloned_id() {
+	# for now, if it was foreign, reset id. SIMETBox can do
+	# better (it overrides this), and so could x86 with
+	# dmidecode and UUIDs.
+	[ $1 -eq 0 ] && \
+		simet_log simet-ma daemon.warn "SIMET: vlabel flagged as foreign: assuming agent credentials came from other device"
+	return "$1"
+}
+
 gettoken() {
 	OLDAT=
 	OLDAID=
@@ -453,6 +467,10 @@ gettoken() {
 	AT=$OLDAT
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
+
+	VL_GOOD=1
+	[ -e "$SIMET_RUNSTATE_DIR/vlabel-was-foreign" ] && VL_GOOD=0
+	call simet_detect_cloned_id "$VL_GOOD" && __simet_invalidate_all "ma_foreign"
 
 	call_hook before_reginfo
 
