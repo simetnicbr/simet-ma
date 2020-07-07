@@ -12,6 +12,7 @@ Package: simet-ma
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, lsb-release, curl, cron | cron-daemon, gawk | mawk, simet-lmapd (>= 0.13.3~), lsb-base
 Recommends: apt-utils, unattended-upgrades, apt-transport-https, iproute2, iw, fping, iputils-ping, traceroute (>= 1:2.0), libcap2-bin, dnsutils | ldnsutils
+Suggests: xdg-utils | sensible-utils
 Breaks: sysvinit (<< 2.88dsf-52~)
 Description: NIC.br SIMET Measurement Agent
  This is the Measurement Agent for the SIMET system from NIC.br.  It
