@@ -95,4 +95,14 @@ simet_load_hooks() {
 	[ -r "@SIMETCONFDIR@/simet_$1-hooks.sh" ] && . "@SIMETCONFDIR@/simet_$1-hooks.sh"
 	:
 }
+
+# first will be main mac
+simet_get_persistent_macs()
+(
+	printf '%s\n' "$SIMET_MAC_LABEL"
+	N=$(for i in /sys/class/net/* ; do [ -r "$i/address" ] && readlink -f "$i" ; done | sed -e '/virtual/ d' -e '/sys/ s#$#/address#')
+	for i in $N ; do
+		printf '%s\n' "$(tr -dc '0-9a-fA-F' < "$i" 2>/dev/null | tr A-F a-f)"
+	done | sed -e '/^0\+$/ d' -e '/^f\+$/ d' -e "/$SIMET_MAC_LABEL/ d" | sort -u
+)
 :
