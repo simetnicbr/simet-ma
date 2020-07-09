@@ -47,12 +47,16 @@ EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in
 dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
 EXTRA_DIST += simet_lmap-send-report.sh.in simet_lmap-stdout-wrapper.sh.in
 
+simet_read_vlabel.sh.in : simet_read_vlabel.$(sbprefix).sh.in
+	ln -sf "$^" "$@"
+
 simet_create_vlabel.sh.in : simet_create_vlabel.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
 
 dist_bin_SCRIPTS += simet_read_vlabel.sh simet_create_vlabel.sh
-EXTRA_DIST += simet_read_vlabel.sh.in
+EXTRA_DIST += simet_read_vlabel.simetbox.sh.in simet_read_vlabel.simet.sh.in
 EXTRA_DIST += simet_create_vlabel.simetbox.sh.in simet_create_vlabel.simet.sh.in
+CLEANFILES += simet_read_vlabel.sh.in simet_read_vlabel.sh
 CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 
 # LMAP wrapped tasklet links we want to create, watch the first field (-, exec21-, etc)

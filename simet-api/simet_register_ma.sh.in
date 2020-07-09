@@ -81,6 +81,7 @@ __gethash() {
 	return 0
 }
 #overidable
+#clobbers $OUTFILE contents!
 write_lmap_agent() {
 	if [ -z "$1" ] ; then
 		rm -f  "$LMAP_AGENT_FILE"
@@ -99,6 +100,34 @@ write_lmap_agent() {
 	fi
 	:
 }
+#overridable
+# $1: VTK (assumed to be stored in tmpfs)
+write_access_tokens() {
+	if [ -z "$1" ] ; then
+		rm -f "$AGENT_VTK_FILE"
+		simet_log simet-ma daemon.notice "SIMET: view_results token removed"
+	else
+		printf "%s" "$1" > "$AGENT_VTK_FILE"
+		simet_log simet-ma daemon.info "SIMET: view_results token updated"
+	fi
+	:
+}
+#overridable
+#clobbers $OUTFILE contents (write_lmap_agent)
+write_agent_creds() {
+	if [ -z "$AID" ] ; then
+		rm -f "$AGENT_ID_FILE"
+	elif [ "$AID" != "$OLDAID" ] ; then
+		printf '%s\n' "$AID" > "$AGENT_ID_FILE"
+	fi
+	if [ -z "$AT" ] ; then
+		rm -f "$AGENT_TOKEN_FILE"
+	elif [ "$AT"  != "$OLDAT"  ] ; then
+		printf '%s\n' "$AT" > "$AGENT_TOKEN_FILE"
+	fi
+	call write_lmap_agent "$AID" || :
+	:
+}
 
 #must not change pairing data cache
 __simet_consume_api_output() {
@@ -109,15 +138,10 @@ __simet_consume_api_output() {
 		|| abend "illegal response from agent-registry service"
 	eval "$SID" || abend "internal error"
 	PAIREDTO=$($JSONFILTER -i "$OUTFILE" -e "@.participant_id") || PAIREDTO=
-
-	[ x"$AID" != x"$OLDAID" ] && {
-		echo "$AID" > "$AGENT_ID_FILE"
-		write_lmap_agent "$AID"
-		# OUTFILE not valid anymore!
-	}
-	[ x"$AT"  != x"$OLDAT"  ] && echo "$AT" > "$AGENT_TOKEN_FILE"
-
 	: > "$OUTFILE"
+
+	call write_agent_creds || \
+		simet_log simet-ma daemon.err "failed to write credentials!"
 	:
 }
 
@@ -240,6 +264,31 @@ simet_save_pairing_recovery() {
 	:
 }
 
+#overridable
+# $1: reason A-Za-z0-9_, to name bkp files
+backup_invalid_id() {
+	simet_log simet-ma daemon.debug "backup agent-id and tokens, suffix $1.bak"
+	[ -e "$AGENT_ID_FILE" ] && mv -f "$AGENT_ID_FILE" "$AGENT_ID_FILE.$1.bak"
+	[ -e "$AGENT_TOKEN_FILE" ] && mv -f "$AGENT_TOKEN_FILE" "$AGENT_TOKEN_FILE.$1.bak"
+}
+
+# pairing not cleaned up here
+# $1: reason a-z0-9_, to name bkp files
+__simet_invalidate_all() {
+	call backup_invalid_id "$1"
+	simet_log simet-ma daemon.notice "removing agent-id and tokens"
+	OLDAT=
+	OLDAID=
+	AT=
+	AID=
+	call write_agent_creds || rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE"
+	__invalidate_tokens
+	[ -n "$V1_AGENT_ID_FILE" ] && rm -f "$V1_AGENT_ID_FILE"
+	[ -n "$V1_AGENT_TOKEN_FILE" ] && rm -f "$V1_AGENT_TOKEN_FILE"
+
+	[ -d "$SIMET_RUNSTATE_DIR" ] && rm -f "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
+}
+
 #overidable
 simet_refresh_agent_status() {
 	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
@@ -255,6 +304,11 @@ simet_refresh_agent_status() {
 		;;
 	403)
 		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
+		;;
+	410)
+		simet_log simet-ma deamon.err "server reports our agent-id is outdated or duplicated (was it cloned? or from an old backup?)"
+		# in case we fail to get a new one, ensure it is gone
+		__simet_invalidate_all agstat_410
 		;;
 	200)
 		__simet_consume_api_output
@@ -343,17 +397,19 @@ simet_pairing_flow() {
 	fi
 }
 
+__invalidate_tokens() {
+	VTK=
+	call write_access_tokens "" || :
+}
 __consume_tokens_api_output() {
+	VTK=
 	SID=$($JSONFILTER -i "$OUTFILE" -e "VTK=@.access_tokens.view_results") \
 		|| abend "illegal response from agent-registry service"
 	eval "$SID" || abend "internal error"
-
-	printf "%s" "$VTK" > $AGENT_VTK_FILE || \
-		simet_log simet-ma daemon.err "SIMET-MA: failed to store view_results token"
-
-	simet_log simet-ma daemon.info "SIMET: view_results token updated"
-
 	: > "$OUTFILE"
+
+	call write_access_tokens "$VTK" || \
+		simet_log simet-ma daemon.err "failed to store access tokens"
 	:
 }
 
@@ -375,6 +431,10 @@ simet_update_tokens() {
 	403)
 		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
 		;;
+	410)
+		simet_log simet-ma daemon.err "server requests removal of all access tokens"
+		__invalidate_tokens
+		;;
 	200)
 		__consume_tokens_api_output
 		return 0
@@ -386,6 +446,18 @@ simet_update_tokens() {
 	return 1
 }
 
+#overridable
+# return 0 if ID is foreign/cloned, NZ otherwise
+# $1: 1 if vlabel OK, 0 if vlabel was foreign (and has been fixed)
+simet_detect_cloned_id() {
+	# for now, if it was foreign, reset id. SIMETBox can do
+	# better (it overrides this), and so could x86 with
+	# dmidecode and UUIDs.
+	[ $1 -eq 0 ] && \
+		simet_log simet-ma daemon.warn "SIMET: vlabel flagged as foreign: assuming agent credentials came from other device"
+	return "$1"
+}
+
 gettoken() {
 	OLDAT=
 	OLDAID=
@@ -395,6 +467,10 @@ gettoken() {
 	AT=$OLDAT
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
+
+	VL_GOOD=1
+	[ -e "$SIMET_RUNSTATE_DIR/vlabel-was-foreign" ] && VL_GOOD=0
+	call simet_detect_cloned_id "$VL_GOOD" && __simet_invalidate_all "ma_foreign"
 
 	call_hook before_reginfo
 
