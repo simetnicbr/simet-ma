@@ -1,3 +1,22 @@
+simet-ma (0.16.10) unstable; urgency=medium
+
+  * simet-ma version 0.16.10
+  * simet-api: support cloning detection (active on simetbox)
+  * simet-api: invalidade creds on status 410 (Agent Registry)
+  * simet-api: vlabel anti-clonning support (for simetbox)
+  * simet-api: change vlabel on-storage format (for simetbox)
+  * simet-api: layerize credential writing, now hook-able
+  * simet-api: properly call write_lmap_agent to have hook support
+  * inetup: implement wan_txrx measurement (number of bytes sent and
+    received on WAN interface, five-minute-average WAN throughput)
+  * inetup: implement telemetry server selection, and MSG_MEASUREMENT
+  * inetup: support MSG_DISCONNECT from server
+  * inetup: fix possible memory leak when reloading configuration
+  * inetup: several warning fixes
+  * inetup: rework timer_check to avoid (extremely unlikely) overflow
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 09 Jul 2020 14:57:21 -0300
+
 simet-ma (0.16.9) unstable; urgency=medium
 
   * simet-ma version 0.16.9
