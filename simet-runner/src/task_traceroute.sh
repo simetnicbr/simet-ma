@@ -29,11 +29,11 @@ _task_traceroute(){
   mkdir -p "$_task_dir/tables"
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TRACEROUTE_HELPER -n -$_af $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/traceroute.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TRACEROUTE_HELPER -$_af $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/traceroute.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TRACEROUTE_HELPER -n -$_af $_host >\"$_task_dir/tables/traceroute.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TRACEROUTE_HELPER -$_af $_host >\"$_task_dir/tables/traceroute.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
