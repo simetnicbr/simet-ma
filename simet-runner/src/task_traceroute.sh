@@ -4,6 +4,7 @@
 # main program source code.
 
 # Connected to twamp, so enabled/disabled through TWAMP
+# WARNING: MAY BE RUN IN BACKGROUND IN PARALLEL WITH OTHER TWAMP/TRACEROUTES!
 _task_traceroute(){
   local _af="$1"
   local _tst_prefix="$2"
