@@ -158,9 +158,9 @@ _main_run(){
     _task_traceroute "6" "$_tstid_prefix"
   elif [ "$RUN_ONLY_TASK" = "TWAMPFAST" ] ; then
     _task_twamp "4" "$_tstid_prefix" $TWAMPFAST_OPT
-    _task_traceroute "4" "$_tstid_prefix"
+    _task_traceroute "4" "$_tstid_prefix" &
     _task_twamp "6" "$_tstid_prefix" $TWAMPFAST_OPT
-    _task_traceroute "6" "$_tstid_prefix"
+    _task_traceroute "6" "$_tstid_prefix" &
   fi
 
   # 5. task bw tcp
@@ -206,6 +206,7 @@ _main_orchestrate(){
         break
       fi
 
+      # this may end up running a measurement in background
       _main_run $_loopcounter && \
          [ -z "$_collector_endpoint" ] && \
 	   _collector_endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
@@ -226,6 +227,9 @@ _main_orchestrate(){
   fi
 
   _task_environment
+
+  log_info "Waiting for background measurements to complete"
+  wait
 
   # 7. task report
   log_debug "Start task REPORT"
@@ -321,7 +325,7 @@ _task_twamp(){
     log_info "Skipping task TWAMP IPv$_af"
     return 0
   fi
-  log_measurement "TWAMP IPv$_af"
+  log_measurement "TWAMP ${_tst_prefix}IPv$_af"
   local _host=$( discover_service TWAMP HOST )
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
@@ -355,7 +359,7 @@ _task_twamp(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_debug "End Task TWAMP IPv$_af"
+  log_debug "End Task TWAMP ${_tst_prefix}IPv$_af"
 }
 
 _task_tcpbw(){
@@ -369,7 +373,7 @@ _task_tcpbw(){
     log_info "Skipping task TCPBW IPv$_af"
     return 0
   fi
-  log_measurement "TCPBW IPv$_af"
+  log_measurement "TCPBW ${_tst_prefix}IPv$_af"
   local _host=$( discover_service TCPBW HOST )
   local _port=$( discover_service TCPBW PORT )
   local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
@@ -409,7 +413,7 @@ _task_tcpbw(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_debug "End Task TCPBW IPv$_af"
+  log_debug "End Task TCPBW ${_tst_prefix}IPv$_af"
 }
 
 

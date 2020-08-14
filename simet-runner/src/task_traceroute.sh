@@ -4,6 +4,7 @@
 # main program source code.
 
 # Connected to twamp, so enabled/disabled through TWAMP
+# WARNING: MAY BE RUN IN BACKGROUND IN PARALLEL WITH OTHER TWAMP/TRACEROUTES!
 _task_traceroute(){
   local _af="$1"
   local _tst_prefix="$2"
@@ -15,7 +16,7 @@ _task_traceroute(){
     log_info "Skipping task traceroute IPv$_af"
     return 0
   fi
-  log_measurement "traceroute IPv$_af"
+  log_measurement "traceroute ${_tst_prefix}IPv$_af"
   local _host=$( discover_service TRACEROUTE HOST )
 
   export _task_name="${LMAP_TASK_NAME_PREFIX}tool_traceroute"
@@ -29,11 +30,11 @@ _task_traceroute(){
   mkdir -p "$_task_dir/tables"
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TRACEROUTE_HELPER -n -$_af $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/traceroute.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TRACEROUTE_HELPER -$_af $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/traceroute.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TRACEROUTE_HELPER -n -$_af $_host >\"$_task_dir/tables/traceroute.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TRACEROUTE_HELPER -$_af $_host >\"$_task_dir/tables/traceroute.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -47,7 +48,7 @@ _task_traceroute(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_debug "End Task traceroute IPv$_af"
+  log_debug "End Task traceroute ${_tst_prefix}IPv$_af"
 }
 
 # keep line
