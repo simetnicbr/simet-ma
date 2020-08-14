@@ -325,7 +325,7 @@ _task_twamp(){
     log_info "Skipping task TWAMP IPv$_af"
     return 0
   fi
-  log_measurement "TWAMP IPv$_af"
+  log_measurement "TWAMP ${_tst_prefix}IPv$_af"
   local _host=$( discover_service TWAMP HOST )
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
@@ -359,7 +359,7 @@ _task_twamp(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_debug "End Task TWAMP IPv$_af"
+  log_debug "End Task TWAMP ${_tst_prefix}IPv$_af"
 }
 
 _task_tcpbw(){
@@ -373,7 +373,7 @@ _task_tcpbw(){
     log_info "Skipping task TCPBW IPv$_af"
     return 0
   fi
-  log_measurement "TCPBW IPv$_af"
+  log_measurement "TCPBW ${_tst_prefix}IPv$_af"
   local _host=$( discover_service TCPBW HOST )
   local _port=$( discover_service TCPBW PORT )
   local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
@@ -413,7 +413,7 @@ _task_tcpbw(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_debug "End Task TCPBW IPv$_af"
+  log_debug "End Task TCPBW ${_tst_prefix}IPv$_af"
 }
 
 

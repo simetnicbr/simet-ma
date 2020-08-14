@@ -16,7 +16,7 @@ _task_traceroute(){
     log_info "Skipping task traceroute IPv$_af"
     return 0
   fi
-  log_measurement "traceroute IPv$_af"
+  log_measurement "traceroute ${_tst_prefix}IPv$_af"
   local _host=$( discover_service TRACEROUTE HOST )
 
   export _task_name="${LMAP_TASK_NAME_PREFIX}tool_traceroute"
@@ -48,7 +48,7 @@ _task_traceroute(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
-  log_debug "End Task traceroute IPv$_af"
+  log_debug "End Task traceroute ${_tst_prefix}IPv$_af"
 }
 
 # keep line
