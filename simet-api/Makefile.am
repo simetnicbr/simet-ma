@@ -64,11 +64,11 @@ CLEANFILES += simet_create_vlabel.sh.in simet_create_vlabel.sh
 if SIMETBOX_BUILD
 traceroute_tasklets = --help_ICMP-traceroute_traceroute
 traceroute_tasklets += --help_UDP-traceroute_udp-traceroute --help_ICMP-traceroute_icmp-traceroute
-tasklets = exec21ok-v__fping --help__ping --help__ping6 --help__nslookup -v__drill -v__dig
+tasklets = exec21ok-v_fping-to-host-raw_fping --help__ping --help__ping6 --help__nslookup -v__drill -v__dig
 else
 traceroute_tasklets = -V_ICMP-traceroute_traceroute
 traceroute_tasklets += -V_UDP-traceroute_udp-traceroute -V_ICMP-traceroute_icmp-traceroute
-tasklets = exec21ok-v__fping -V__ping -V__ping6 -version__nslookup -v__drill -v__dig
+tasklets = exec21ok-v_fping-to-host-raw_fping -V__ping -V__ping6 -version__nslookup -v__drill -v__dig
 endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh lmap-tasks/lmap-traceroute-wrapper.sh
