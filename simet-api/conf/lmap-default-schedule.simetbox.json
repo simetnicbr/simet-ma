@@ -1,0 +1,29 @@
+{"ietf-lmap-control:lmap":{
+"schedules":{"schedule":[
+  { "name":"ma-local_default-sched-refresh",
+    "start":"every-six-hours",
+    "execution-mode":"sequential",
+    "action":[{"name":"simet.nic.br_reschedule","task":"simet.nic.br_reschedule"}]
+  },
+  { "name":"ma-local_default-periodic-test-run",
+    "start":"every-four-hours",
+    "execution-mode":"sequential",
+    "action":[
+      {"name":"simet.nic.br_basic-tests","task":"simet.nic.br_basic-tests"},
+      {"name":"simet.nic.br_srvlist-mp-latency","task":"simet.nic.br_srvlist-mp-latency"}
+    ]
+  },
+  { "name":"ma-local_periodic_report",
+    "start":"every-hour",
+    "execution-mode":"sequential",
+    "action":[ { "name":"simet.nic.br_report","task":"simet.nic.br_report" } ]
+  }
+]},"events":{"event":[
+  { "name":"immediate","immediate":[null] },
+  { "name":"every-minute","random-spread":5,"periodic":{"interval":60} },
+  { "name":"every-hour","random-spread":300,"periodic":{"interval":3600} },
+  { "name":"every-three-hours","random-spread":300,"periodic":{"interval":10800} },
+  { "name":"every-four-hours","random-spread":300,"periodic":{"interval":14400} },
+  { "name":"every-six-hours","random-spread":300,"periodic":{"interval":21600} },
+  { "name":"daily","random-spread":300,"periodic":{"interval":86400} }
+]} }}
