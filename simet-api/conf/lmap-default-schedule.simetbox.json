@@ -13,6 +13,18 @@
       {"name":"simet.nic.br_srvlist-mp-latency","task":"simet.nic.br_srvlist-mp-latency"}
     ]
   },
+  { "name":"ma-local_periodic_gateway-ping",
+    "start":"every-hour",
+    "execution-mode":"sequential",
+    "action":[
+      {"name":"simet.nic.br_gateway-ping_ip4","task":"simet.nic.br_gateway-ping",
+       "option":[{"id":"gwpip4","value":"-4"}],
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_gateway-ping_ip6","task":"simet.nic.br_gateway-ping",
+       "option":[{"id":"gwpip6","value":"-6"}],
+       "destination":["ma-local_periodic_report"]}
+    ]
+  },
   { "name":"ma-local_periodic_report",
     "start":"every-hour",
     "execution-mode":"sequential",
