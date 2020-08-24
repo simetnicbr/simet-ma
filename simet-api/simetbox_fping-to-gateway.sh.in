@@ -1,0 +1,68 @@
+#!/bin/sh
+# SIMET LMAP fping-to-gateway measurement, SIMETBox version
+# Copyright (c) 2020 NIC.br <medicoes@simet.nic.br>
+# Distributed under the GPLv3+ license with additional terms and permissions
+
+METRIC=fping-to-gateway-raw
+FPING_OPTIONS="-Adam"
+FPING_INT=
+GWS=
+
+usage() {
+	printf '%s\n' "usage: $0 -4|-6 [-c <number of probes>]"
+	exit 2
+}
+pgw_device_offline() {
+	printf '%s: device is offline, gateway undefined\n' "$1" >&2
+	exit 11
+}
+
+ipf=
+count=5
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	"-4"|"-6")
+		ipf="$1"
+		;;
+	"-c")
+		shift
+		count="$1"
+		[ "$count" -ge 1 ] 2>/dev/null || usage
+		;;
+	*)
+		usage
+		;;
+	esac
+	shift
+done
+[ -z "$ipf" ] && usage
+
+# detect non-functional ubus/ACL, network.sh needs it
+ubus list network.interface >/dev/null 2>&1 || exit 3
+. /lib/functions/network.sh >/dev/null 2>&1 || exit 3
+
+if [ "$ipf" = "-4" ] ; then
+	network_find_wan IP4WAN false && [ -n "$IP4WAN" ] \
+	  && network_is_up "$IP4WAN" \
+	  && network_get_gateway IP4GW "$IP4WAN" && [ -n "$IP4GW" ] \
+	  && network_get_device IP4L3DEV "$IP4WAN" && [ -n "$IP4L3DEV" ] \
+	  && {
+		FPING_INT="$IP4L3DEV"
+		GWS="$IP4GW"
+	}
+	[ -z "$GWS" ] && pgw_device_offline ip4
+
+else
+        network_find_wan6 IP6WAN false && [ -n "$IP6WAN" ] \
+	  && network_is_up "$IP6WAN" \
+	  && network_get_gateway6 IP6GW "$IP6WAN" && [ -n "$IP6GW" ] \
+	  && network_get_device IP6L3DEV "$IP6WAN" && [ -n "$IP6L3DEV" ] \
+	  && {
+		FPING_INT="$IP6L3DEV"
+		GWS="$IP6GW"
+	}
+	[ -z "$GWS" ] && pgw_device_offline ip6
+fi
+[ -z "$GWS" ] && exit 3
+
+exec "@BINDIR@/simet_lmap-stdout-wrapper.sh" exec21ok "fping" "-v" "$METRIC" $FPING_OPTIONS "$ipf" -I "$FPING_INT" -C "$count" $GWS

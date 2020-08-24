@@ -2,10 +2,13 @@ Makefile
 Makefile.in
 agent-version.txt
 conf/simet-ma.conf
+conf/lmap-default-schedule.json
 config.d/simet-ma_base-config.json
 config.d/simet-ma_tasklet-config.json
+config.d/simetbox_base-config.json
 registry.d/simet-ma_base-registry.json
 registry.d/simet-ma_tasklet-registry.json
+registry.d/simetbox_base-registry.json
 simet*_register_ma.sh
 simet-ma_periodic.sh
 simet*_lmap-fetch-schedule.sh
@@ -13,7 +16,7 @@ simet*_lmap-create-report.sh
 simet*_lmap-send-report.sh
 simet*_lmap-stdout-wrapper.sh
 simet*_geolocation.sh
-simet*_register_vlabel.sh
+simet*_fping-to-gateway.sh
 simet_read_vlabel.sh*
 simet_create_vlabel.sh*
 simet_lib.sh*
