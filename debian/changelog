@@ -1,3 +1,16 @@
+simet-ma (0.16.11) unstable; urgency=medium
+
+  * simet-ma version 0.16.11
+  * simet-api: rename the generic fping metric
+  * simet-api: add simetbox_fping-to-gateway measurement
+    (SIMETBox only, OWRT 18.06+, for now), and call it
+    every 1h on the default schedule
+  * simet-runner: minor improvements to logging to console
+  * simet-runner: TWAMPFAST traceroutes in background/parallel
+  * simet-runner: enable reverse DNS in traceroute output
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 24 Aug 2020 09:51:45 -0300
+
 simet-ma (0.16.10) unstable; urgency=medium
 
   * simet-ma version 0.16.10
