@@ -45,10 +45,15 @@ endif
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
 EXTRA_DIST += simetbox_fping-to-gateway.sh.in
 
-dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh simet_spoofer.sh
-EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in simet_spoofer.sh.in
+dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh
+EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in
 dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
 EXTRA_DIST += simet_lmap-send-report.sh.in simet_lmap-stdout-wrapper.sh.in
+
+if SIMET_SPOOFER
+dist_bin_SCRIPTS += simet_spoofer.sh
+endif
+EXTRA_DIST += simet_spoofer.sh.in
 
 simet_read_vlabel.sh.in : simet_read_vlabel.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
