@@ -157,7 +157,7 @@ fail_all() {
 
 straceroute() (
   # busybox traceroute doesn't accept -N1
-  exec traceroute -n -w1 -q3 -m$TRDIST "$@"
+  exec traceroute -I -w1 -q3 -m$TRDIST "$@"
 )
 
 snping() (
