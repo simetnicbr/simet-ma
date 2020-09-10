@@ -31,12 +31,12 @@ command -v traceroute >/dev/null || RC=3 abend "traceroute not found on PATH"
 FAIL_SILENTLY=
 RC=1
 
-#FIXME
-KEY="simet982411 testtest"
+KEY=
 
 TARGETXOR=1
 TARGETS=
 TFDIST=10
+TRDIST=30
 SYNCMODE=@SMALLMEMORY@
 
 usage() {
@@ -67,6 +67,7 @@ while [ $# -gt 0 ] ; do
       shift
       TFDIST="$1"
       [ "$TFDIST" -gt 0 ] || RC=2 abend "--tracefilter distance must be a number higher than zero"
+      [ "$TFDIST" -gt "$TRDIST" ] && TRDIST="$TFDIST"
       ;;
     --single-threaded)
       SYNCMODE=1
@@ -85,6 +86,7 @@ while [ $# -gt 0 ] ; do
 done
 
 [ -z "$KEY" ] && RC=2 abend "an access key is required to run this test"
+[ -z "$TARGETS" ] && RC=2 abend "no targets (bcp38 measurement peers) specified"
 
 OUTDIR=$(mktemp -q -t -d simet-spoofer.$$.XXXXXXXXXX) \
   || abend "could not create work directory"
@@ -155,7 +157,7 @@ fail_all() {
 
 straceroute() (
   # busybox traceroute doesn't accept -N1
-  exec traceroute -n -w1 -q3 -m30 "$@"
+  exec traceroute -n -w1 -q3 -m$TRDIST "$@"
 )
 
 snping() (
