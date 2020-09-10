@@ -159,7 +159,9 @@ straceroute() (
 )
 
 snping() (
-  exec simet-nping --echo-client "$KEY" --udp -g40135 --dest-port 53,33434 "$@"
+  RS=$(date +%s 2>/dev/null) || RS=$$
+  RS=$((RS % 65536 + $$))
+  exec simet-nping --echo-client "$KEY" --data-len 32 --udp -g $((RS % 15000 + 40000)) --dest-port $((RS % 100 + 33434)) "$@"
 )
 
 xor_lsb() {
