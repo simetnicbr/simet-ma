@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # SIMET2 MA - register and refresh agent registry information
 # Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
 #

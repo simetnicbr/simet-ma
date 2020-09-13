@@ -20,7 +20,13 @@ udp*|UDP*)
 	;;
 esac
 
-#Force tool to traceroute, so that we can have tasklets like icmp-traceroute, etc.
-TOOL=traceroute
+# Force tool, so that we can have tasklets like icmp-traceroute, etc.
+if command -v traceroute.db >/dev/null 2>&1 ;  then
+	# Prefer known-good traceroute for Debian/Ubuntu
+	TOOL=traceroute.db
+else
+	TOOL=traceroute
+fi
+
 
 exec "@BINDIR@/simet_lmap-stdout-wrapper.sh" exec "$TOOL" "-$VC" "$METRIC" $PROTO "$@"
