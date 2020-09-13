@@ -1,3 +1,16 @@
+simet-ma (0.16.12.1) unstable; urgency=medium
+
+  * simet-ma version 0.16.12.1
+  * deb: drop inetutils-* from Recommends
+  * deb: version traceroute dependency, to bypass "provides: traceroute"
+    from inetutils-traceroute
+  * simet-api: prefer traceroute.db over traceroute, as
+    the alternatives system from Debian/Ubuntu might be set
+    to inetutils-traceroute.
+  * simet-api: use /bin/bash for simet_register_ma.sh
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 13 Sep 2020 17:59:07 -0300
+
 simet-ma (0.16.12) unstable; urgency=medium
 
   * simet-ma version 0.16.12
