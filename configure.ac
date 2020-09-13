@@ -45,4 +45,17 @@ AM_CONDITIONAL([SIMETBOX_BUILD], [test x$simetbox = xtrue])
 AM_COND_IF([SIMETBOX_BUILD],
 	   [AC_MSG_NOTICE([building for SIMETBOX (OpenWRT)])] )
 
+AC_ARG_ENABLE([simet-spoofer],
+    [AC_HELP_STRING([--enable-simet-spoofer],
+        [disable simet_spoofer measurement])],
+    [case "${enableval}" in
+        yes) simetspoofer=true ;;
+        no)  simetspoofer=false ;;
+        *) AC_MSG_ERROR([bad value ${enableval} for --enable-simet-spoofer]) ;;
+     esac],
+    [simetspoofer=false])
+AM_CONDITIONAL([SIMET_SPOOFER], [test x$simetspoofer = xtrue ])
+AM_COND_IF([SIMET_SPOOFER],
+           [AC_MSG_NOTICE([including simet_spoofer measurement])] )
+
 AC_OUTPUT

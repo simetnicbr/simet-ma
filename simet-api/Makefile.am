@@ -33,11 +33,13 @@ dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh simetbox_fping-to-gateway.sh
 sbprefix = simetbox
 jsonfilter=jsonfilter
 theshell=/bin/sh
+smallmemory=1
 else
 dist_bin_SCRIPTS = simet_lmap-fetch-schedule.sh
 sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
+smallmemory=0
 endif
 
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
@@ -47,6 +49,11 @@ dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh
 EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in
 dist_bin_SCRIPTS += simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
 EXTRA_DIST += simet_lmap-send-report.sh.in simet_lmap-stdout-wrapper.sh.in
+
+if SIMET_SPOOFER
+dist_bin_SCRIPTS += simet_spoofer.sh
+endif
+EXTRA_DIST += simet_spoofer.sh.in
 
 simet_read_vlabel.sh.in : simet_read_vlabel.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
@@ -115,7 +122,7 @@ config.d/simet-ma_tasklet-config.json :
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
-	    -e "1 s!/bin/\(ba\)\?sh!$(theshell)!" \
+	    -e "s!@SMALLMEMORY@!$(smallmemory)!g" -e "1 s!/bin/\(ba\)\?sh!$(theshell)!" \
 	    "$^" > "$@" && chmod 0755 "$@"
 
 %.conf: %.conf.in
