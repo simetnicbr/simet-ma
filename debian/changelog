@@ -1,3 +1,18 @@
+simet-ma (0.16.13) unstable; urgency=medium
+
+  * simet-ma version 0.16.13
+  * simet-api: add preliminary version of simet_spoofer, a BCP38 validation
+    measuremet which tries to detect the (desired!) presence of protections
+    against traffic with spoofed origin addresses.  Note that this requires
+    simet-nping, a forked variant of nping(TM) from nmap(TM), to work.  The
+    simet-nping fork is a work-in-progress that changes nping echo-mode to be
+    more suitable for *this specific measurement use*, and it is likely not
+    acceptable upstream.  NOTE: THIS NEW MEASUREMENT IS NOT INSTALLED BY
+    DEFAULT, the measurement peers (servers) it needs are not yet available
+    for general service.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 13 Sep 2020 18:06:04 -0300
+
 simet-ma (0.16.12.1) unstable; urgency=medium
 
   * simet-ma version 0.16.12.1
