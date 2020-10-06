@@ -33,6 +33,9 @@ typedef struct ntp_timestamp {
 /* HELPERS */
 /***********/
 
+// converts ts_now + ts_offset to Timestamp
+Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, const struct timespec * const ts_offset);
+
 // timeval_to_timestamp converts struct timeval to Timestamp
 Timestamp timeval_to_timestamp(const struct timeval *tv);
 
@@ -46,5 +49,11 @@ void encode_be_timestamp(Timestamp *ts);
 void decode_be_timestamp(Timestamp *ts);
 
 uint64_t timeval_to_microsec(const struct timeval *tv);
+
+static inline void timespec_to_offset(struct timespec * const ts_target, const struct timespec * const ts_reference)
+{
+    ts_target->tv_sec  -= ts_reference->tv_sec;
+    ts_target->tv_nsec -= ts_reference->tv_nsec;
+}
 
 #endif /* NTP_TIMESTAMP_H_ */

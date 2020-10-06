@@ -501,9 +501,13 @@ static void *twamp_callback_thread(void *p) {
     unsigned int pkg_count = 0;
     unsigned int pkg_corrupt = 0;
 
-    struct timeval tv_cur, tv_stop, tv_recv, to;
+    struct timeval tv_cur, tv_stop, to;
+    struct timespec ts_recv;
 
     static int return_result; /* must be static! */
+
+    /* what we need to add to CLOCK_MONOTONIC to get absolute time */
+    const struct timespec ts_offset = t_param->clock_offset;
 
     print_msg(MSG_NORMAL, "reflected packet receiveing thread started");
 
@@ -532,7 +536,10 @@ static void *twamp_callback_thread(void *p) {
         // Read message
         ret = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket, &bytes_recv);
 
-        gettimeofday(&tv_recv, NULL);
+        if (clock_gettime(CLOCK_MONOTONIC, &ts_recv)) {
+            ret = SEXIT_INTERNALERR;
+            goto error_out;
+        }
 
         if (ret == SEXIT_MP_TIMEOUT)
             break; /* test time limit reached, not an error */
@@ -541,7 +548,7 @@ static void *twamp_callback_thread(void *p) {
 
         if (bytes_recv == sizeof(UnauthReflectedPacket)) {
             // Save result
-            t_param->report->result->raw_data[pkg_count].time = timeval_to_timestamp(&tv_recv);
+            t_param->report->result->raw_data[pkg_count].time = relative_timespec_to_timestamp(&ts_recv, &ts_offset);
             memcpy(&(t_param->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
             pkg_count++;
         } else {
@@ -572,7 +579,7 @@ error_out:
 }
 
 static int twamp_test(TestParameters test_param) {
-    struct timeval tv_cur;
+    struct timespec ts_offset, ts_cur;
     uint counter = 0;
     int send_resp = 0;
     void *thread_retval = NULL;
@@ -585,6 +592,14 @@ static int twamp_test(TestParameters test_param) {
        return SEXIT_OUTOFRESOURCE;
     }
     memset(packet, 0 , sizeof(UnauthPacket));
+
+    if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+        rc = SEXIT_INTERNALERR;
+        goto err_out;
+    }
+    timespec_to_offset(&ts_offset, &ts_cur);
+
+    test_param.clock_offset = ts_offset;
 
     pthread_t receiver_thread;
     ret = pthread_create(&receiver_thread, NULL, twamp_callback_thread, &test_param);
@@ -600,14 +615,18 @@ static int twamp_test(TestParameters test_param) {
     }
 
     print_msg(MSG_DEBUG, "sending test packets...");
+
     // Sending test packets
     while (counter < test_param.param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter++);
 
         // Set packet timestamp
-        gettimeofday(&tv_cur, NULL);
-        Timestamp ts = timeval_to_timestamp(&tv_cur);
+        if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+            rc = SEXIT_INTERNALERR;
+            goto err_out;
+        }
+        Timestamp ts = relative_timespec_to_timestamp(&ts_cur, &ts_offset);
         encode_be_timestamp(&ts);
         packet->Time = ts;
 
@@ -642,7 +661,6 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
     ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
-    struct timeval tv_cur;
 
     FD_ZERO(&rset_master);
     FD_SET((unsigned long)socket, &rset_master);
@@ -665,8 +683,6 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
         } else {
             if (FD_ISSET((unsigned long)socket, &rset)) {
                 recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC);
-
-                gettimeofday(&tv_cur, NULL);
 
                 // Caso recv apresente algum erro
                 if (recv_size < 0) {

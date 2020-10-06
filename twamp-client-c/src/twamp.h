@@ -44,6 +44,7 @@ typedef struct twamp_parameters {
 
 typedef struct twamp_test_parameters {
     int test_socket;
+    struct timespec clock_offset;
     TWAMPParameters param;
     TWAMPReport * report;
 } TestParameters;
