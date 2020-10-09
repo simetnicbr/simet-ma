@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Downloads the SIMET MA lmapd schedule
 # Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
 #
@@ -25,6 +25,9 @@ abend() {
 	exit 1
 }
 
+# if this is missing, the MA will have *no* hardcoded schedule
+LMAP_DFLSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
+
 . @SIMETLIBDIR@/simet_lib.sh
 
 LMAP_RECONFIG=${LMAP_RECONFIG:-/etc/init.d/simet-lmapd reload}
@@ -38,6 +41,9 @@ USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 1000000"
 CURLOPT2=
 
+HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
+	|| RC=3 abend "neither md5sum nor sha256sum found!"
+
 case "$1" in
 	--boot)
 		shift
@@ -45,6 +51,97 @@ case "$1" in
 		LMAP_RECONFIG=
 	;;
 esac
+
+# $1: max; $2 base_mult; $3 period; $4 offset
+__gen_seq() {
+	local value_max="$1" value_units="$2"
+	local value_step="$3" value_offset="$4"
+	local s b
+
+	[ -z "$value_step" ] && value_step=1
+	[ -z "$value_offset" ] && value_offset=0
+
+	[ "$value_step" -eq 0 ] && return 1
+	[ "$value_step" -le "$value_units" ] && {
+		printf '"*"'
+		return 0
+	}
+	[ $((value_step % value_units)) -ne 0 ] && return 1
+
+	s=$(((value_step / value_units) % value_max))
+	b=$(((value_offset / value_units) % value_max))
+
+	if [ "$s" -eq 1 ] ; then
+		res="\"*\""
+	elif [ "$s" -eq 0 ] ; then
+		res="$b"
+	else
+		[ $((value_max % s)) -ne 0 ] && return 2
+		res=
+		b=$((b % s))
+		while [ "$b" -lt "$value_max" ] ; do
+			[ -n "$res" ] && res="$res,"
+			res="$res$b"
+			b=$((b+s))
+		done
+	fi
+	printf '%s' "$res"
+	:
+}
+
+# $1 period (min); $2 spread (s)
+__clamp_spread() {
+	local res="$2" tbase="$(($1*60))" s="$2"
+
+	if [ "$tbase" -le "$((5*s))" ] ; then
+		res=$((tbase / 5)) || res=300
+		[ $res -gt 300 ] && res=300
+		[ $res -lt 5 ] && res=0
+	fi
+	printf '%d' "$res" || printf "0"
+	:
+}
+
+#overridable
+#clobbers $OUTFILE contents!
+simet_gen_local_schedule() {
+	local awkseed RND RND1 RND2
+
+	# stableish pseudo-random sequence for awk, fallback to time-based seed
+	awkseed=$($HASHSUM "$AGENT_ID_FILE" | sed -E -e '1 {s/^[^[:blank:]]*([^[:blank:]]{5})[[:blank:]].*/0x\1/;q}') || awkseed=
+	RND=$(awk "BEGIN { srand($awkseed); printf \"RND1=%d ; RND2=%d\",rand()*1440,rand()*1440 }") && eval "$RND"
+
+	# Last resort config and/or defaults
+	T_PERIODIC_TEST_SPREAD="${SIMET_PERIODIC_TEST_SPREAD_SECONDS:-300}"
+	T_PERIODIC_GWP_SPREAD="${SIMET_PERIODIC_GWPING_SPREAD_SECONDS:-300}"
+	T_PERIODIC_TEST_PERIOD="${SIMET_PERIODIC_TEST_PERIOD_MINUTES:-240}"
+	T_PERIODIC_GWP_PERIOD="${SIMET_PERIODIC_GWPING_PERIOD_MINUTES:-60}"
+
+	T_PERIODIC_GWP_PERIOD_S=$((T_PERIODIC_GWP_PERIOD * 60))
+	T_PERIODIC_TEST_PERIOD_S=$((T_PERIODIC_TEST_PERIOD * 60))
+
+	T_PERIODIC_TEST_SPREAD=$(__clamp_spread "$T_PERIODIC_TEST_PERIOD" "$T_PERIODIC_TEST_SPREAD")
+	T_PERIODIC_GWP_SPREAD=$(__clamp_spread "$T_PERIODIC_GWP_PERIOD" "$T_PERIODIC_GWP_SPREAD")
+
+	T_PERIODIC_GWP_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_GWP_PERIOD" "$RND2") \
+	  && T_PERIODIC_GWP_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_GWP_PERIOD" "$RND2") \
+	  || { T_PERIODIC_GWP_HOURS='"*"' ; T_PERIODIC_GWP_MINUTES=0 ; }
+	T_PERIODIC_TEST_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_TEST_PERIOD" "$RND1") \
+	  && T_PERIODIC_TEST_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_TEST_PERIOD" "$RND1") \
+	  || { T_PERIODIC_TEST_HOURS="1,5,9,13,17,21" ; T_PERIODIC_TEST_MINUTES=39 ; }
+
+	sed -e "s/@PERIODIC_GWP_HOURS@/$T_PERIODIC_GWP_HOURS/g" \
+	    -e "s/@PERIODIC_GWP_MINUTES@/$T_PERIODIC_GWP_MINUTES/g" \
+	    -e "s/@PERIODIC_GWP_SPREAD@/$T_PERIODIC_GWP_SPREAD/g" \
+	    -e "s/@PERIODIC_GWP_PERIOD@/$T_PERIODIC_GWP_PERIOD_S/g" \
+	    -e "s/@PERIODIC_TEST_HOURS@/$T_PERIODIC_TEST_HOURS/g" \
+	    -e "s/@PERIODIC_TEST_MINUTES@/$T_PERIODIC_TEST_MINUTES/g" \
+	    -e "s/@PERIODIC_TEST_SPREAD@/$T_PERIODIC_TEST_SPREAD/g" \
+	    -e "s/@PERIODIC_TEST_PERIOD@/$T_PERIODIC_TEST_PERIOD_S/g" \
+		"$LMAP_DFLSCHED_TMPL" > "$OUTFILE" || return 1
+
+	simet_log simet-ma daemon.info "SIMET local schedule updated"
+}
 
 # overridable
 simet_api_lmapputstate() {
@@ -79,7 +176,7 @@ simet_lmap_download_schedule() {
 	call simet_api_lmapgetsched || return $?
 	case "$APIRES" in
 	204)
-		ln -sf "@SIMETLIBDIR@/lmap-default-schedule.json" "$OUTFILE"
+		call simet_gen_local_schedule || return 1
 		;;
 	304)
 		ln -sf "$LMAP_SCHEDULE_FILE" "$OUTFILE"
@@ -98,14 +195,13 @@ simet_lmap_reload_config() {
 	fi
 }
 
-#FIXME - switch to http etag support
 gethash() {
 	# $1 - file to hash
 	[ -r "$1" ] || {
 		echo ""
 		return 0
 	}
-	sha256sum "$1" | sed -n '1 { s/[[:blank:]].*// ; p }'
+	$HASHSUM "$1" | sed -n '1 { s/[[:blank:]].*// ; p ; q }' || :
 	return 0
 }
 
@@ -147,7 +243,6 @@ getschedule() {
 	#   Then,  GET your schedule (if PUT failed, you may get one based on ancient state)
 	#   Then,  PUT your new state, so that controller knows the schedule took
 
-	# FIXME http etags
 	OLDSCHED_HASH=
 	[ -r "$LMAP_SCHEDULE_FILE" ] && OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE")
 
@@ -172,6 +267,17 @@ getschedule() {
 	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
 	[ -d "$LMAP_SCHEDULE_DIR" ] || \
 		mkdir -p "$LMAP_SCHEDULE_DIR" 2>/dev/null || true
+
+	[ -s "$LMAP_SCHEDULE_FILE" ] || {
+		OUTFILE=$(mktemp -q -t simet-lmap-localschedule.$$.XXXXXXXXXX) \
+			|| abend "failed to create tmpfile"
+		call simet_gen_local_schedule \
+			&& mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
+			&& chmod +r "$LMAP_SCHEDULE_FILE" \
+			&& OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE") \
+		|| OLDSCHED_HASH=
+		OUTFILE=
+	}
 
 	OUTFILE=$(mktemp -q -t simet-lmap-downloadschedule.$$.XXXXXXXXXX) \
 		|| abend "failed to create tmpfile"

@@ -161,12 +161,12 @@ install-exec-hook:
 			ln -sf lmap-traceroute-wrapper.sh "$$i" ; \
 		done
 
-conf/lmap-default-schedule.json : conf/lmap-default-schedule.$(sbprefix).json
-	cd conf && ln -sf lmap-default-schedule.$(sbprefix).json lmap-default-schedule.json
+conf/lmap-sched-template.json : conf/lmap-sched-template.$(sbprefix).json
+	cd conf && ln -sf lmap-sched-template.$(sbprefix).json lmap-sched-template.json
 
-dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-default-schedule.json
-EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-default-schedule.simetbox.json conf/lmap-default-schedule.simet.json
-CLEANFILES += conf/lmap-default-schedule.json conf/simet-ma.conf agent-version.txt
+dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-sched-template.json
+EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-sched-template.simetbox.json conf/lmap-sched-template.simet.json
+CLEANFILES += conf/lmap-sched-template.json conf/simet-ma.conf agent-version.txt
 
 simet_lib.sh.in : simet_lib.$(sbprefix).sh.in
 	ln -sf "$^" "$@"

@@ -2,7 +2,7 @@ Makefile
 Makefile.in
 agent-version.txt
 conf/simet-ma.conf
-conf/lmap-default-schedule.json
+conf/lmap-sched-template.json
 config.d/simet-ma_base-config.json
 config.d/simet-ma_tasklet-config.json
 config.d/simetbox_base-config.json
