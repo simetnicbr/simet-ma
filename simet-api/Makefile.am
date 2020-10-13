@@ -18,6 +18,7 @@
 simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
 simetrundir=$(localstatedir)/run/simet
+simetlockdir=$(localstatedir)/lock/simet
 simetlmapqueuedir=$(localstatedir)/spool/lmapd/queue
 simetlmapregistrydir=$(simetlibdir)/lmap/registry.d
 simetlmapconfigdir=$(simetlibdir)/lmap/config.d
@@ -111,7 +112,7 @@ config.d/simet-ma_tasklet-config.json :
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" \
+	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
@@ -121,7 +122,7 @@ config.d/simet-ma_tasklet-config.json :
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" \
+	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
@@ -130,7 +131,7 @@ config.d/simet-ma_tasklet-config.json :
 %.json: %.json.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" \
+	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
@@ -145,6 +146,8 @@ install-data-local:
 	$(MKDIR_P) -m 0711 -- "$(DESTDIR)$(simetconfdir)"
 	$(MKDIR_P) -m 0755 -- "$(DESTDIR)$(simetconfdir)/lmap"
 	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapqueuedir)"
+	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetrundir)"
+	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlockdir)"
 
 # Creates tasklet symlinks
 install-exec-hook:
