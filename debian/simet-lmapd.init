@@ -48,12 +48,6 @@ do_start_prepare() {
 	mkdir -p "$LMAP_QUEUE_DIR"
 	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $SUSER:$SGROUP "$LMAP_QUEUE_DIR" && chmod 02770 "$LMAP_QUEUE_DIR"
 
-	# might race a schedule download, we don't want to clobber the
-	# downloaded schedule with a ln -sf.
-	[ -r "$LMAP_SCHEDULE_FILE" ] || \
-		ln -s /opt/simet/lib/simet/lmap-default-schedule.json \
-			"$LMAP_SCHEDULE_FILE" 2>/dev/null || true
-
 	# don't mess with not-files, like symlinks. chown must run before chmod.
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown $SUSER:$SGROUP '{}' +)
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod g+r '{}' +)
@@ -64,8 +58,7 @@ do_start_prepare() {
 		exit 0
 	}
 
-	# contact controller at daemon start/boot, we will use the default schedule
-	# if this fails
+	# contact controller at daemon start/boot, it will generate the default schedule as well if needed
 	start-stop-daemon -c "$SUSER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
 
 	# try to geolocate (as root)
