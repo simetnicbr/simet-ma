@@ -1,6 +1,7 @@
 {"ietf-lmap-control:lmap":{
 "schedules":{"schedule":[
   { "name":"ma-local_default-sched-refresh",
+    "tag":["ma-local_locally-generated-schedule"],
     "start":"every-six-hours",
     "execution-mode":"sequential",
     "action":[{"name":"simet.nic.br_reschedule","task":"simet.nic.br_reschedule"}]

@@ -139,8 +139,7 @@ simet_gen_local_schedule() {
 	    -e "s/@PERIODIC_TEST_SPREAD@/$T_PERIODIC_TEST_SPREAD/g" \
 	    -e "s/@PERIODIC_TEST_PERIOD@/$T_PERIODIC_TEST_PERIOD_S/g" \
 		"$LMAP_DFLSCHED_TMPL" > "$OUTFILE" || return 1
-
-	simet_log simet-ma daemon.info "SIMET local schedule updated"
+	:
 }
 
 # overridable
@@ -176,6 +175,7 @@ simet_lmap_download_schedule() {
 	call simet_api_lmapgetsched || return $?
 	case "$APIRES" in
 	204)
+		simet_log simet-ma daemon.notice "controller ordered us to switch to local schedule"
 		call simet_gen_local_schedule || return 1
 		;;
 	304)
@@ -185,6 +185,7 @@ simet_lmap_download_schedule() {
 		return 1
 		;;
 	esac
+	simet_log simet-ma daemon.info "downloaded a proposed schedule from controller"
 	:
 }
 
@@ -218,10 +219,12 @@ simet_lmap_verifyconfig() {
 }
 
 activateschedule() {
+	force_reload=0
+	[ "$1" -eq 1 ] && force_reload=1
 	NEWSCHED_HASH=$(gethash "$OUTFILE")
 	if [ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] ; then
-		call simet_lmap_verifyconfig $LMAP_CONFIG_PATH "$OUTFILE" || {
-			simet_log simet-lmapd daemon.err "illegal schedule received from controller"
+		call simet_lmap_verifyconfig "$LMAP_CONFIG_PATH" "$OUTFILE" || {
+			simet_log simet-lmapd daemon.err "proposed new SIMET schedule is invalid"
 			return 1
 		}
 
@@ -229,11 +232,14 @@ activateschedule() {
 			chmod 0644 "$OUTFILE" || return 1
 		}
 		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
-		call simet_lmap_reload_config || return 1
+		force_reload=1
 		simet_log simet-ma daemon.notice "SIMET schedule has changed"
 	else
 		simet_log simet-ma daemon.info "SIMET schedule unchanged"
 	fi
+	[ $force_reload -eq 1 ] && {
+		call simet_lmap_reload_config || return 1
+	}
 	:
 }
 
@@ -242,9 +248,6 @@ getschedule() {
 	#   First, PUT your current state so that controller knows it
 	#   Then,  GET your schedule (if PUT failed, you may get one based on ancient state)
 	#   Then,  PUT your new state, so that controller knows the schedule took
-
-	OLDSCHED_HASH=
-	[ -r "$LMAP_SCHEDULE_FILE" ] && OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE")
 
 	OLDAT=
 	OLDAID=
@@ -268,31 +271,45 @@ getschedule() {
 	[ -d "$LMAP_SCHEDULE_DIR" ] || \
 		mkdir -p "$LMAP_SCHEDULE_DIR" 2>/dev/null || true
 
-	[ -s "$LMAP_SCHEDULE_FILE" ] || {
-		OUTFILE=$(mktemp -q -t simet-lmap-localschedule.$$.XXXXXXXXXX) \
-			|| abend "failed to create tmpfile"
-		call simet_gen_local_schedule \
-			&& mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
-			&& chmod +r "$LMAP_SCHEDULE_FILE" \
-			&& OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE") \
-		|| OLDSCHED_HASH=
+	OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
+		|| abend "failed to create tmpfile"
+
+	LMAPD_NEED_RELOAD=0
+	# Create a local schedule if there isn't any schedule yet.  We send it to
+	# the LMAP controller as "current".
+	[ ! -s "$LMAP_SCHEDULE_FILE" ] && call simet_gen_local_schedule && {
+		# must displace target, either mv-f or rm-f+cp/cat>
+		chmod 0644 "$OUTFILE" \
+		  && mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
+		  && LMAPD_NEED_RELOAD=1 \
+		  && simet_log simet-ma daemon.info "SIMET local schedule created"
 		OUTFILE=
 	}
 
-	OUTFILE=$(mktemp -q -t simet-lmap-downloadschedule.$$.XXXXXXXXXX) \
-		|| abend "failed to create tmpfile"
+	[ -z "$OUTFILE" ] && {
+		OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
+		  || abend "failed to create tmpfile"
+	}
 
-	call simet_lmap_download_schedule \
-		|| abend "failed to download schedule from controller"
+	OLDSCHED_HASH=
+	[ -r "$LMAP_SCHEDULE_FILE" ] && OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE")
 
-	activateschedule \
-		|| simet_log simet-lmapd daemon.info "keeping currently active schedule"
+	call simet_lmap_download_schedule && activateschedule "$LMAPD_NEED_RELOAD" || {
+		simet_log simet-ma daemon.err "failed to download or activate schedule from controller"
+		grep -q -s -F '"ma-local_locally-generated-schedule"' "$LMAP_SCHEDULE_FILE" && {
+			if call simet_gen_local_schedule && activateschedule "$LMAPD_NEED_RELOAD" ; then
+				simet_log simet-ma daemon.notice "using local schedule"
+			else
+				simet_log simet-ma daemon.err "failed to update or activate local schedule"
+			fi
+		}
+	}
 
 	# always try to send state after downloading a schedule
 	call simet_lmap_sendstate \
-		|| abend "failed to send state update to controller"
+		|| simet_log simet-ma daemon.notice "failed to send state update to controller"
 
-	rm -f "$OUTFILE"
+	[ -n "$OUTFILE" ] && rm -f "$OUTFILE"
 	OUTFILE=
 }
 
