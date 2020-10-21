@@ -29,7 +29,7 @@ CLEANFILES=
 simetenginename=nic_simet2_simet-ma
 
 if SIMETBOX_BUILD
-dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh simetbox_fping-to-gateway.sh
+dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh
 sbprefix = simetbox
 jsonfilter=jsonfilter
 theshell=/bin/sh
@@ -41,7 +41,6 @@ theshell=/bin/bash
 endif
 
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
-EXTRA_DIST += simetbox_fping-to-gateway.sh.in
 
 dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh
 EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in
@@ -73,6 +72,10 @@ endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh lmap-tasks/lmap-traceroute-wrapper.sh
 EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in lmap-tasks/lmap-traceroute-wrapper.sh.in
+if SIMETBOX_BUILD
+dist_simetlmapbin_SCRIPTS += lmap-tasks/simetbox_fping-to-gateway.sh
+endif
+EXTRA_DIST += lmap-tasks/simetbox_fping-to-gateway.sh.in
 CLEANFILES += $(dist_simetlmapbin_SCRIPTS)
 
 # automake will nicely "resolve" our symlinks, thus wasting space.
