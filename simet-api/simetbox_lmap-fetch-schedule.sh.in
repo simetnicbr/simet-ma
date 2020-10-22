@@ -103,6 +103,7 @@ __clamp_spread() {
 #clobbers $OUTFILE contents!
 simet_gen_local_schedule() {
 	local awkseed RND RND1 RND2
+	local engineconf
 
 	# stable-per-device pseudo-random sequence for awk, fallback to time-based seed
 	awkseed=$(printf '%s' "$SIMET_MAC_LABEL" | sed -E -e '1 {s/.*(.{5})$/0x\1/;q}') || awkseed=
@@ -112,9 +113,10 @@ simet_gen_local_schedule() {
 	T_PERIODIC_TEST_SPREAD="${SIMET_PERIODIC_TEST_SPREAD_SECONDS:-300}"
 	T_PERIODIC_GWP_SPREAD="${SIMET_PERIODIC_GWPING_SPREAD_SECONDS:-300}"
 
-	T_PERIODIC_TEST_PERIOD=$(uci -q get simet_ma.basic.time_step) \
+	engineconf=$(ubus call simet_ma simet_engine_status) || engineconf="{}"
+	T_PERIODIC_TEST_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.basic.time_step' || uci -q get simet_ma.basic.time_step) \
 		|| T_PERIODIC_TEST_PERIOD="${SIMET_PERIODIC_TEST_PERIOD_MINUTES:-240}"
-	T_PERIODIC_GWP_PERIOD=$(uci -q get simet_ma.gw_ping.time_step) \
+	T_PERIODIC_GWP_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.gw_ping.time_step' || uci -q get simet_ma.gw_ping.time_step) \
 		|| T_PERIODIC_GWP_PERIOD="${SIMET_PERIODIC_GWPING_PERIOD_MINUTES:-60}"
 
 	T_PERIODIC_GWP_PERIOD_S=$((T_PERIODIC_GWP_PERIOD * 60))
