@@ -16,7 +16,6 @@ simet*_lmap-create-report.sh
 simet*_lmap-send-report.sh
 simet*_lmap-stdout-wrapper.sh
 simet*_geolocation.sh
-simet*_fping-to-gateway.sh
 simet_read_vlabel.sh*
 simet*_spoofer.sh
 simet_create_vlabel.sh*
