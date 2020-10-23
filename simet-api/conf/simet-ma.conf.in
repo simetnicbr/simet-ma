@@ -2,7 +2,7 @@ CURL_APIOPT="--max-time 30 --connect-timeout 15 --retry 8 --location --post301 -
 
 API_SIMET_AGENT_REG=https://api.simet.nic.br/agent-registry
 
-SIMET_LOCK_DIR=@LOCALSTATEDIR@/lock/simet
+SIMET_LOCK_DIR=@SIMETLOCKDIR@
 
 AGENT_ID_FILE=@SIMETCONFDIR@/agent-id-v2
 AGENT_PAIR_FILE=@SIMETCONFDIR@/pairing-id
