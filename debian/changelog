@@ -1,3 +1,23 @@
+simet-ma (0.16.14) unstable; urgency=medium
+
+  * simet-ma version 0.16.14
+  * simet-api: generate the schedule locally using a configurable
+    measurement period for the main group of SIMET measurements, and
+    ping-to-gateway.  Any schedule received from the LMAP controller
+    will override this, though.
+  * simet-api: better spread the measurements throughout the fleet
+    even when the LMAP controller is down
+  * twamp: use CLOCK_MONOTONIC for measurements.  This avoids rare
+    measurement artifacts due to ntp/chrony/sysadmin stepping
+    the clock.
+  * simet-api: lmap: add simet_nic.br_fping-to-ixbr measurement, run
+    it every 12h
+  * simet-api: move ping-to-gateway scripts to lmap-tasks/ in source,
+    and to lmapbindir on binaries, since it is only run from an lmapd
+    context.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 22 Oct 2020 13:49:48 -0300
+
 simet-ma (0.16.13) unstable; urgency=medium
 
   * simet-ma version 0.16.13
