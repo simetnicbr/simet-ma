@@ -22,6 +22,42 @@
 
 #include <arpa/inet.h>
 
+Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, const struct timespec * const ts_offset)
+{
+    Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
+    unsigned long sec;
+    long nsec;
+
+    if (!ts_now || !ts_offset)
+        return ret_timestamp;
+
+    /* Realtime is based on UNIX epoch (1970), timestamps are NTP epoch (1900) */
+    /* 70 years = 2208988800 seconds */
+    sec = ts_now->tv_sec + ts_offset->tv_sec + 2208988800L;
+    nsec = ts_now->tv_nsec + ts_offset->tv_nsec;
+
+    /* our two input timespecs are assumed to be normalized already,
+     * but we MUST normalize the result or Bad Things Will Happen */
+    while (nsec > 1000000000L) {
+	sec++;
+	nsec -= 1000000000L;
+    }
+    while (nsec < 0) {
+	sec--;
+	nsec += 1000000000L;
+    }
+
+    /* should never happen */
+    if (sec < 0)
+	return ret_timestamp;
+
+    ret_timestamp.integer = sec;
+    /* NTP fraction has base 2^32 */
+    ret_timestamp.fractional = (uint32_t) ( (double)(nsec) * ( (double)(1uLL<<32) / (double)1e9 ) );
+
+    return ret_timestamp;
+}
+
 Timestamp timeval_to_timestamp(const struct timeval *tv) {
     Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
 
