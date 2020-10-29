@@ -38,6 +38,11 @@ soft_abend() {
 . @SIMETLIBDIR@/simet_lib.sh
 
 [ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
+[ -n "$GEOLOC_DISABLE" ] && {
+	simet_log simet-ma daemon.info "geolocation: disabled by configuration"
+	exit 26
+}
+
 OUTFILE=
 FAIL_SILENTLY=
 CACHE_ONLY=
