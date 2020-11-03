@@ -101,13 +101,18 @@ write_lmap_agent() {
 	:
 }
 #overridable
-# $1: VTK (assumed to be stored in tmpfs)
+# $1: agent-id
+# $2: VTK (assumed to be stored in tmpfs)
+# if missing, remove the token
 write_access_tokens() {
-	if [ -z "$1" ] ; then
-		rm -f "$AGENT_VTK_FILE"
+	if [ $# -lt 2 ] || [ -z "$1" ] || [ -z "$2" ] ; then
+		rm -f "$AGENT_VTK_FILE" "$AGENT_VIEW_CREDENTIALS_FILE"
 		simet_log simet-ma daemon.notice "SIMET: view_results token removed"
 	else
-		printf "%s" "$1" > "$AGENT_VTK_FILE"
+		printf "%s" "$2" > "$AGENT_VTK_FILE"
+		VTK_CREDS_DIR=$(dirname "$AGENT_VIEW_CREDENTIALS_FILE")
+		[ -d "$AGENT_VIEW_CREDENTIALS_FILE" ] || mkdir -m 0755 -p "$VTK_CREDS_DIR"
+		printf '%s %s\n' "$1" "$2" > "$AGENT_VIEW_CREDENTIALS_FILE"
 		simet_log simet-ma daemon.info "SIMET: view_results token updated"
 	fi
 	:
@@ -399,7 +404,7 @@ simet_pairing_flow() {
 
 __invalidate_tokens() {
 	VTK=
-	call write_access_tokens "" || :
+	call write_access_tokens || :
 }
 __consume_tokens_api_output() {
 	VTK=
@@ -408,7 +413,7 @@ __consume_tokens_api_output() {
 	eval "$SID" || abend "internal error"
 	: > "$OUTFILE"
 
-	call write_access_tokens "$VTK" || \
+	call write_access_tokens "$1" "$VTK" || \
 		simet_log simet-ma daemon.err "failed to store access tokens"
 	:
 }
@@ -436,7 +441,7 @@ simet_update_tokens() {
 		__invalidate_tokens
 		;;
 	200)
-		__consume_tokens_api_output
+		__consume_tokens_api_output "$AGENT_ID"
 		return 0
 		;;
 	500|400|404)
