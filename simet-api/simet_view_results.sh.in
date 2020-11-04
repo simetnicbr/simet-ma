@@ -78,6 +78,14 @@ simet_read_tokens() {
 	return 1
 }
 
+__get_lang() {
+	system_lang="${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-${LANG}}}}"
+	system_lang="${system_lang%%.*}"
+	system_lang="${system_lang%%@*}"
+	printf '%s' "$system_lang"
+	:
+}
+
 #overridable
 # $1 - agent-id
 # $2 - view access token
@@ -91,7 +99,7 @@ simet_generate_view_url() {
 
 call simet_read_tokens || abend "missing access credentials, cannot proceed..."
 
-URL=$(call simet_generate_view_url "$AID" "$VTK") || URL=
+URL=$(call simet_generate_view_url "$AID" "$VTK" "$(__get_lang)") || URL=
 [ -z "$URL" ] && abend "cannot generate the URL to view results"
 
 [ -n "$URLMODE" ] && {
