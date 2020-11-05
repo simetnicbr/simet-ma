@@ -1,3 +1,16 @@
+simet-ma (0.16.15) unstable; urgency=medium
+
+  * simet-ma version 0.16.15
+  * simet-api: add new script, simet_view_reports.sh, which either shows the
+    URL (simet_view_reports.sh --url) or calls the xdg browser to show the
+    measurement report dashboard for the MA.
+  * deb: ship a freedesktop.org menu item that uses simet_view_reports.sh to
+    open the measurement results in a webpage using the default web browser.
+  * simet-api: allow docker containers to disable geolocalization measurements
+    properly, for SIMET-AS use.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 05 Nov 2020 14:44:30 -0300
+
 simet-ma (0.16.14) unstable; urgency=medium
 
   * simet-ma version 0.16.14
