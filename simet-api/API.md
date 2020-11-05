@@ -51,6 +51,19 @@ into some details of the SIMET2 web API.
   Beware of file system permission issues if you call these scripts as
   different users (e.g. "root" and "nicbr-simet").
 
+### Access to measurement results
+
+  Access to measurement results and reports is done using the _agent-id_
+  and _view-results token_.  The agent token is not used.
+
+  The _view-results token_ is changed every time <>\_register\_ma.sh is
+  run to refresh tokens and credentials, typically this should be done
+  once every 24h.
+
+  The simet\_view\_results.sh script can be used to open a device-results
+  page on the web browser, using the above tokens.  It can also take
+  an "--url" parameter to just output the full URL to the results page.
+
 ### MA pairing recovery mode
 
   The SIMET2 API might, for several reasons, refuse the current

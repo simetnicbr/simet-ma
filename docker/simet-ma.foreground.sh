@@ -76,9 +76,10 @@ call_hook simet_ma_docker_ep_init
 # Handle early issues with filesystem permissions on persistent volumes
 SUSER=nicbr-simet
 simet_ma_ephemeral_dirs() {
-	mkdir -p -m 0770 /var/run/simet /var/lock/simet || abend "cannot create ephemeral dirs"
-	chgrp $SUSER /var/run/simet /var/lock/simet || abend "cannot chgrp $SUSER the ephemeral dirs"
+	mkdir -p -m 0770 /var/run/simet /var/run/simet_public /var/lock/simet || abend "cannot create ephemeral dirs"
+	chgrp $SUSER /var/run/simet /var/run/simet_public /var/lock/simet || abend "cannot chgrp $SUSER the ephemeral dirs"
 	chmod 0770 /var/run/simet /var/lock/simet || abend "cannot chmod 0770 the ephemeral dirs"
+	chmod 0775 /var/run/simet_public || abend "cannot chmod 0775 the public ephemeral dirs"
 	:
 }
 simet_ma_docker_volume_prepare() {

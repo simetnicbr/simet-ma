@@ -1,4 +1,6 @@
 debian/etc.apt/* etc/apt/
 debian/etc.apt.conf.d/* etc/apt/apt.conf.d/
 debian/etc.apt.sources.list.d/*list etc/apt/sources.list.d/
+debian/*.desktop usr/share/applications/
+debian/simetnicbr.svg /usr/share/icons/hicolor/scalable/apps/
 opt/

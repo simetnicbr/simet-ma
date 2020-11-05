@@ -10,6 +10,7 @@ registry.d/simet-ma_base-registry.json
 registry.d/simet-ma_tasklet-registry.json
 registry.d/simetbox_base-registry.json
 simet*_register_ma.sh
+simet*_view_results.sh
 simet-ma_periodic.sh
 simet*_lmap-fetch-schedule.sh
 simet*_lmap-create-report.sh
