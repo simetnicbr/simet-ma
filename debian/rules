@@ -25,7 +25,7 @@ export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
 
 # change configure options _and_ ensure bootstrap/retool
 override_dh_auto_configure: configure
-	dh_auto_configure -- --prefix=/opt/simet --localstatedir=/var --libdir=/opt/simet/lib --sysconfdir=/opt/simet/etc
+	dh_auto_configure -- --prefix=/opt/simet --localstatedir=/var --libdir=/opt/simet/lib --sysconfdir=/opt/simet/etc --enable-simet-spoofer
 
 # retool using upstream's bootstrap script
 configure: configure.ac Makefile.am
