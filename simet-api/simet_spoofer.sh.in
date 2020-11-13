@@ -4,7 +4,7 @@
 # Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
 
 # Requires simet-nping, either suid root or cap_net_raw+ep
-# Requires traceroute
+# Requires either Busybox or the Linux modern traceroute (*not* inetutils-traceroute).
 # Requires "ip route get"
 
 set -e
@@ -26,7 +26,7 @@ soft_abend() {
 . @SIMETLIBDIR@/simet_lib.sh
 
 command -v simet-nping >/dev/null || RC=3 abend "simet-nping not found on PATH"
-command -v traceroute >/dev/null || RC=3 abend "traceroute not found on PATH"
+TRACEROUTE=$(command -v traceroute.db || command -v traceroute) || RC=3 abend "traceroute not found on PATH"
 
 # bcp38 server control is from simet-as right now
 API_SIMET_SPOOFER="${API_SIMET_SPOOFER:-https://api.simetas.nic.br/probelist}"
@@ -188,7 +188,7 @@ fail_all() {
 
 straceroute() (
   # busybox traceroute doesn't accept -N1
-  exec traceroute -I -w1 -q3 -m$TRDIST "$@"
+  exec "$TRACEROUTE" -I -w1 -q3 "-m$TRDIST" "$@"
 )
 
 snping() (
