@@ -95,7 +95,7 @@ OUTDIR=$(mktemp -q -t -d simet-spoofer.$$.XXXXXXXXXX) \
 output_json() {
   cat <<- EOFJH1
 	{
-		"function":[{"uri":"urn:ietf:metrics:perf:TBD"}],
+		"function":[{"uri":"urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-ICMP_BCP38_Multiple_Raw"}],
 		"column":["test_id","subtest_id","source","destination","raw_output","exit_status"],
 		"row":[
 EOFJH1
