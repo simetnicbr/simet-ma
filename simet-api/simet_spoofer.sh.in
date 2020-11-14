@@ -4,7 +4,7 @@
 # Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
 
 # Requires simet-nping, either suid root or cap_net_raw+ep
-# Requires traceroute
+# Requires either Busybox or the Linux modern traceroute (*not* inetutils-traceroute).
 # Requires "ip route get"
 
 set -e
@@ -26,7 +26,22 @@ soft_abend() {
 . @SIMETLIBDIR@/simet_lib.sh
 
 command -v simet-nping >/dev/null || RC=3 abend "simet-nping not found on PATH"
-command -v traceroute >/dev/null || RC=3 abend "traceroute not found on PATH"
+TRACEROUTE=$(command -v traceroute.db || command -v traceroute) || RC=3 abend "traceroute not found on PATH"
+
+# bcp38 server control is from simet-as right now
+API_SIMET_SPOOFER="${API_SIMET_SPOOFER:-https://api.simetas.nic.br/probelist}"
+
+# We *require* an agent-id and agent token to get an API key
+OLDAT=
+OLDAID=
+[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
+[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
+  RC=20 abend "MA not registered yet"
+fi
+
+USERAGENT=$(get_http_useragent)
+CURLOPT="$CURL_APIOPT --max-filesize 4000"
 
 FAIL_SILENTLY=
 RC=1
@@ -40,14 +55,13 @@ TRDIST=30
 SYNCMODE=@SMALLMEMORY@
 
 usage() {
-  echo "$0 [--help][-h] [--single-threaded | --multi-threaded] [--fail-silently] [--key <key>] [--tracefilter-same-source] [--tracefilter-distance <distance>] <target>..." >&2
+  echo "$0 [--help][-h] [--single-threaded | --multi-threaded] [--fail-silently] [--key <key>] [--tracefilter-same-source] [--tracefilter-distance <distance>] [<target>...]" >&2
   exit 0
 }
 
 #
 # Handle command line
 #
-[ $# -eq 0 ] && usage
 while [ $# -gt 0 ] ; do
   case "$1" in
     --help|-h)
@@ -85,17 +99,34 @@ while [ $# -gt 0 ] ; do
   shift
 done
 
-[ -z "$KEY" ] && RC=2 abend "an access key is required to run this test"
-[ -z "$TARGETS" ] && RC=2 abend "no targets (bcp38 measurement peers) specified"
-
 OUTDIR=$(mktemp -q -t -d simet-spoofer.$$.XXXXXXXXXX) \
   || abend "could not create work directory"
 [ -d "$OUTDIR" ] || RC=3 abend "weirdness while creating work directory"
 
+# FIXME: fetch a key for each target?
+get_spoof_server_key() {
+  LSK=$(curl $CURLOPT -A "$USERAGENT" \
+       -X GET -f -H "Authorization: Bearer $OLDAT" \
+       "${API_SIMET_SPOOFER}/v1/bcp38token?agent_id=$OLDAID") \
+     || return 1
+  [ -z "$LSK" ] && return 1
+  printf '%s' "$LSK"
+  :
+}
+get_spoof_targets() {
+  LTG=$(curl $CURLOPT -A "$USERAGENT" \
+       -X GET -f -H "Authorization: Bearer $OLDAT" \
+       "${API_SIMET_SPOOFER}/v1/bcp38targets?agent_id=$OLDAID") \
+     || return 1
+  [ -z "$LTG" ] && return 1
+  printf '%s' "$LTG"
+  :
+}
+
 output_json() {
   cat <<- EOFJH1
 	{
-		"function":[{"uri":"urn:ietf:metrics:perf:TBD"}],
+		"function":[{"uri":"urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-ICMP_BCP38_Multiple_Raw"}],
 		"column":["test_id","subtest_id","source","destination","raw_output","exit_status"],
 		"row":[
 EOFJH1
@@ -157,7 +188,7 @@ fail_all() {
 
 straceroute() (
   # busybox traceroute doesn't accept -N1
-  exec traceroute -I -w1 -q3 -m$TRDIST "$@"
+  exec "$TRACEROUTE" -I -w1 -q3 "-m$TRDIST" "$@"
 )
 
 snping() (
@@ -287,6 +318,11 @@ traceroute_targets() {
   end_test
 }
 
+[ -z "$TARGETS" ] && TARGETS=$(get_spoof_targets) || TARGETS=
+[ -z "$TARGETS" ] && RC=22 abend "no targets (bcp38 measurement peers) to measure with"
+
+[ -z "$KEY" ] && KEY=$(get_spoof_server_key) || KEY=
+[ -z "$KEY" ] && RC=22 abend "an access key is required to run this measurement"
 
 probe_targets before
 traceroute_targets before
