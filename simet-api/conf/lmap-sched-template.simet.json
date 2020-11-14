@@ -14,6 +14,19 @@
       {"name":"simet.nic.br_srvlist-mp-latency","task":"simet.nic.br_srvlist-mp-latency"}
     ]
   },
+  { "name":"ma-local_periodic-spoofer",
+    "tag":["simet.nic.br_ev-period:@PERIODIC_SPOOFER_PERIOD@"],
+    "start":"ma-local_ev-periodic-spoofer",
+    "execution-mode":"sequential",
+    "action":[
+      {"name":"simet.nic.br_agent-info","task":"simet.nic.br_agent-info",
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_geolocation","task":"simet.nic.br_geolocation",
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_spoofer_ip4","task":"simet.nic.br_spoofer",
+       "destination":["ma-local_periodic_report"]}
+    ]
+  },
   { "name":"ma-local_periodic-ixbr-ping",
     "tag":["simet.nic.br_ev-period:@PERIODIC_IXBRP_PERIOD@"],
     "start":"ma-local_ev-periodic-ixbr-ping",
@@ -51,6 +64,12 @@
     "calendar":{
       "month":["*"],"day-of-month":["*"],"day-of-week":["*"],
       "hour":[@PERIODIC_TEST_HOURS@],"minute":[@PERIODIC_TEST_MINUTES@],"second":[0]
+    }},
+  { "name":"ma-local_ev-periodic-spoofer",
+    "random-spread":@PERIODIC_SPOOFER_SPREAD@,
+    "calendar":{
+      "month":["*"],"day-of-month":["*"],"day-of-week":["*"],
+      "hour":[@PERIODIC_SPOOFER_HOURS@],"minute":[@PERIODIC_SPOOFER_MINUTES@],"second":[0]
     }},
   { "name":"ma-local_ev-periodic-ixbr-ping",
     "random-spread":@PERIODIC_IXBRP_SPREAD@,
