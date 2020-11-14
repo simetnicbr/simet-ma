@@ -1,0 +1,123 @@
+#!/bin/sh
+# SIMET2 MA - access interface to reports and results
+# Copyright (c) 2020 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+# parameters:
+# --url     print the URL instead of running the browser
+# --        pass anything after to the browser (or ignore it)
+#
+# An error is always returned if the MA is not registered or lacking the
+# required token to access/view measurement results.
+
+set -e
+
+RC=1
+abend() {
+	simet_log simet-ma daemon.err "error: $*"
+	exit "$RC"
+}
+
+usage() {
+	printf 'usage: %s [--help|-h] [--url]\n' "$0"
+	:
+}
+
+. @SIMETLIBDIR@/simet_lib.sh
+simet_load_hooks view_results
+
+URLMODE=
+# Handle command line
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	--help|-h)
+		usage
+		exit 0
+		;;
+	--url)
+		URLMODE=1
+		;;
+	--)
+		break
+		;;
+	*)
+		usage
+		RC=2 abend "Unknown command line argument/option $1"
+		;;
+	esac
+	shift
+done
+
+if [ -z "$AGENT_VIEW_CREDENTIALS_FILE" ] ; then
+	abend "missing configuration: AGENT_VIEW_CREDENTIALS_FILE"
+fi
+
+#overridable
+simet_read_tokens() {
+	[ -s "$AGENT_VIEW_CREDENTIALS_FILE" ] || return 1
+
+	AID=
+	VTK=
+	read -r AID VTK nouse < "$AGENT_VIEW_CREDENTIALS_FILE" || return 1
+	[ -n "$AID" ] && [ -n "$VTK" ] && return 0
+
+	AID=
+	VTK=
+	return 1
+}
+
+__get_lang() {
+	system_lang="${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-${LANG}}}}"
+	system_lang="${system_lang%%.*}"
+	system_lang="${system_lang%%@*}"
+	printf '%s' "$system_lang"
+	:
+}
+
+#overridable
+# $1 - agent-id
+# $2 - view access token
+# $3 - language
+simet_generate_view_url() {
+	[ $# -lt 2 ] && return 1
+	[ -n "$3" ] && sl=";lang=$3"
+	printf 'https://dashboard.simet.nic.br/simet2/results/?matype=simet-ma;agentid=%s;authtoken=%s%s' "$1" "$2" "$sl"
+	:
+}
+
+call simet_read_tokens || abend "missing access credentials, cannot proceed..."
+
+URL=$(call simet_generate_view_url "$AID" "$VTK" "$(__get_lang)") || URL=
+[ -z "$URL" ] && abend "cannot generate the URL to view results"
+
+[ -n "$URLMODE" ] && {
+	printf '%s\n' "$URL"
+	exit 0
+}
+
+if command -v xgd-open >/dev/null 2>&1 ; then
+	xdg-open "$URL" &
+elif command -v sensible-browser >/dev/null 2>&1 ; then
+	sensible-browser "$URL" &
+elif command -v x-www-browser >/dev/null 2>&1 ; then
+	x-www-browser "$URL" &
+elif command -v firefox >/dev/null 2>&1 ; then
+	firefox "$URL" &
+else
+	printf 'error: cannot find a way to run the web browser!\n'
+	printf 'please use one to navigate to this URL:\n%s\n' "$URL"
+	exit 1
+fi
+:

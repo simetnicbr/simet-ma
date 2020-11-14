@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=SIMET Reports
+Name[pt]=Relatórios SIMET
+GenericName=Internet connection quality report
+GenericName[pt]=Relatório de qualidade da conexão à Internet
+Comment=Opens a web page with SIMET reports for this system
+Comment[pt]=Abre uma página web com relatórios SIMET para esse sistema
+Path=/opt/simet
+TryExec=/opt/simet/bin/simet_view_results.sh
+Exec=/opt/simet/bin/simet_view_results.sh
+Icon=simetnicbr
+Terminal=false
+Categories=Application;Network;Monitor;
+Keywords=network;measurement;IP;Internet;

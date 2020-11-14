@@ -2,7 +2,7 @@ CURL_APIOPT="--max-time 30 --connect-timeout 15 --retry 8 --location --post301 -
 
 API_SIMET_AGENT_REG=https://api.simet.nic.br/agent-registry
 
-SIMET_LOCK_DIR=@LOCALSTATEDIR@/lock/simet
+SIMET_LOCK_DIR=@SIMETLOCKDIR@
 
 AGENT_ID_FILE=@SIMETCONFDIR@/agent-id-v2
 AGENT_PAIR_FILE=@SIMETCONFDIR@/pairing-id
@@ -15,6 +15,9 @@ AGENT_VERSION_FILE=@SIMETLIBDIR@/agent-version.txt
 
 SIMET_RUNSTATE_DIR=@SIMETRUNDIR@
 AGENT_VTK_FILE="$SIMET_RUNSTATE_DIR/agent-vtk"
+
+SIMET_PUBRUNSTATE_DIR=@SIMETPUBRUNDIR@
+AGENT_VIEW_CREDENTIALS_FILE="$SIMET_PUBRUNSTATE_DIR/view-credentials"
 
 LMAP_AGENT_FILE=@SIMETCONFDIR@/lmap/agent-id.json
 LMAP_CHANNEL_URL=https://api.simet.nic.br/controller

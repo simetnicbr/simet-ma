@@ -1,4 +1,4 @@
 {"ietf-lmap-control:lmap":{"capabilities":{
  "tasks":{"task":[
-  { "name":"simet.nic.br_gateway-ping","version":"@PACKAGEVERSION@","program":"@BINDIR@/simetbox_fping-to-gateway.sh" }
+  { "name":"simet.nic.br_gateway-ping","version":"@PACKAGEVERSION@","program":"@LMAPBINDIR@/simetbox_fping-to-gateway.sh" }
 ]}}}}

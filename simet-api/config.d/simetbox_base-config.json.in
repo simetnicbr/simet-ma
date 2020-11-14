@@ -4,5 +4,5 @@
     "tag":["simet.nic.br_engine-name:@SIMET_ENGINE_NAME@",
 	   "simet.nic.br_engine-version:@PACKAGEVERSION@",
 	   "simet.nic.br_task-version:@PACKAGEVERSION@" ],
-    "program":"@BINDIR@/simetbox_fping-to-gateway.sh" }
+    "program":"@LMAPBINDIR@/simetbox_fping-to-gateway.sh" }
 ]}}}

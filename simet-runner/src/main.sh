@@ -438,13 +438,16 @@ _task_tcpbw(){
 #   REPORT_EVENT
 ################################################################################
 _main_setup(){
-  local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   # 1. pepare dir structure
-  BASEDIR="/tmp/simet-ma/$_time_of_exection"
+  BASEDIR=$(mktemp -t -d simet-ma-run_XXXXXXXXXXXX) || {
+    log_error "could not create temporary work directory"
+    exit 1
+  }
   log_debug "Files will be collected in $BASEDIR"
   mkdir -p "$BASEDIR/report"
 
   # 2. prepare env variables
+  local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export REPORT_SCHEDULE="$LMAP_SCHEDULE"
   export REPORT_EVENT="$_time_of_exection"
   REPORT_MAC_ADDRESS_TAG_ENTRY=
@@ -457,9 +460,8 @@ _main_setup(){
 
 _main_cleanup(){
   # delete files of this execution
-  if [ "$DEBUG" != "true" ]; then
-    rm -fr $BASEDIR
-  fi
+  [ "$DEBUG" != "true" ] && [ -n "$BASEDIR" ] && [ -d "$BASEDIR" ] && rm -fr "$BASEDIR"
+  :
 }
 
 _main_config(){

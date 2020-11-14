@@ -18,6 +18,8 @@
 simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
 simetrundir=$(localstatedir)/run/simet
+simetlockdir=$(localstatedir)/lock/simet
+simetpubrundir=$(localstatedir)/run/simet_public
 simetlmapqueuedir=$(localstatedir)/spool/lmapd/queue
 simetlmapregistrydir=$(simetlibdir)/lmap/registry.d
 simetlmapconfigdir=$(simetlibdir)/lmap/config.d
@@ -29,20 +31,20 @@ CLEANFILES=
 simetenginename=nic_simet2_simet-ma
 
 if SIMETBOX_BUILD
-dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh simetbox_fping-to-gateway.sh
+dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh
 sbprefix = simetbox
 jsonfilter=jsonfilter
 theshell=/bin/sh
 smallmemory=1
 else
-dist_bin_SCRIPTS = simet_lmap-fetch-schedule.sh
+dist_bin_SCRIPTS = simet_lmap-fetch-schedule.sh simet_view_results.sh
 sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
 theshell=/bin/bash
 smallmemory=0
 endif
 
-EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
+EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in simet_view_results.sh.in
 EXTRA_DIST += simetbox_fping-to-gateway.sh.in
 
 dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh
@@ -80,6 +82,12 @@ endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh lmap-tasks/lmap-traceroute-wrapper.sh
 EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in lmap-tasks/lmap-traceroute-wrapper.sh.in
+dist_simetlmapbin_SCRIPTS += lmap-tasks/simet_fping-to-ixbr.sh
+EXTRA_DIST += lmap-tasks/simet_fping-to-ixbr.sh.in
+if SIMETBOX_BUILD
+dist_simetlmapbin_SCRIPTS += lmap-tasks/simetbox_fping-to-gateway.sh
+endif
+EXTRA_DIST += lmap-tasks/simetbox_fping-to-gateway.sh.in
 CLEANFILES += $(dist_simetlmapbin_SCRIPTS)
 
 # automake will nicely "resolve" our symlinks, thus wasting space.
@@ -118,7 +126,8 @@ config.d/simet-ma_tasklet-config.json :
 %.sh: %.sh.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" \
+	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETPUBRUNDIR@!$(simetpubrundir)!g" \
+	    -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
@@ -128,7 +137,8 @@ config.d/simet-ma_tasklet-config.json :
 %.conf: %.conf.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" \
+	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETPUBRUNDIR@!$(simetpubrundir)!g" \
+	    -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
@@ -137,7 +147,8 @@ config.d/simet-ma_tasklet-config.json :
 %.json: %.json.in
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
-	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" \
+	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETPUBRUNDIR@!$(simetpubrundir)!g" \
+	    -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPQUEUEDIR@!$(simetlmapqueuedir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
 	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
@@ -152,6 +163,8 @@ install-data-local:
 	$(MKDIR_P) -m 0711 -- "$(DESTDIR)$(simetconfdir)"
 	$(MKDIR_P) -m 0755 -- "$(DESTDIR)$(simetconfdir)/lmap"
 	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapqueuedir)"
+	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetrundir)"
+	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlockdir)"
 
 # Creates tasklet symlinks
 install-exec-hook:
@@ -165,12 +178,12 @@ install-exec-hook:
 			ln -sf lmap-traceroute-wrapper.sh "$$i" ; \
 		done
 
-conf/lmap-default-schedule.json : conf/lmap-default-schedule.$(sbprefix).json
-	cd conf && ln -sf lmap-default-schedule.$(sbprefix).json lmap-default-schedule.json
+conf/lmap-sched-template.json : conf/lmap-sched-template.$(sbprefix).json
+	cd conf && ln -sf lmap-sched-template.$(sbprefix).json lmap-sched-template.json
 
-dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-default-schedule.json
-EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-default-schedule.simetbox.json conf/lmap-default-schedule.simet.json
-CLEANFILES += conf/lmap-default-schedule.json conf/simet-ma.conf agent-version.txt
+dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-sched-template.json
+EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-sched-template.simetbox.json conf/lmap-sched-template.simet.json
+CLEANFILES += conf/lmap-sched-template.json conf/simet-ma.conf agent-version.txt
 
 simet_lib.sh.in : simet_lib.$(sbprefix).sh.in
 	ln -sf "$^" "$@"

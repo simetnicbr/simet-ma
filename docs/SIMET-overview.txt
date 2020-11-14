@@ -127,6 +127,28 @@ Brazilian laws.  You are the sole party responsible for compliance with
 any laws applicable to your use of the SIMET2 services in your location.
 
 
+SIMET2 results and reports:
+===========================
+
+Access to results and reports is only available through the SIMET portal
+and web APIs.
+
+On the SIMETBox and other embedded measurement devices, there will be a
+way to retrieve such results in the device's administration/status
+interface, but it basically just calls into the web APIs with the device's
+credentials.
+
+For generic clients, the measurement engine provides a CLI utility that
+generates the required URL to retrieve measurement results and reports,
+and when possible, tries to open it in a web browser.  This utility is
+often installed as a desktop environment menu item for easy access.
+
+By using the SIMET web APIs and portals, you agree to abide to the NIC.br
+and SIMET terms of service.  Access to these services shall be subject to
+Brazilian laws.  You are the sole party responsible for compliance with
+any laws applicable to your use of the SIMET services in your location.
+
+
 SIMET2 core measurements:
 =========================
 

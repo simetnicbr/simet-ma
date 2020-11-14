@@ -1,3 +1,64 @@
+simet-ma (0.16.15) unstable; urgency=medium
+
+  * simet-ma version 0.16.15
+  * simet-api: add new script, simet_view_reports.sh, which either shows the
+    URL (simet_view_reports.sh --url) or calls the xdg browser to show the
+    measurement report dashboard for the MA.
+  * deb: ship a freedesktop.org menu item that uses simet_view_reports.sh to
+    open the measurement results in a webpage using the default web browser.
+  * simet-api: allow docker containers to disable geolocalization measurements
+    properly, for SIMET-AS use.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 05 Nov 2020 14:44:30 -0300
+
+simet-ma (0.16.14) unstable; urgency=medium
+
+  * simet-ma version 0.16.14
+  * simet-api: generate the schedule locally using a configurable
+    measurement period for the main group of SIMET measurements, and
+    ping-to-gateway.  Any schedule received from the LMAP controller
+    will override this, though.
+  * simet-api: better spread the measurements throughout the fleet
+    even when the LMAP controller is down
+  * twamp: use CLOCK_MONOTONIC for measurements.  This avoids rare
+    measurement artifacts due to ntp/chrony/sysadmin stepping
+    the clock.
+  * simet-api: lmap: add simet_nic.br_fping-to-ixbr measurement, run
+    it every 12h
+  * simet-api: move ping-to-gateway scripts to lmap-tasks/ in source,
+    and to lmapbindir on binaries, since it is only run from an lmapd
+    context.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 22 Oct 2020 13:49:48 -0300
+
+simet-ma (0.16.13) unstable; urgency=medium
+
+  * simet-ma version 0.16.13
+  * simet-api: add preliminary version of simet_spoofer, a BCP38 validation
+    measuremet which tries to detect the (desired!) presence of protections
+    against traffic with spoofed origin addresses.  Note that this requires
+    simet-nping, a forked variant of nping(TM) from nmap(TM), to work.  The
+    simet-nping fork is a work-in-progress that changes nping echo-mode to be
+    more suitable for *this specific measurement use*, and it is likely not
+    acceptable upstream.  NOTE: THIS NEW MEASUREMENT IS NOT INSTALLED BY
+    DEFAULT, the measurement peers (servers) it needs are not yet available
+    for general service.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 13 Sep 2020 18:06:04 -0300
+
+simet-ma (0.16.12.1) unstable; urgency=medium
+
+  * simet-ma version 0.16.12.1
+  * deb: drop inetutils-* from Recommends
+  * deb: version traceroute dependency, to bypass "provides: traceroute"
+    from inetutils-traceroute
+  * simet-api: prefer traceroute.db over traceroute, as
+    the alternatives system from Debian/Ubuntu might be set
+    to inetutils-traceroute.
+  * simet-api: use /bin/bash for simet_register_ma.sh
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 13 Sep 2020 17:59:07 -0300
+
 simet-ma (0.16.12) unstable; urgency=medium
 
   * simet-ma version 0.16.12
