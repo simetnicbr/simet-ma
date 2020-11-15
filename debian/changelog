@@ -1,3 +1,17 @@
+simet-ma (0.16.16) unstable; urgency=medium
+
+  * simet-ma version 0.16.16
+  * simet-spoofer: enable the bcp38 spoofed origin measurement every 12h.
+    This is a preliminary (beta) version of this measurement.  It sends normal
+    packets as well as packets with spoofed *origin* address to specific
+    NIC.br servers, and attempts to detect the filtering point (Robert Beverly
+    and Steven Bauer; Tracefilter: A Tool for Locating Network Source Address
+    Validation Filters).  It is similar in intent to CAIDA Spoofer, but with a
+    very different implementation and set of "vantage points" (target
+    servers).
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 15 Nov 2020 19:14:05 -0300
+
 simet-ma (0.16.15) unstable; urgency=medium
 
   * simet-ma version 0.16.15
