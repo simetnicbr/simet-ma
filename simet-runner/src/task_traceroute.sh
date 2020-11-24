@@ -17,7 +17,7 @@ _task_traceroute(){
     return 0
   fi
   log_measurement "traceroute ${_tst_prefix}IPv$_af"
-  local _host=$( discover_service TRACEROUTE HOST )
+  local _host="ipv$_af.$( discover_service TRACEROUTE HOST )"
 
   export _task_name="${LMAP_TASK_NAME_PREFIX}tool_traceroute"
   export _task_version="$PACKAGE_VERSION"

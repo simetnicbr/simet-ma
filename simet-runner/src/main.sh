@@ -326,7 +326,7 @@ _task_twamp(){
     return 0
   fi
   log_measurement "TWAMP ${_tst_prefix}IPv$_af"
-  local _host=$( discover_service TWAMP HOST )
+  local _host="ipv$_af.$( discover_service TWAMP HOST )"
   local _port=$( discover_service TWAMP PORT )
   local _about=$( $TWAMPC -V | head -n1)
   set -f && set -- $_about && set +f
@@ -374,7 +374,7 @@ _task_tcpbw(){
     return 0
   fi
   log_measurement "TCPBW ${_tst_prefix}IPv$_af"
-  local _host=$( discover_service TCPBW HOST )
+  local _host="ipv$_af.$( discover_service TCPBW HOST )"
   local _port=$( discover_service TCPBW PORT )
   local _path=$( discover_service TCPBW PATH | sed 's/.$//' )
   local _about=$( $TCPBWC -V | head -n1)
