@@ -318,10 +318,14 @@ traceroute_targets() {
   end_test
 }
 
-[ -z "$TARGETS" ] && TARGETS=$(get_spoof_targets) || TARGETS=
+[ -z "$TARGETS" ] && {
+  TARGETS=$(get_spoof_targets) || TARGETS=
+}
 [ -z "$TARGETS" ] && RC=22 abend "no targets (bcp38 measurement peers) to measure with"
 
-[ -z "$KEY" ] && KEY=$(get_spoof_server_key) || KEY=
+[ -z "$KEY" ] && {
+  KEY=$(get_spoof_server_key) || KEY=
+}
 [ -z "$KEY" ] && RC=22 abend "an access key is required to run this measurement"
 
 probe_targets before
