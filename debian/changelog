@@ -1,3 +1,10 @@
+simet-ma (0.16.16.2) unstable; urgency=medium
+
+  * simet-ma version 0.16.16.2
+  * simet-spoofer: fix --key and direct target specification in CLI
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 30 Nov 2020 18:00:13 -0300
+
 simet-ma (0.16.16.1) unstable; urgency=medium
 
   * simet-ma version 0.16.16.1
