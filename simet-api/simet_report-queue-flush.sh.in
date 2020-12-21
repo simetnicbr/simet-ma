@@ -1,0 +1,120 @@
+#!/bin/bash
+# Handle a lmapd compressed report queue (send/retry, cleanup)
+# Copyright (c) 2020 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+# Command line: list of URLs of collectors to use.  If none are given, the one
+# from the hardcoded configuration will be used.
+
+set -e
+set -o pipefail
+
+. @SIMETLIBDIR@/simet_lib.sh
+
+abend() {
+	simet_log simet-ma daemon.err "$*"
+	exit 1
+}
+
+if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
+	abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
+fi
+
+# this is normal at power-up lmapd startup on embedded MAs: no log
+[ -d "$LMAP_REPORT_QUEUE_DIR" ] || exit 0
+
+# Fast exit should the queue be empty
+# Note: some versions of OpenWRT "find" lack -quit
+[ -z "$(find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | head -n1)" ] && exit 0
+
+COLLECTORS="$*"
+[ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
+[ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
+
+USERAGENT=$(get_http_useragent)
+CURLOPT="$CURL_APIOPT"
+
+# parameters:
+# $1 - report filename (must be a .gz file)
+# $2.. - collectors
+send_report_to_collector() {
+    reportfn="$1"
+    shift
+
+    [ -s "$reportfn" ] || return 0
+
+    malformed=0
+    while [ $# -gt 0 ] ; do
+	APIRES=$( gzip -cd "$reportfn" | curl $CURLOPT -A "$USERAGENT" \
+		--data-binary @- -X POST \
+		-o /dev/null -w "%{http_code}" \
+		-H "Authorization: Bearer $OLDAT" \
+		-H "Content-Type: application/yang.data+json" \
+		"$1" ) || APIRES=
+
+	case "$APIRES" in
+	200)
+		simet_log simet-ma daemon.info "LMAP report accepted by collector $1"
+		rm -f "$reportfn"
+		return 0
+		;;
+	400)
+		malformed=1
+		;;
+	esac
+	shift
+    done
+    if [ "$malformed" -eq 1 ] ; then
+	simet_log simet-ma daemon.warn "LMAP report rejected by all collectors, discarding it"
+	rm -f "$reportfn"
+	return 0
+    fi
+    return 1
+}
+
+simet_reportqueue_runqueue() {
+    OLDAT=
+    OLDAID=
+    [ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
+    [ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+
+    # We *require* an agent-id and agent token to submit reports
+    if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] || [ ! -r "$LMAP_AGENT_FILE" ] ; then
+	abend "MA not registered yet, cannot submit reports"
+    fi
+
+    # beware the stripped-down busybox "find" in OpenWRT!
+
+    find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | while read -r fn ; do
+	if [ -s "$fn" ] && gzip -t "$fn" >/dev/null 2>&1 ; then
+	    send_report_to_collector "$fn" $COLLECTORS || :
+	else
+	    [ -s "$fn" ] && simet_log simet-ma daemon.warn "queued report '$fn' corrupt, discarding it..."
+	    [ -n "$fn" ] && rm -f "$fn"
+	fi
+    done
+
+    # remove stale data such as maybe-incomplete uncompressed reports
+    find "$LMAP_REPORT_QUEUE_DIR" -type f -mtime +0 ! -name '*.report.json.gz' ! -name '*.lock' -print0 | xargs -0 -r rm -f
+
+    waiting=$(find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print 2>/dev/null | wc -l) || waiting=0
+    [ "$waiting" -gt 0 ] && {
+	simet_log simet-ma daemon.notice "$waiting report(s) still waiting for delivery"
+    }
+}
+
+cd "$LMAP_REPORT_QUEUE_DIR" || abend "cannot change to LMAP_REPORT_QUEUE_DIR"
+{ flock -n -x 9 && simet_reportqueue_runqueue ; } <&- 9>"$LMAP_REPORT_QUEUE_DIR/.report-flush.lock" || :
+:

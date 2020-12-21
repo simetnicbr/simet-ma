@@ -12,6 +12,7 @@ registry.d/simetbox_base-registry.json
 simet*_register_ma.sh
 simet*_view_results.sh
 simet-ma_periodic.sh
+simet_report-queue-flush.sh
 simet*_lmap-fetch-schedule.sh
 simet*_lmap-create-report.sh
 simet*_lmap-send-report.sh

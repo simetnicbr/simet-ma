@@ -2,6 +2,8 @@
 "tasks":{"task":[
   { "name":"simet.nic.br_report",
     "program":"@BINDIR@/simet_lmap-send-report.sh" },
+  { "name":"simet.nic.br_report-queue-flush",
+    "program":"@BINDIR@/simet_report-queue-flush.sh" },
   { "name":"simet.nic.br_reschedule",
     "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
   { "name":"simet.nic.br_agent-info",

@@ -83,7 +83,12 @@
   { "name":"ma-local_periodic_report",
     "start":"every-fifteen-minutes",
     "execution-mode":"sequential",
-    "action":[ { "name":"simet.nic.br_report","task":"simet.nic.br_report" } ]
+    "action":[{"name":"simet.nic.br_report","task":"simet.nic.br_report"}]
+  },
+  { "name":"ma-local_report-queue-flush",
+    "start":"every-fifteen-minutes",
+    "execution-mode":"sequential",
+    "action":[{"name":"simet.nic.br_report-queue-flush","task":"simet.nic.br_report-queue-flush"}]
   }
 ]},"events":{"event":[
   { "name":"ma-local_ev-default-periodic-test-run",
