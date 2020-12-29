@@ -97,7 +97,7 @@ simet_reportqueue_runqueue() {
 
     # beware the stripped-down busybox "find" in OpenWRT!
 
-    find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | while read -r fn ; do
+    find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | sort | while read -r fn ; do
 	if [ -s "$fn" ] && gzip -t "$fn" >/dev/null 2>&1 ; then
 	    send_report_to_collector "$fn" $COLLECTORS || :
 	else

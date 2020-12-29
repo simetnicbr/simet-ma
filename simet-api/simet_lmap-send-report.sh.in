@@ -105,12 +105,12 @@ if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] || [ ! -r "$LMAP_AGENT_FILE" ] ; then
     abend "MA not registered yet, cannot submit reports"
 fi
 
-OUTFILE=$(mktemp -q -t simet-report.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
+TIMENOW=$(date +%s) || TIMENOW=
+OUTFILE=$(mktemp -q -p "$LMAP_REPORT_QUEUE_DIR" "simet-report.$TIMENOW.XXXXXXXXXX") || abend "failed to create tmpfile"
 
 # don't leave behind tmpfiles
 trap 'run_trap' INT TERM QUIT
 
-OUTFILE=$(mktemp -q -p "$LMAP_REPORT_QUEUE_DIR" "simet-report.XXXXXXXXXX") || abend "failed to create tmpfile"
 if (export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > "$OUTFILE" ; then
     send_report_to_collector $COLLECTORS || {
 	# unsent, try to queue
