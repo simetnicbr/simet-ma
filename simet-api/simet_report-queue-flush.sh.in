@@ -16,6 +16,7 @@
 # for details.
 
 # Command line:
+#   --fast:     do not wait for slow-to-respond LMAP collectors
 #   --max-age:  clean up unsent reports older than max-age days
 #               (done before --max-size is checked)
 #   --max-size: clean up unsent reports until the queue is below
@@ -35,8 +36,8 @@ set -o pipefail
 . @SIMETLIBDIR@/simet_lib.sh
 
 abend() {
-	simet_log simet-ma daemon.err "$*"
-	exit 1
+    simet_log simet-ma daemon.err "$*"
+    exit 1
 }
 
 COLLECTORS=
@@ -45,6 +46,10 @@ MAX_SIZE=
 MAX_AGE=
 while [ $# -gt 0 ] ; do
     case "$1" in
+	--fast)
+	    # give up network operations faster
+	    CURLOPT="--retry 3 --retry-max-time 30"
+	    ;;
 	--max-age)
 	    shift
 	    MAX_AGE="$1"
@@ -68,7 +73,7 @@ while [ $# -gt 0 ] ; do
 done
 
 if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
-	abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
+    abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
 fi
 
 [ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
@@ -82,7 +87,6 @@ fi
 [ -z "$(find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | head -n1)" ] && exit 0
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT"
 
 # parameters:
 # $1 - report filename (must be a .gz file)
@@ -95,7 +99,7 @@ send_report_to_collector() {
 
     malformed=0
     while [ $# -gt 0 ] ; do
-	APIRES=$( gzip -cd "$reportfn" | curl $CURLOPT -A "$USERAGENT" \
+	APIRES=$( gzip -cd "$reportfn" | curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
 		--data-binary @- -X POST \
 		-o /dev/null -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \

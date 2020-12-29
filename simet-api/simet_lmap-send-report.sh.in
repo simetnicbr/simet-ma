@@ -20,7 +20,13 @@
 # runs us in a task workspace, the schedule processing queue will be in the
 # parent directory, and we can be sure it is stable.
 
-# Command line: list of URLs of collectors to use.  If none are given, the one
+# Command line:
+# options:
+#  --queue, --no-queue: should queue or not (if unsent), default --queue
+#  --send, --no-send:   should try to send to collector or not, default --send
+#  --fast:              do not wait for a slow-to-respond LMAP collector
+#
+# list of URLs of collectors to use.  If none are given, the one
 # from the hardcoded configuration will be used.
 
 # The gzip-compressed report will be sent to stdout if no collectors
@@ -35,20 +41,56 @@ set -o pipefail
 
 OUTFILE=
 abend() {
-	simet_log simet-ma daemon.err "$*"
-	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" "$OUTFILE.gz" 2>/dev/null
-	exit 1
+    simet_log simet-ma daemon.err "$*"
+    [ -n "$OUTFILE" ] && rm -f "$OUTFILE" "$OUTFILE.gz" 2>/dev/null
+    exit 1
 }
 run_trap() {
 	abend "$0: received stop/interrupt signal"
 }
+
+COLLECTORS=
+CURLOPT=
+DO_QUEUE=1
+DO_SEND=1
+while [ $# -gt 0 ] ; do
+    case "$1" in
+	--fast)
+	    # give up network operations faster
+	    CURLOPT="--retry 3 --retry-max-time 30"
+	    ;;
+	--queue)
+	    DO_QUEUE=1
+	    ;;
+	--no-queue)
+	    DO_QUEUE=0
+	    ;;
+	--send)
+	    DO_SEND=1
+	    ;;
+	--no-send)
+	    DO_SEND=0
+	    ;;
+	--queue-only)
+	    DO_SEND=0
+	    DO_QUEUE=1
+	    ;;
+	-*)
+	    #abend "Unknown option $1"
+	    ;;
+	*)
+	    COLLECTORS="$COLLECTORS $1"
+	    ;;
+    esac
+    shift
+done
 
 # Do nothing when there are no input data files, otherwise lmapctl would
 # log errors.  Note: some versions of OpenWRT "find" lack -quit
 [ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
 
 if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
-	abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
+    abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
 fi
 
 [ -d "$LMAP_REPORT_QUEUE_DIR" ] || mkdir -m 0770 -p "$LMAP_REPORT_QUEUE_DIR"
@@ -56,22 +98,23 @@ fi
 
 LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
 
-COLLECTORS=
-while [ $# -gt 0 ] ; do
-	COLLECTORS="$COLLECTORS $1"
-	shift
-done
 [ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
 [ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
+[ "$DO_QUEUE" -eq 0 ] && [ "$DO_SEND" -eq 0 ] && {
+    simet_log simet-ma daemon.warn "discarding report by request (--no-queue --no-send)"
+    exit 0
+}
+
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT"
 
 # parameters: list of possible collectors to try to send to
 send_report_to_collector() {
+    [ "$DO_SEND" -eq 0 ] && return 1
+
     malformed=0
     while [ $# -gt 0 ] ; do
-	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
+	APIRES=$( curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
 		--data-binary "@$OUTFILE" -X POST \
 		-o /dev/null -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
@@ -114,9 +157,11 @@ trap 'run_trap' INT TERM QUIT
 if (export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > "$OUTFILE" ; then
     send_report_to_collector $COLLECTORS || {
 	# unsent, try to queue
-	if gzip "$OUTFILE" && mv -f "$OUTFILE.gz" "$OUTFILE.report.json.gz" ; then
+	if [ "$DO_QUEUE" -eq 1 ] && gzip "$OUTFILE" && mv -f "$OUTFILE.gz" "$OUTFILE.report.json.gz" ; then
 	    simet_log simet-ma daemon.debug "queued report: $OUTFILE.report.json.gz"
 	    OUTFILE=
+	elif [ "$DO_QUEUE" -eq 0 ] ; then
+	    simet_log simet-ma daemon.notice "$0: discarding unsent report by request (--no-queue)"
 	else
 	    # FIXME: if we return non-zero status, there is no loss but we waste space
 	    # with the uncompressed report source data.  That would be *bad* since the
