@@ -15,8 +15,19 @@
 # General Public License and the COPYING file in the program Source
 # for details.
 
-# Command line: list of URLs of collectors to use.  If none are given, the one
+# Command line:
+#   --max-age:  clean up unsent reports older than max-age days
+#               (done before --max-size is checked)
+#   --max-size: clean up unsent reports until the queue is below
+#               max-size kibibytes.
+#
+# list of URLs of collectors to use.  If none are given, the one
 # from the hardcoded configuration will be used.
+#
+# Note: this script does *not* remove unsent reports when the amount
+# of free resources is "large enough", regardless of --max-size/age.
+# There are defaults and limits hardcoded that apply regardless of
+# --max-age/size.
 
 set -e
 set -o pipefail
@@ -28,9 +39,40 @@ abend() {
 	exit 1
 }
 
+COLLECTORS=
+CURLOPT=
+MAX_SIZE=
+MAX_AGE=
+while [ $# -gt 0 ] ; do
+    case "$1" in
+	--max-age)
+	    shift
+	    MAX_AGE="$1"
+	    [ -n "$MAX_AGE" ] && [ "$MAX_AGE" -ge 1 ] 2>/dev/null \
+		|| abend "--max-age <days>, days must be >= 1"
+	    ;;
+	--max-size)
+	    shift
+	    MAX_SIZE="$1"
+	    [ -n "$MAX_SIZE" ] && [ "$MAX_SIZE" -ge 100 ] 2>/dev/null \
+		|| abend "--max-size <size in KiB>, size must be >= 100 kibibytes"
+	    ;;
+	-*)
+	    #abend "Unknown option $1"
+	    ;;
+	*)
+	    COLLECTORS="$COLLECTORS $1"
+	    ;;
+    esac
+    shift
+done
+
 if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
 	abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
 fi
+
+[ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
+[ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
 # this is normal at power-up lmapd startup on embedded MAs: no log
 [ -d "$LMAP_REPORT_QUEUE_DIR" ] || exit 0
@@ -38,10 +80,6 @@ fi
 # Fast exit should the queue be empty
 # Note: some versions of OpenWRT "find" lack -quit
 [ -z "$(find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | head -n1)" ] && exit 0
-
-COLLECTORS="$*"
-[ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
-[ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT"
@@ -84,6 +122,75 @@ send_report_to_collector() {
     return 1
 }
 
+# discards older unsent reports
+# what we have:
+#   du -k -s <paths> will return disk use for each path
+#   df -P -k <path> will return the percent full, free space, etc.
+#   find <path> -mtime +# -type f -print0 | xargs -r -0
+#
+# beware shell disliking large numbers, use || when assuming error-because-too-large
+# for embedded, we also try to track free memory, not portable.
+# at least for $memfree, keep in mind it might be empty
+enough_free_space() {
+    tmpfs_mem_check=0
+    memfree=
+    df -T "$LMAP_REPORT_QUEUE_DIR" 2>/dev/null | grep -q tmpfs && {
+        memfree=$(grep -s -i "^MemFree:" /proc/meminfo 2>/dev/null | sed -nE -e '{s/.*:[ \t]*//;s/[ \t]+[kK].*//;p;q}') \
+	    && [ "$memfree" -ge 1 ] 2>/dev/null && tmpfs_mem_check=1
+    }
+
+    # using tmpfs, and free RAM too low: do remove
+    [ "$tmpfs_mem_check" -eq 1 ] && [ "$memfree" -le 2048 ] && return 1
+
+    # we depend on -o pipefail here
+    duo=$(du -k -s "$LMAP_REPORT_QUEUE_DIR" 2>/dev/null | sed -n -E '/^[0-9]/ {s/(^[0-9]+).*/\1/;p;q}') \
+       && [ "$duo" -ge 0 ] 2>/dev/null || duo=
+    dfo=$(df -k -P "$LMAP_REPORT_QUEUE_DIR" 2>/dev/null | sed -n -E '/[0-9]%/ {s/[ \t]+/ /g;s/%//g;p;q}') || dfo=
+
+    [ -n "$duo" ] && {
+	# don't remove anything if we're using less than 100KiB (or on overflow)
+	[ "$duo" -ge 100 ] || return 0
+	# Free RAM low, and we'd help a lot by removing unsent reports: do remove
+	[ "$tmpfs_mem_check" -eq 1 ] && [ "$memfree" -le 10240 ] && [ "$duo" -ge 1024 ] && return 1
+    }
+
+    df_free=$(printf '%s' "$dfo" | cut -d ' ' -f 4) || df_free=
+    [ -n "$df_free" ] && {
+	# don't remove anything if we have more than 100MiB free
+	[ "$df_free" -lt 102400 ] || return 0
+	# if we're under 1MiB free, *do* remove
+	[ "$df_free" -lt 1024 ] && return 1
+    }
+
+    #df_userel=$(printf '%s' "$dfo" | cut -d ' ' -f 5) || df_userel=
+    #df_used=$(printf '%s' "$dfo" | cut -d ' ' -f 3) || df_used=
+
+    [ -n "$duo" ] && [ -n "$MAX_SIZE" ] && {
+	# don't remove if we'd free too little
+	[ -n "$df_free" ] && {
+	    [ "$df_free" -lt $((duo * 10)) ] || return 0
+	}
+	[ "$duo" -lt "$MAX_SIZE" ] || return 1
+    }
+    #[ "$duo" -le 10240 ] && [ "$df_userel" -le 95 ] && return 0
+
+    return 0
+}
+discard_older() {
+    enough_free_space "$LMAP_REPORT_QUEUE_DIR" && return
+    [ -n "$MAX_AGE" ] && [ "$MAX_AGE" -ge 1 ] && {
+	find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json*' -mtime "+$((MAX_AGE - 1))" -print | while read -r fn ; do
+	    [ -f "$fn" ] && rm -f "$fn" && simet_log simet-ma daemon.warn "removed unsent report $fn due to old age, report lost"
+        done
+        enough_free_space "$LMAP_REPORT_QUEUE_DIR" && return
+    }
+    find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json*' -print | sort | while read -r fn ; do
+	[ -f "$fn" ] && rm -f "$fn" && simet_log simet-ma daemon.warn "removed unsent report $fn to free space, report lost"
+	enough_free_space "$LMAP_REPORT_QUEUE_DIR" && return
+    done
+    :
+}
+
 simet_reportqueue_runqueue() {
     OLDAT=
     OLDAID=
@@ -108,6 +215,8 @@ simet_reportqueue_runqueue() {
 
     # remove stale data such as maybe-incomplete uncompressed reports
     find "$LMAP_REPORT_QUEUE_DIR" -type f -mtime +0 ! -name '*.report.json.gz' ! -name '*.lock' -print0 | xargs -0 -r rm -f
+
+    discard_older
 
     waiting=$(find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print 2>/dev/null | wc -l) || waiting=0
     [ "$waiting" -gt 0 ] && {
