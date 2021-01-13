@@ -241,24 +241,32 @@ _main_orchestrate(){
   else
     local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
   fi
-  _resp=$(curl \
-    --request POST \
-    --header "Content-Type: application/yang.data+json" \
-    --header "Authorization: Bearer $AGENT_TOKEN" \
-    --data "@$_report_dir/result.json"  \
-    --silent \
-    --fail \
-    --location \
-    --show-error \
-    --verbose \
-    "${_endpoint}measure" 2>&1
-  ) || {
-    log_error "failed to submit LMAP report, measurement results will be lost"
-    log_debug "HTTP Trace: ${_resp}"
-    log_debug "Task REPORT failed"
-    return 1
-  }
-  log_notice "LMAP measurement report accepted by collector: $_endpoint"
+  if [ -x "$LMAPSENDREPORT" ] ; then
+    $LMAPSENDREPORT --fast --use-report "$_report_dir/result.json" "${_endpoint}measure" || {
+      log_debug "Task REPORT failed"
+      return 1
+    }
+  else
+    log_info "LMAPSENDREPORT config missing, trying a direct submission"
+    _resp=$(curl \
+      --request POST \
+      --header "Content-Type: application/yang.data+json" \
+      --header "Authorization: Bearer $AGENT_TOKEN" \
+      --data "@$_report_dir/result.json"  \
+      --silent \
+      --fail \
+      --location \
+      --show-error \
+      --verbose \
+      "${_endpoint}measure" 2>&1
+    ) || {
+      log_error "failed to submit LMAP report, measurement results will be lost"
+      log_debug "HTTP Trace: ${_resp}"
+      log_debug "Task REPORT failed"
+      return 1
+    }
+    log_notice "LMAP measurement report accepted by collector: $_endpoint"
+  fi
   log_debug "End task REPORT"
 }
 

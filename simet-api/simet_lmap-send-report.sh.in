@@ -25,6 +25,7 @@
 #  --queue, --no-queue: should queue or not (if unsent), default --queue
 #  --send, --no-send:   should try to send to collector or not, default --send
 #  --fast:              do not wait for a slow-to-respond LMAP collector
+#  --use-report <file>: use the specified file as the full report
 #
 # list of URLs of collectors to use.  If none are given, the one
 # from the hardcoded configuration will be used.
@@ -53,6 +54,8 @@ COLLECTORS=
 CURLOPT=
 DO_QUEUE=1
 DO_SEND=1
+DO_RENDER=1
+INPUT_REPORT=
 while [ $# -gt 0 ] ; do
     case "$1" in
 	--fast)
@@ -75,6 +78,13 @@ while [ $# -gt 0 ] ; do
 	    DO_SEND=0
 	    DO_QUEUE=1
 	    ;;
+	--use-report)
+	    INPUT_REPORT="$2"
+	    [ -n "$INPUT_REPORT" ] && [ -r "$INPUT_REPORT" ] || \
+		abend "--use-report requires a report filename as a parameter"
+	    DO_RENDER=0
+	    shift
+	    ;;
 	-*)
 	    #abend "Unknown option $1"
 	    ;;
@@ -87,7 +97,7 @@ done
 
 # Do nothing when there are no input data files, otherwise lmapctl would
 # log errors.  Note: some versions of OpenWRT "find" lack -quit
-[ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
+[ "$DO_RENDER" -ne 0 ] && [ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
 
 if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
     abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
@@ -138,6 +148,15 @@ send_report_to_collector() {
     return 1
 }
 
+render_report() {
+    if [ "$DO_RENDER" -ne 0 ] ; then
+	(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > "$1" || return $?
+    else
+	cat "$INPUT_REPORT" > "$1" || return $?
+    fi
+    :
+}
+
 OLDAT=
 OLDAID=
 [ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
@@ -154,7 +173,7 @@ OUTFILE=$(mktemp -q -p "$LMAP_REPORT_QUEUE_DIR" "simet-report.$TIMENOW.XXXXXXXXX
 # don't leave behind tmpfiles
 trap 'run_trap' INT TERM QUIT
 
-if (export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > "$OUTFILE" ; then
+if render_report "$OUTFILE" ; then
     send_report_to_collector $COLLECTORS || {
 	# unsent, try to queue
 	if [ "$DO_QUEUE" -eq 1 ] && gzip "$OUTFILE" && mv -f "$OUTFILE.gz" "$OUTFILE.report.json.gz" ; then

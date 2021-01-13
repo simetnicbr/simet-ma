@@ -44,3 +44,4 @@ GEOLOCATE=@BINDIR@/simet_geolocation.sh
 TWAMPC=@BINDIR@/twampc
 TCPBWC=@BINDIR@/tcpbwc
 JSONFILTER=@JSONFILTER@
+LMAPSENDREPORT=@BINDIR@/simet_lmap-send-report.sh
