@@ -81,7 +81,7 @@
     ]
   },
   { "name":"ma-local_periodic_report",
-    "start":"every-fifteen-minutes",
+    "start":"every-five-minutes",
     "execution-mode":"sequential",
     "action":[{"name":"simet.nic.br_report","task":"simet.nic.br_report"}]
   },
@@ -118,6 +118,7 @@
   { "name":"immediate","immediate":[null] },
   { "name":"startup-delayed","random-spread":300,"startup":[null] },
   { "name":"every-minute","random-spread":5,"periodic":{"interval":60} },
+  { "name":"every-five-minutes","random-spread":15,"periodic":{"interval":300} },
   { "name":"every-fifteen-minutes","random-spread":15,"periodic":{"interval":900} },
   { "name":"every-hour","random-spread":300,"periodic":{"interval":3600} },
   { "name":"every-three-hours","random-spread":300,"periodic":{"interval":10800} },
