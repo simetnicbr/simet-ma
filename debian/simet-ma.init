@@ -27,9 +27,14 @@ PIDFILE=/var/run/simet-inetupc.pid
 
 START_ARGS="-u $SUSER -c $SUSER --background --make-pidfile"
 
-RC=0
-. /opt/simet/lib/simet/simet_lib_config.sh || RC=$?
-if [ $RC -ne 0 ] || [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || \
+# SIMET_CFG_LOAD_ERROR is also internally set in simet_lib_config.sh
+SIMET_CFG_LOAD_ERROR=
+. /opt/simet/lib/simet/simet_lib_config.sh || SIMET_CFG_LOAD_ERROR=1
+if [ -n "$SIMET_CFG_LOAD_ERROR" ] ; then
+	echo "$0: syntax errors in the configuration files, aborting..." >&2
+	exit 1
+fi
+if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || \
    [ -z "$GEOLOC_CACHE" ] || [ -z "$SIMET_INETUP_SERVER" ] ; then
 	echo "$0: required configuration missing, aborting..." >&2
 	exit 1
