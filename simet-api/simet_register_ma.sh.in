@@ -24,6 +24,8 @@
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 umask 0022
 
 RC=1
@@ -37,8 +39,6 @@ clean_exit() {
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 0
 }
-
-. @SIMETLIBDIR@/simet_lib.sh
 
 # FIXME: We can and should remove this after the "point of no return"
 # of support for downgrading without MA measurement continuity loss.

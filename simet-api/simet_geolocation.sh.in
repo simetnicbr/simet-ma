@@ -22,7 +22,10 @@
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 OUTFILE=
+RC=1
 abend() {
   [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
   simet_log simet-ma daemon.err "geolocation: error: $*"
@@ -35,19 +38,15 @@ soft_abend() {
   exit "$RC"
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
-
 [ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
 [ -n "$GEOLOC_DISABLE" ] && {
 	simet_log simet-ma daemon.info "geolocation: disabled by configuration"
 	exit 26
 }
 
-OUTFILE=
 FAIL_SILENTLY=
 CACHE_ONLY=
 MAX_AGE=259200
-RC=1
 
 API_SIMET_GEO=${API_SIMET_GEO:-https://api.simet.nic.br/geolocation}
 

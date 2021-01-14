@@ -13,14 +13,16 @@
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 OUTFILE=
+RC=1
 abend() {
   [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-  echo "$0: error: $*" >&2
+  simet_log simet-ma daemon.err "$0: error: $*"
   exit "$RC"
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
 [ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
 
 if [ -z "$SIMET2_VLABEL" ] ; then

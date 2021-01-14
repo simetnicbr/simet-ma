@@ -24,6 +24,8 @@
 
 set -e
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 RC=1
 abend() {
 	simet_log simet-ma daemon.err "error: $*"
@@ -35,7 +37,6 @@ usage() {
 	:
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
 simet_load_hooks view_results
 
 URLMODE=

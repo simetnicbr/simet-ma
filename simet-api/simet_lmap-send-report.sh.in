@@ -26,13 +26,13 @@
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 abend() {
 	simet_log simet-ma daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
-
-. @SIMETLIBDIR@/simet_lib.sh
 
 # Do nothing when there are no input data files, otherwise lmapctl would
 # log errors.  Note: some versions of OpenWRT "find" lack -quit

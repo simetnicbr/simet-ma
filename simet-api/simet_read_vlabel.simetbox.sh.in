@@ -12,7 +12,9 @@ abend() {
   exit "$RC"
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
+. @SIMETLIBDIR@/simet_lib.sh || RC=3 abend "simet_lib.sh malfunction"
+
+RC=1
 
 [ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
 [ -r "$AGENT_VLABEL_FILE" ] || RC=20 abend "MA is missing its virtual label"

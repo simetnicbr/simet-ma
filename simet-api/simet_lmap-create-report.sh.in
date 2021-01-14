@@ -25,7 +25,8 @@
 set -e
 set -o pipefail
 
-. @SIMETLIBDIR@/simet_lib.sh
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
 
 # Do nothing if no input data files, otherwise lmapctl would log errors

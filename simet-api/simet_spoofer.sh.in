@@ -10,7 +10,10 @@
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 OUTDIR=
+RC=1
 abend() {
   [ -n "$OUTDIR" ] && [ -d "$OUTDIR" ] && rm -fr "$OUTDIR" 2>/dev/null
   simet_log simet-ma daemon.err "simet-spoofer: error: $*"
@@ -22,8 +25,6 @@ soft_abend() {
   simet_log simet-ma daemon.err "simet-spoofer: error: $*"
   exit "$RC"
 }
-
-. @SIMETLIBDIR@/simet_lib.sh
 
 command -v simet-nping >/dev/null || RC=3 abend "simet-nping not found on PATH"
 TRACEROUTE=$(command -v traceroute.db || command -v traceroute) || RC=3 abend "traceroute not found on PATH"
