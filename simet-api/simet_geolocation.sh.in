@@ -64,11 +64,13 @@ done
 
 API_SIMET_GEO=${API_SIMET_GEO:-https://api.simet.nic.br/geolocation}
 
-[ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
 [ -n "$GEOLOC_DISABLE" ] && {
-	simet_log simet-ma daemon.info "geolocation: disabled by configuration"
+	[ -n "$FAIL_SILENTLY" ] && exit 0
+	[ -n "$CACHE_ONLY" ] \
+		|| simet_log simet-ma daemon.info "geolocation: disabled by configuration"
 	exit 26
 }
+[ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
 
 # We *require* an agent-id and agent token to get an API key
 OLDAT=
