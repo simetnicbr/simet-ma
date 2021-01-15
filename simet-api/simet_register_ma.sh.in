@@ -39,6 +39,10 @@ clean_exit() {
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 0
 }
+run_trap() {
+	# 128 + SIGTERM (15)
+	RC=143 abend "$0: received stop/interrupt signal"
+}
 
 # FIXME: We can and should remove this after the "point of no return"
 # of support for downgrading without MA measurement continuity loss.

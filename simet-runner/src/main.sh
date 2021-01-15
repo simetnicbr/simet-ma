@@ -446,6 +446,9 @@ _main_setup(){
   log_debug "Files will be collected in $BASEDIR"
   mkdir -p "$BASEDIR/report"
 
+  # Remove $BASEDIR if interrupted to avoid wasting tmpfs space on embedded devices
+  trap '_main_run_trap' INT TERM QUIT
+
   # 2. prepare env variables
   local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export REPORT_SCHEDULE="$LMAP_SCHEDULE"
@@ -462,6 +465,12 @@ _main_cleanup(){
   # delete files of this execution
   [ "$DEBUG" != "true" ] && [ -n "$BASEDIR" ] && [ -d "$BASEDIR" ] && rm -fr "$BASEDIR"
   :
+}
+
+_main_run_trap(){
+  _main_cleanup || :
+  log_error "$0: received stop/interrupt signal..."
+  exit 143
 }
 
 _main_config(){

@@ -25,6 +25,10 @@ soft_abend() {
   simet_log simet-ma daemon.err "simet-spoofer: error: $*"
   exit "$RC"
 }
+run_trap() {
+	# 128 + SIGTERM(15)
+	RC=143 soft_abend "$0: received stop/interrupt signal"
+}
 
 command -v simet-nping >/dev/null || RC=3 abend "simet-nping not found on PATH"
 TRACEROUTE=$(command -v traceroute.db || command -v traceroute) || RC=3 abend "traceroute not found on PATH"
@@ -103,6 +107,9 @@ done
 OUTDIR=$(mktemp -q -t -d simet-spoofer.$$.XXXXXXXXXX) \
   || abend "could not create work directory"
 [ -d "$OUTDIR" ] || RC=3 abend "weirdness while creating work directory"
+
+# do not leave behind tmpfiles
+trap 'run_trap' INT TERM QUIT
 
 # FIXME: fetch a key for each target?
 get_spoof_server_key() {

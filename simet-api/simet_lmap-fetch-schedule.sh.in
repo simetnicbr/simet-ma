@@ -26,6 +26,9 @@ abend() {
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
+run_trap() {
+	abend "$0: received stop/interrupt signal"
+}
 
 # if this is missing, the MA will have *no* hardcoded schedule
 LMAP_DFLSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
@@ -296,6 +299,9 @@ getschedule() {
 
 	OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
 		|| abend "failed to create tmpfile"
+
+	# don't leave behind tmpfiles
+	trap 'run_trap' INT TERM QUIT
 
 	LMAPD_NEED_RELOAD=0
 	# Create a local schedule if there isn't any schedule yet.  We send it to
