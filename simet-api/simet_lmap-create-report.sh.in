@@ -1,6 +1,6 @@
 #!/bin/bash
 # Render a LMAP report, and compress it for later sending
-# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+# Copyright (c) 2019-2020 NIC.br <medicoes@simet.nic.br>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,22 +15,65 @@
 # General Public License and the COPYING file in the program Source
 # for details.
 
-# This program is supposed to be run from a simet-lmapd task, and
-# expects the environment and directories to be correct for a simet-lmapd
-# task.
+# This program is supposed to be run from a simet-lmapd task, and expects the
+# environment and directories to be correct for a simet-lmapd task. simet-lmapd
+# runs us in a task workspace, the schedule processing queue will be in the
+# parent directory, and we can be sure it is stable.
 
-# Command line: none (ignored)
-# Environment variables: $LMAPCTL, etc.
+# The gzip-compressed report will be queued for simet_report-queue-flush.sh to
+# send later.
 
 set -e
+# this script depends on pipefail behavior
 set -o pipefail
 
-. @SIMETLIBDIR@/simet_lib.sh
-LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
 
-# Do nothing if no input data files, otherwise lmapctl would log errors
-# Note: some versions of OpenWRT "find" lack -quit
+OUTFILE=
+abend() {
+	simet_log simet-ma daemon.err "$*"
+	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+	exit 1
+}
+run_trap() {
+	abend "$0: received stop/interrupt signal"
+}
+
+# Do nothing when there are no input data files, otherwise lmapctl would
+# log errors.  Note: some versions of OpenWRT "find" lack -quit
 [ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
 
-export TZ=UTC0
-cd .. && $LMAPCTL -i json report | gzip -c
+if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
+	abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
+fi
+
+# Create queue dir if it is not there yet
+[ -d "$LMAP_REPORT_QUEUE_DIR" ] || mkdir -m 0770 -p "$LMAP_REPORT_QUEUE_DIR"
+[ -d "$LMAP_REPORT_QUEUE_DIR" ] || abend "could not access or create $LMAP_REPORT_QUEUE_DIR"
+
+LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
+
+OLDAT=
+OLDAID=
+[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
+[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+
+# We *require* an agent-id and agent token to submit reports
+if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] || [ ! -r "$LMAP_AGENT_FILE" ] ; then
+	abend "MA not registered yet, cannot submit reports"
+fi
+
+TIMENOW=$(date +%s) || TIMENOW=
+OUTFILE=$(mktemp -q -p "$LMAP_REPORT_QUEUE_DIR" "simet-report.$TIMENOW.XXXXXXXXXX") || abend "failed to create tmpfile"
+
+# cleanup tmpfiles if we get interrupted
+trap 'run_trap' INT TERM QUIT
+
+# -o pipefail matters here!
+(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report | gzip -c) > "$OUTFILE" || {
+	abend "failed to render compressed report"
+}
+mv -f "$OUTFILE" "$OUTFILE.report.json.gz" || \
+	abend "failed to atomic rename report, report lost"
+OUTFILE=
+:

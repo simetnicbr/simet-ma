@@ -241,24 +241,32 @@ _main_orchestrate(){
   else
     local _endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
   fi
-  _resp=$(curl \
-    --request POST \
-    --header "Content-Type: application/yang.data+json" \
-    --header "Authorization: Bearer $AGENT_TOKEN" \
-    --data "@$_report_dir/result.json"  \
-    --silent \
-    --fail \
-    --location \
-    --show-error \
-    --verbose \
-    "${_endpoint}measure" 2>&1
-  ) || {
-    log_error "failed to submit LMAP report, measurement results will be lost"
-    log_debug "HTTP Trace: ${_resp}"
-    log_debug "Task REPORT failed"
-    return 1
-  }
-  log_notice "LMAP measurement report accepted by collector: $_endpoint"
+  if [ -x "$LMAPSENDREPORT" ] ; then
+    $LMAPSENDREPORT --fast --use-report "$_report_dir/result.json" "${_endpoint}measure" || {
+      log_debug "Task REPORT failed"
+      return 1
+    }
+  else
+    log_info "LMAPSENDREPORT config missing, trying a direct submission"
+    _resp=$(curl \
+      --request POST \
+      --header "Content-Type: application/yang.data+json" \
+      --header "Authorization: Bearer $AGENT_TOKEN" \
+      --data "@$_report_dir/result.json"  \
+      --silent \
+      --fail \
+      --location \
+      --show-error \
+      --verbose \
+      "${_endpoint}measure" 2>&1
+    ) || {
+      log_error "failed to submit LMAP report, measurement results will be lost"
+      log_debug "HTTP Trace: ${_resp}"
+      log_debug "Task REPORT failed"
+      return 1
+    }
+    log_notice "LMAP measurement report accepted by collector: $_endpoint"
+  fi
   log_debug "End task REPORT"
 }
 
@@ -446,6 +454,9 @@ _main_setup(){
   log_debug "Files will be collected in $BASEDIR"
   mkdir -p "$BASEDIR/report"
 
+  # Remove $BASEDIR if interrupted to avoid wasting tmpfs space on embedded devices
+  trap '_main_run_trap' INT TERM QUIT
+
   # 2. prepare env variables
   local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   export REPORT_SCHEDULE="$LMAP_SCHEDULE"
@@ -462,6 +473,12 @@ _main_cleanup(){
   # delete files of this execution
   [ "$DEBUG" != "true" ] && [ -n "$BASEDIR" ] && [ -d "$BASEDIR" ] && rm -fr "$BASEDIR"
   :
+}
+
+_main_run_trap(){
+  _main_cleanup || :
+  log_error "$0: received stop/interrupt signal..."
+  exit 143
 }
 
 _main_config(){

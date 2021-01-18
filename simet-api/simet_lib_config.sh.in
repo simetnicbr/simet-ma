@@ -1,11 +1,19 @@
 #!/bin/sh
 # SIMET-MA compatibility layer (shell script)
+# DO NOT FAIL OR EXIT WITH NON-ZERO STATUS HERE IF AT ALL POSSIBLE
 
-[ -r @SIMETLIBDIR@/simet-ma.conf ] && . @SIMETLIBDIR@/simet-ma.conf
+simetlib_shopt="$-"
+set +e
+SIMET_CFG_LOAD_ERROR=
+[ -r @SIMETLIBDIR@/simet-ma.conf ] && { . @SIMETLIBDIR@/simet-ma.conf || SIMET_CFG_LOAD_ERROR=1 ; }
 [ -d @SIMETLIBDIR@/conf.d ] && {
 	for i in @SIMETLIBDIR@/conf.d/*.conf ; do
-		[ -r "$i" ] && . "$i"
+		[ -r "$i" ] && { . "$i" || SIMET_CFG_LOAD_ERROR=1 ; }
 	done
 }
-[ -r @SIMETCONFDIR@/simet-ma.conf ] && . @SIMETCONFDIR@/simet-ma.conf
+[ -r @SIMETCONFDIR@/simet-ma.conf ] && { . @SIMETCONFDIR@/simet-ma.conf || SIMET_CFG_LOAD_ERROR=1 ; }
+case "$simetlib_shopt" in
+	*e*) set -e ;;
+esac
+unset simetlib_shopt
 :

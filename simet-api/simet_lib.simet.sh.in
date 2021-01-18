@@ -21,7 +21,23 @@
 # preseed some variables
 SIMET2_AGENT_FAMILY="system_service"
 
+# logs to stderr and syslog, deals with eventual "logger" oddities
+# $1 - simet subsystem (simet-lmapd, simet-ma)
+# $2 - syslog facility.level (daemon.info, etc)
+# $3... message
+simet_log() {
+	P1="$1"
+	P2="$2"
+	shift 2
+	echo "$P1: $*" >&2 || :
+	logger -t "$P1" -p "$P2" -- "$@" 2>/dev/null || :
+	:
+}
+
+# Loads SIMET-MA engine config for all users of this lib
 . @SIMETLIBDIR@/simet_lib_config.sh
+[ -z "$SIMET_CFG_LOAD_ERROR" ] || \
+	simet_log simet-ma daemon.crit "SIMET-MA configuration has syntax errors, malfunction is likely"
 
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
@@ -39,19 +55,6 @@ get_http_useragent()
 simet2_agentinfo() {
 	SIMET2_AGENT_ENVNAME=$(lsb_release -s -i) || SIMET2_AGENT_ENVNAME="(generic)"
 	SIMET2_AGENT_ENVVERSION=$(lsb_release -s -d) || SIMET2_AGENT_ENVVERSION="unknown"
-	:
-}
-
-# logs to stderr and syslog, deals with eventual "logger" oddities
-# $1 - simet subsystem (simet-lmapd, simet-ma)
-# $2 - syslog facility.level (daemon.info, etc)
-# $3... message
-simet_log() {
-	P1="$1"
-	P2="$2"
-	shift 2
-	echo "$P1: $*" >&2 || :
-	logger -t "$P1" -p "$P2" -- "$@" 2>/dev/null || :
 	:
 }
 

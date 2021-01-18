@@ -18,17 +18,20 @@
 # parameters:
 #   --boot   (optional) shorten wait times and not restart the service
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 OUTFILE=
 abend() {
 	simet_log simet-lmapd daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
 	exit 1
 }
+run_trap() {
+	abend "$0: received stop/interrupt signal"
+}
 
 # if this is missing, the MA will have *no* hardcoded schedule
 LMAP_DFLSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
-
-. @SIMETLIBDIR@/simet_lib.sh
 
 LMAP_RECONFIG=${LMAP_RECONFIG:-/etc/init.d/simet-lmapd reload}
 LMAPD=@BINDIR@/lmapd
@@ -294,6 +297,9 @@ getschedule() {
 
 	OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
 		|| abend "failed to create tmpfile"
+
+	# don't leave behind tmpfiles
+	trap 'run_trap' INT TERM QUIT
 
 	LMAPD_NEED_RELOAD=0
 	# Create a local schedule if there isn't any schedule yet.  We send it to

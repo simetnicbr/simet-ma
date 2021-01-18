@@ -33,24 +33,33 @@ DAEMON_ARGS="-j"
 
 # not called on default init-d-script do_restart/reload
 do_start_prepare() {
-	RC=0
-	. /opt/simet/lib/simet/simet_lib_config.sh || RC=$?
-	if [ $RC -ne 0 ] || [ -z "$LMAP_QUEUE_DIR" ] || [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] ; then
+	# SIMET_CFG_LOAD_ERROR is also internally set in simet_lib_config.sh
+	SIMET_CFG_LOAD_ERROR=
+	. /opt/simet/lib/simet/simet_lib_config.sh || SIMET_CFG_LOAD_ERROR=1
+	if [ -n "$SIMET_CFG_LOAD_ERROR" ] ; then
+		echo "$0: syntax errors in the configuration files, aborting..." >&2
+		return 1
+	fi
+	if [ -z "$LMAP_QUEUE_DIR" ] || [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] ; then
 		echo "$0: required configuration missing, aborting..." >&2
 		return 1
 	fi
-	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
 
 	mkdir -p "$PID_DIR"
 	chgrp $SGROUP "$PID_DIR" && chmod 02770 "$PID_DIR"
+
+	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
 	mkdir -p "$LMAP_SCHEDULE_DIR"
 	chgrp $SGROUP "$LMAP_SCHEDULE_DIR" && chmod 02770 "$LMAP_SCHEDULE_DIR"
-	mkdir -p "$LMAP_QUEUE_DIR"
-	chmod 0700 "$LMAP_QUEUE_DIR" && chown -R $SUSER:$SGROUP "$LMAP_QUEUE_DIR" && chmod 02770 "$LMAP_QUEUE_DIR"
-
 	# don't mess with not-files, like symlinks. chown must run before chmod.
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown $SUSER:$SGROUP '{}' +)
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod g+r '{}' +)
+
+	mkdir -p "$LMAP_SPOOL_DIR"
+	chgrp $SGROUP "$LMAP_SPOOL_DIR" && chmod 02770 "$LMAP_SPOOL_DIR"
+	(cd "$LMAP_SPOOL_DIR" && mkdir -p queue reports && chmod 02770 queue reports)
+	(cd "$LMAP_SPOOL_DIR" && find . -type f -exec chown $SUSER:$SGROUP '{}' +)
+	(cd "$LMAP_SPOOL_DIR" && find . -type f -exec chmod g+r '{}' +)
 
 	start-stop-daemon -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	[ -r "$LMAP_AGENT_FILE" ] || {

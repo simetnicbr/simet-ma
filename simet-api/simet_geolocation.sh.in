@@ -22,7 +22,10 @@
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
 OUTFILE=
+RC=1
 abend() {
   [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
   simet_log simet-ma daemon.err "geolocation: error: $*"
@@ -35,32 +38,11 @@ soft_abend() {
   exit "$RC"
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
+# Handle command line
 
-[ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
-[ -n "$GEOLOC_DISABLE" ] && {
-	simet_log simet-ma daemon.info "geolocation: disabled by configuration"
-	exit 26
-}
-
-OUTFILE=
 FAIL_SILENTLY=
 CACHE_ONLY=
 MAX_AGE=259200
-RC=1
-
-API_SIMET_GEO=${API_SIMET_GEO:-https://api.simet.nic.br/geolocation}
-
-# We *require* an agent-id and agent token to get an API key
-OLDAT=
-OLDAID=
-[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
-[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
-if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
-  RC=20 abend "MA not registered yet, cannot geolocate"
-fi
-
-# Handle command line
 while [ $# -gt 0 ] ; do
   case "$1" in
     --fail-silently)
@@ -79,6 +61,25 @@ while [ $# -gt 0 ] ; do
   esac
   shift
 done
+
+API_SIMET_GEO=${API_SIMET_GEO:-https://api.simet.nic.br/geolocation}
+
+[ -n "$GEOLOC_DISABLE" ] && {
+	[ -n "$FAIL_SILENTLY" ] && exit 0
+	[ -n "$CACHE_ONLY" ] \
+		|| simet_log simet-ma daemon.info "geolocation: disabled by configuration"
+	exit 26
+}
+[ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
+
+# We *require* an agent-id and agent token to get an API key
+OLDAT=
+OLDAID=
+[ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
+[ -r "$AGENT_TOKEN_FILE" ] && OLDAT=$(cat "$AGENT_TOKEN_FILE")
+if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
+  RC=20 abend "MA not registered yet, cannot geolocate"
+fi
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 10000"

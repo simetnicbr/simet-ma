@@ -1,6 +1,6 @@
 #!/bin/bash
-# Send a LMAP report to a SIMET2 report collector
-# Copyright (c) 2019 NIC.br <medicoes@simet.nic.br>
+# Send a LMAP report to a SIMET2 report collector, or queue it
+# Copyright (c) 2019-2020 NIC.br <medicoes@simet.nic.br>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,56 +20,141 @@
 # runs us in a task workspace, the schedule processing queue will be in the
 # parent directory, and we can be sure it is stable.
 
-# Command line: list of URLs of collectors to use.  If none are given, the one
+# Command line:
+# options:
+#  --queue, --no-queue: should queue or not (if unsent), default --queue
+#  --send, --no-send:   should try to send to collector or not, default --send
+#  --fast:              do not wait for a slow-to-respond LMAP collector
+#  --use-report <file>: use the specified file as the full report
+#
+# list of URLs of collectors to use.  If none are given, the one
 # from the hardcoded configuration will be used.
+
+# The gzip-compressed report will be sent to stdout if no collectors
+# accept it.  If every collector rejects it as malformed, we consume (destroy)
+# it instead.  stdout should be redirected to a queue for later ressubmission,
+# skipping zero-sized/empty output files.
 
 set -e
 set -o pipefail
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
+OUTFILE=
 abend() {
-	simet_log simet-ma daemon.err "$*"
-	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-	exit 1
+    simet_log simet-ma daemon.err "$*"
+    [ -n "$OUTFILE" ] && rm -f "$OUTFILE" "$OUTFILE.gz" 2>/dev/null
+    exit 1
+}
+run_trap() {
+	abend "$0: received stop/interrupt signal"
 }
 
-. @SIMETLIBDIR@/simet_lib.sh
+COLLECTORS=
+CURLOPT=
+DO_QUEUE=1
+DO_SEND=1
+DO_RENDER=1
+INPUT_REPORT=
+while [ $# -gt 0 ] ; do
+    case "$1" in
+	--fast)
+	    # give up network operations faster
+	    CURLOPT="--retry 3 --retry-max-time 30"
+	    ;;
+	--queue)
+	    DO_QUEUE=1
+	    ;;
+	--no-queue)
+	    DO_QUEUE=0
+	    ;;
+	--send)
+	    DO_SEND=1
+	    ;;
+	--no-send)
+	    DO_SEND=0
+	    ;;
+	--queue-only)
+	    DO_SEND=0
+	    DO_QUEUE=1
+	    ;;
+	--use-report)
+	    INPUT_REPORT="$2"
+	    [ -n "$INPUT_REPORT" ] && [ -r "$INPUT_REPORT" ] || \
+		abend "--use-report requires a report filename as a parameter"
+	    DO_RENDER=0
+	    shift
+	    ;;
+	-*)
+	    #abend "Unknown option $1"
+	    ;;
+	*)
+	    COLLECTORS="$COLLECTORS $1"
+	    ;;
+    esac
+    shift
+done
 
 # Do nothing when there are no input data files, otherwise lmapctl would
 # log errors.  Note: some versions of OpenWRT "find" lack -quit
-[ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
+[ "$DO_RENDER" -ne 0 ] && [ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
 
-COLLECTORS=
-while [ $# -gt 0 ] ; do
-	COLLECTORS="$COLLECTORS $1"
-	shift
-done
-
-if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] ; then
-	abend "missing configuration: AGENT_ID_FILE or AGENT_TOKEN_FILE"
+if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
+    abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
 fi
+
+[ -d "$LMAP_REPORT_QUEUE_DIR" ] || mkdir -m 0770 -p "$LMAP_REPORT_QUEUE_DIR"
+[ -d "$LMAP_REPORT_QUEUE_DIR" ] || abend "could not access $LMAP_REPORT_QUEUE_DIR"
+
 LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
 
 [ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
 [ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
+[ "$DO_QUEUE" -eq 0 ] && [ "$DO_SEND" -eq 0 ] && {
+    simet_log simet-ma daemon.warn "discarding report by request (--no-queue --no-send)"
+    exit 0
+}
+
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT"
 
 # parameters: list of possible collectors to try to send to
 send_report_to_collector() {
+    [ "$DO_SEND" -eq 0 ] && return 1
+
+    malformed=0
     while [ $# -gt 0 ] ; do
-	curl $CURLOPT -A "$USERAGENT" \
-		--data-binary "@$OUTFILE" -f \
+	APIRES=$( curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
+		--data-binary "@$OUTFILE" -X POST \
+		-o /dev/null -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
 		-H "Content-Type: application/yang.data+json" \
-		"$1" \
-	  && {
+		"$1" ) || APIRES=
+	case "$APIRES" in
+	200)
 		simet_log simet-ma daemon.info "LMAP report accepted by collector $1"
 		return 0
-	}
+		;;
+	400)
+		malformed=1
+		;;
+	esac
 	shift
     done
+    if [ "$malformed" -eq 1 ] ; then
+	simet_log simet-ma daemon.warn "LMAP report rejected as malformed by collectors, discarding it"
+	return 0
+    fi
     return 1
+}
+
+render_report() {
+    if [ "$DO_RENDER" -ne 0 ] ; then
+	(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > "$1" || return $?
+    else
+	cat "$INPUT_REPORT" > "$1" || return $?
+    fi
+    :
 }
 
 OLDAT=
@@ -79,13 +164,34 @@ OLDAID=
 
 # We *require* an agent-id and agent token to submit reports
 if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] || [ ! -r "$LMAP_AGENT_FILE" ] ; then
-	abend "MA not registered yet, cannot submit reports"
+    abend "MA not registered yet, cannot submit reports"
 fi
 
-OUTFILE=$(mktemp -q -t simet-report.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
-(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > $OUTFILE || abend "failed to render report"
-send_report_to_collector $COLLECTORS || abend "failed to submit report to collector"
+TIMENOW=$(date +%s) || TIMENOW=
+OUTFILE=$(mktemp -q -p "$LMAP_REPORT_QUEUE_DIR" "simet-report.$TIMENOW.XXXXXXXXXX") || abend "failed to create tmpfile"
 
-rm -f "$OUTFILE"
+# don't leave behind tmpfiles
+trap 'run_trap' INT TERM QUIT
+
+if render_report "$OUTFILE" ; then
+    send_report_to_collector $COLLECTORS || {
+	# unsent, try to queue
+	if [ "$DO_QUEUE" -eq 1 ] && gzip "$OUTFILE" && mv -f "$OUTFILE.gz" "$OUTFILE.report.json.gz" ; then
+	    simet_log simet-ma daemon.debug "queued report: $OUTFILE.report.json.gz"
+	    OUTFILE=
+	elif [ "$DO_QUEUE" -eq 0 ] ; then
+	    simet_log simet-ma daemon.notice "$0: discarding unsent report by request (--no-queue)"
+	else
+	    # FIXME: if we return non-zero status, there is no loss but we waste space
+	    # with the uncompressed report source data.  That would be *bad* since the
+	    # most likely reason for failure is full storage
+	    simet_log simet-ma daemon.err "could neither send nor compress report, report lost"
+	fi
+    }
+else
+    # Either all input is malformed, we have a bad lmap config, or ENOSPC
+    simet_log simet-ma daemon.err "failed to render report, report lost (likely invalid data)"
+fi
+[ -n "$OUTFILE" ] && rm -f "$OUTFILE" "$OUTFILE.gz"
 OUTFILE=
 :
