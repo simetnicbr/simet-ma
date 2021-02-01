@@ -95,7 +95,7 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
-	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>]"
+	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>] [-o <path>]"
 	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
@@ -111,6 +111,7 @@ static void print_usage(const char * const p, int mode)
 		"\t-d\tmeasurement agent id\n"
 		"\t-j\taccess credentials\n"
 		"\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
+		"\t-o\tredirect report output to <path>\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -132,7 +133,7 @@ int main(int argc, char **argv) {
 
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:")) != -1) {
         switch (option) {
         case 'v':
             if (log_level < 1)
@@ -146,6 +147,12 @@ int main(int argc, char **argv) {
             else
                 log_level = 0;
             break;
+	case 'o':
+	    if (freopen(optarg, "w", stdout) == NULL) {
+	        print_err("could not redirect output to %s: %s", optarg, strerror(errno));
+	        exit(SEXIT_FAILURE);
+	    }
+	    break;
 	case '4':
 	    family = 4;
 	    break;
