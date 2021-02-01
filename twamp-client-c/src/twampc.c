@@ -117,8 +117,8 @@ static void sanitize_std_fds(void)
 
 int main(int argc, char **argv)
 {
-    char *host = NULL;
-    char *port = "862";
+    const char *host = NULL;
+    const char *port = "862";
     int family = 0;
     int connect_timeout = 15;
     int packet_count = 200;
