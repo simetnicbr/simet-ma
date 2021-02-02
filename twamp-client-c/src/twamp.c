@@ -55,6 +55,7 @@ int twamp_run_client(TWAMPParameters param) {
     int fd_ready;
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
+    int do_report = 0;
 
     if (param.packets_count > param.packets_max) {
         print_err("Configuration error: packet train size (%u) too big (max %u)", param.packets_count, param.packets_max);
@@ -366,6 +367,9 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
+    /* From this point onwards, we do output a result report */
+    do_report = 1;
+
     print_msg(MSG_NORMAL, "measurement starting...");
     t_param.test_socket = fd_test;
 
@@ -427,7 +431,8 @@ MEM_FREE:
     free(stpSessions);
     free(testPort);
 
-    twamp_report(report, &param);
+    if (do_report)
+        twamp_report(report, &param);
     twamp_report_done(report);
     report = NULL;
 

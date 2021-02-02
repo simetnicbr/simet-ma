@@ -51,7 +51,7 @@ static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-p <service port>] [-t <timeout>] "
         "[-c <packet count>] [-i <interpacket interval>] [-T <packet discard timeout>] "
-        "[-r <report mode>] <server>\n", p);
+        "[-r <report mode>] [-o <path>] <server>\n", p);
     if (mode) {
         fprintf(stderr, "\n"
             "\t-h\tprint usage help and exit\n"
@@ -66,6 +66,7 @@ static void print_usage(const char * const p, int mode)
             "\t-T\ttime in microseconds to wait for the last packet\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
+            "\t-o\tredirect report output to <path>\n"
             "\nserver: hostname or IP address of the TWAMP server\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -117,8 +118,8 @@ static void sanitize_std_fds(void)
 
 int main(int argc, char **argv)
 {
-    char *host = NULL;
-    char *port = "862";
+    const char *host = NULL;
+    const char *port = "862";
     int family = 0;
     int connect_timeout = 15;
     int packet_count = 200;
@@ -131,7 +132,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVp:t:c:T:i:r:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVp:t:c:T:i:r:o:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -144,6 +145,12 @@ int main(int argc, char **argv)
                 log_level = -1;
             else
                 log_level = 0;
+            break;
+        case 'o':
+            if (freopen(optarg, "w", stdout) == NULL) {
+                print_err("could not redirect output to %s: %s", optarg, strerror(errno));
+                exit(SEXIT_FAILURE);
+            }
             break;
         case '4':
             family = 4;
