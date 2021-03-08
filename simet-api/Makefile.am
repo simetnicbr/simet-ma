@@ -162,7 +162,7 @@ CLEANFILES += $(dist_bin_SCRIPTS)
 install-data-local:
 	$(MKDIR_P) -m 0711 -- "$(DESTDIR)$(simetconfdir)"
 	$(MKDIR_P) -m 0755 -- "$(DESTDIR)$(simetconfdir)/lmap"
-	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapspooldir)" "$(DESTDIR)$(lmapspooldir)/queue" "$(DESTDIR)$(lmapspooldir)/reports"
+	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapspooldir)" "$(DESTDIR)$(simetlmapspooldir)/queue" "$(DESTDIR)$(simetlmapspooldir)/reports"
 	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetrundir)"
 	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlockdir)"
 
