@@ -1,3 +1,10 @@
+simet-ma (0.17.2) unstable; urgency=medium
+
+  * simet-ma version 0.17.2
+  * Fix building with a set --prefix
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 08 Mar 2021 16:52:01 -0300
+
 simet-ma (0.17.1) unstable; urgency=medium
 
   * simet-ma version 0.17.1
