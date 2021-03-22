@@ -228,8 +228,8 @@ condwait() {
 # $1 - destination
 get_spoofed_sources() {
   echo 192.168.34.99 private
-  #echo 10.233.211.199 private
-  #echo 172.31.23.11 private
+  echo 10.233.211.199 private
+  echo 172.31.23.11 private
   echo 200.160.2.3 public_other-as
   #echo "$1" target_ip
   echo "$( echo "$1" | xor_lsb | tr -d '\n' )" target_ip
