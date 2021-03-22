@@ -1,3 +1,10 @@
+simet-ma (0.17.3) unstable; urgency=medium
+
+  * simet-ma version 0.17.3
+  * simet-spoofer: reenable use of multiple private origin addresses
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 22 Mar 2021 11:53:17 -0300
+
 simet-ma (0.17.2) unstable; urgency=medium
 
   * simet-ma version 0.17.2
