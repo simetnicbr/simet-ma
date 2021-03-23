@@ -19,8 +19,7 @@
 #ifndef SIMET_INETUPTIME_H
 #define SIMET_INETUPTIME_H
 
-#include <unistd.h>
-#include <inttypes.h>
+#include <stdint.h>
 #include <time.h>
 #include <sys/socket.h>
 

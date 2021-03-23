@@ -18,8 +18,9 @@
 #ifndef SIMET_SYSLINUX_H
 #define SIMET_SYSLINUX_H
 
-#ifdef __linux__
+#include <stdint.h>
 
+#ifdef __linux__
 
 /*
  * Notes:
@@ -41,7 +42,7 @@ int os_netdev_change(const char * const netdev_name, void *netdev_ctx);
 /* frees a context, netdev_ctx can be NULL */
 void os_netdev_done(void *netdev_ctx);
 
-/* reads interface counters, returns 0 (ok) or ERRNO */
+/* reads interface counters, returns 0 (ok) or -ERRNO */
 int os_get_netdev_counters(uint64_t *tx_bytes, uint64_t *rx_bytes, void * const netdev_ctx);
 
 #else
