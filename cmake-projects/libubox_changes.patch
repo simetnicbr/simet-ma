@@ -1,7 +1,8 @@
-diff -ru orig.jsonpath/libubox/CMakeLists.txt jsonpath/libubox/CMakeLists.txt
---- orig.jsonpath/libubox/CMakeLists.txt	2018-10-10 15:36:15.797999061 -0300
-+++ jsonpath/libubox/CMakeLists.txt	2018-10-10 15:21:49.998976072 -0300
-@@ -31,6 +31,7 @@
+diff --git a/cmake-projects/jsonpath/libubox/CMakeLists.txt b/cmake-projects/jsonpath/libubox/CMakeLists.txt
+index 1a1b7d5..f4b3675 100644
+--- a/cmake-projects/jsonpath/libubox/CMakeLists.txt
++++ b/cmake-projects/jsonpath/libubox/CMakeLists.txt
+@@ -37,6 +37,7 @@ IF(NOT HAVE_GETTIME)
  ENDIF()
  
  FILE(GLOB headers *.h)
@@ -9,7 +10,7 @@ diff -ru orig.jsonpath/libubox/CMakeLists.txt jsonpath/libubox/CMakeLists.txt
  INSTALL(FILES ${headers}
  	DESTINATION include/libubox
  )
-@@ -38,6 +39,7 @@
+@@ -44,6 +45,7 @@ INSTALL(TARGETS ubox ubox-static
  	ARCHIVE DESTINATION lib
  	LIBRARY DESTINATION lib
  )
@@ -17,7 +18,7 @@ diff -ru orig.jsonpath/libubox/CMakeLists.txt jsonpath/libubox/CMakeLists.txt
  
  ADD_SUBDIRECTORY(lua)
  ADD_SUBDIRECTORY(examples)
-@@ -57,6 +59,7 @@
+@@ -80,6 +82,7 @@ IF(EXISTS ${json})
  	ADD_LIBRARY(json_script SHARED json_script.c)
  	TARGET_LINK_LIBRARIES(json_script ubox)
  
@@ -25,10 +26,67 @@ diff -ru orig.jsonpath/libubox/CMakeLists.txt jsonpath/libubox/CMakeLists.txt
  	INSTALL(TARGETS blobmsg_json blobmsg_json-static jshn json_script
  		ARCHIVE DESTINATION lib
  		LIBRARY DESTINATION lib
-@@ -67,5 +70,6 @@
+@@ -90,6 +93,7 @@ IF(EXISTS ${json})
  	INSTALL(FILES ${scripts}
  		DESTINATION share/libubox
  	)
 +	ENDIF()
  
  ENDIF()
+ 
+diff --git a/cmake-projects/jsonpath/libubox/assert.h b/cmake-projects/jsonpath/libubox/assert.h
+deleted file mode 100644
+index 84f5471..0000000
+--- a/cmake-projects/jsonpath/libubox/assert.h
++++ /dev/null
+@@ -1,9 +0,0 @@
+-#pragma once
+-
+-#ifdef NDEBUG
+-#undef NDEBUG
+-#include <assert.h>
+-#define NDEBUG
+-#else
+-#include <assert.h>
+-#endif
+diff --git a/cmake-projects/jsonpath/libubox/avl.c b/cmake-projects/jsonpath/libubox/avl.c
+index 79ea5c7..d1d94ee 100644
+--- a/cmake-projects/jsonpath/libubox/avl.c
++++ b/cmake-projects/jsonpath/libubox/avl.c
+@@ -45,7 +45,7 @@
+ #include <string.h>
+ 
+ #include "avl.h"
+-#include "assert.h"
++#include "ubox_assert.h"
+ #include "list.h"
+ 
+ /**
+diff --git a/cmake-projects/jsonpath/libubox/base64.c b/cmake-projects/jsonpath/libubox/base64.c
+index 1bf2177..bdf4edd 100644
+--- a/cmake-projects/jsonpath/libubox/base64.c
++++ b/cmake-projects/jsonpath/libubox/base64.c
+@@ -66,7 +66,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
+-#include "assert.h"
++#include "ubox_assert.h"
+ #include "utils.h"
+ 
+ static const char Base64[] =
+diff --git a/cmake-projects/jsonpath/libubox/ubox_assert.h b/cmake-projects/jsonpath/libubox/ubox_assert.h
+new file mode 100644
+index 0000000..84f5471
+--- /dev/null
++++ b/cmake-projects/jsonpath/libubox/ubox_assert.h
+@@ -0,0 +1,9 @@
++#pragma once
++
++#ifdef NDEBUG
++#undef NDEBUG
++#include <assert.h>
++#define NDEBUG
++#else
++#include <assert.h>
++#endif

@@ -188,7 +188,8 @@ static int get_sock_fd(lua_State* L, int idx) {
 		lua_getfield(L, idx, "getfd");
 		if(lua_isnil(L, -1))
 			return luaL_error(L, "socket type missing 'getfd' method");
-		lua_pushvalue(L, idx - 1);
+		/* if we have absolute, no need to adjust for getfield() call */
+		lua_pushvalue(L, idx > 0 ? idx: idx - 1);
 		lua_call(L, 1, 1);
 		fd = lua_tointeger(L, -1);
 		lua_pop(L, 1);
@@ -232,27 +233,23 @@ static int ul_ufd_add(lua_State *L)
 	int ref;
 	int fd_ref;
 
-	if (lua_isnumber(L, -1)) {
-		flags = lua_tointeger(L, -1);
-		lua_pop(L, 1);
-	}
-
-	if (!lua_isfunction(L, -1)) {
-		lua_pushstring(L, "invalid arg list");
+	flags = luaL_checkinteger(L, 3);
+	if (!flags) {
+		lua_pushstring(L, "flags cannot be zero");
 		lua_error(L);
-
-		return 0;
 	}
 
-	fd = get_sock_fd(L, -2);
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	fd = get_sock_fd(L, 1);
 
 	lua_getglobal(L, "__uloop_cb");
-	lua_pushvalue(L, -2);
+	lua_pushvalue(L, 2);
 	ref = luaL_ref(L, -2);
 	lua_pop(L, 1);
 
 	lua_getglobal(L, "__uloop_fds");
-	lua_pushvalue(L, -3);
+	lua_pushvalue(L, 1);
 	fd_ref = luaL_ref(L, -2);
 	lua_pop(L, 1);
 
@@ -261,8 +258,7 @@ static int ul_ufd_add(lua_State *L)
 	ufd->fd.fd = fd;
 	ufd->fd_r = fd_ref;
 	ufd->fd.cb = ul_ufd_cb;
-	if (flags)
-		uloop_fd_add(&ufd->fd, flags);
+	uloop_fd_add(&ufd->fd, flags);
 
 	return 1;
 }
