@@ -37,6 +37,7 @@ IF(NOT HAVE_GETTIME)
 ENDIF()
 
 FILE(GLOB headers *.h)
+IF(OFF)
 INSTALL(FILES ${headers}
 	DESTINATION include/libubox
 )
@@ -44,6 +45,7 @@ INSTALL(TARGETS ubox ubox-static
 	ARCHIVE DESTINATION lib
 	LIBRARY DESTINATION lib
 )
+ENDIF()
 
 ADD_SUBDIRECTORY(lua)
 ADD_SUBDIRECTORY(examples)
@@ -80,6 +82,7 @@ IF(EXISTS ${json})
 	ADD_LIBRARY(json_script SHARED json_script.c)
 	TARGET_LINK_LIBRARIES(json_script ubox)
 
+	IF(OFF)
 	INSTALL(TARGETS blobmsg_json blobmsg_json-static jshn json_script
 		ARCHIVE DESTINATION lib
 		LIBRARY DESTINATION lib
@@ -90,6 +93,7 @@ IF(EXISTS ${json})
 	INSTALL(FILES ${scripts}
 		DESTINATION share/libubox
 	)
+	ENDIF()
 
 ENDIF()
 
