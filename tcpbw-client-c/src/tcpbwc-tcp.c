@@ -73,12 +73,21 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 {
     size_t buflen = 128*1024; /* default */
     int optval = 0;
-    socklen_t optvalsz = sizeof(optval);
+    socklen_t optvalsz;
 
     assert(p);
 
+    optvalsz = sizeof(optval);
+    if (!getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &optval, &optvalsz)) {
+	print_msg(MSG_DEBUG, "Socket TCP send buffer size: %d bytes", optval);
+	if (optval > 0 && optval > buflen)
+	    buflen = optval;
+    }
+
+    optvalsz = sizeof(optval);
     if (!getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &optval, &optvalsz)) {
-	if (optval > 0)
+	print_msg(MSG_DEBUG, "Socket TCP receive buffer size: %d bytes", optval);
+	if (optval > 0 && optval > buflen)
 	    buflen = optval;
     }
 
@@ -88,7 +97,7 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 	buflen = TCP_MAX_BUFSIZE;
     }
 
-    print_msg(MSG_DEBUG, "will use a TCP buffer of length %zu", buflen);
+    print_msg(MSG_DEBUG, "will send/receive using a buffer of %zu bytes", buflen);
 
     void *buf = calloc(1, buflen);
     *p = buf;
