@@ -385,6 +385,12 @@ _task_tcpbw(){
     log_info "Skipping task TCPBW IPv$_af"
     return 0
   fi
+
+  local _tcpbwv=
+  if [[ "$DEBUG" = "true" ]] ; then
+	  _tcpbwv="-v -v"
+  fi
+
   log_measurement "TCPBW ${_tst_prefix}IPv$_af"
   local _host="ipv$_af.$( discover_service TCPBW HOST )"
   local _port=$( discover_service TCPBW PORT )
@@ -407,11 +413,11 @@ _task_tcpbw(){
   fi
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
