@@ -459,7 +459,6 @@ static int sendUploadPackets(const MeasureContext ctx)
 {
     int upTimeout = ctx.test_duration;
     struct timeval tv_cur, tv_stop_test, tv_select;
-    uint64_t counter = 0;
     fd_set wset, masterset;
     unsigned int i;
 
@@ -492,7 +491,6 @@ static int sendUploadPackets(const MeasureContext ctx)
 			(errno == EPIPE || errno == ECONNRESET)) {
 			    FD_CLR(sockList[i], &masterset);
 		    }
-		    counter++;
 		}
 	    }
         }
