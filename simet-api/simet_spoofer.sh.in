@@ -289,7 +289,7 @@ tracefilter_targets() {
       (
         OUTFILE=$(start_subtest tracefilter "$dist" $N "nping traceroute from $sip to $dip, dist=$dist")
         R=0
-        snping -c$dist -tr -S "$sip" "$dip" >"$OUTFILE" || R=$?
+        snping -c$dist -tr --delay 5s -S "$sip" "$dip" >"$OUTFILE" || R=$?
         end_subtest tracefilter "$dist" $N "$sip" "$dip" "$OUTFILE" "$R"
       )& condwait
     done
