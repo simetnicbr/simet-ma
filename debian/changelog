@@ -1,3 +1,12 @@
+simet-ma (0.17.5) unstable; urgency=medium
+
+  * simet-ma version 0.17.5
+  * simet_spoofer: don't tracefilter in parallel
+  * simet_spoofer: wait 5s between tracefilter runs (we do 3 runs)
+  * simet_spoofer: wait 5s between tracefilter probes
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 23 Apr 2021 12:38:40 -0300
+
 simet-ma (0.17.4) unstable; urgency=medium
 
   * simet-ma version 0.17.4
