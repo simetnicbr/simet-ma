@@ -281,6 +281,9 @@ spoof_targets() {
   end_test
 }
 
+# We don't tracefilter in parallel, to avoid possible
+# issues with ICMP generation rate limits and to get some
+# time-separation window between them.
 tracefilter_targets() {
   local OUTFILE N sip dip dist i
 
@@ -297,9 +300,10 @@ tracefilter_targets() {
       (
         OUTFILE=$(start_subtest tracefilter "$dist" $N "nping traceroute from $sip to $dip, dist=$dist")
         R=0
-        snping -c$dist -tr -S "$sip" "$dip" >"$OUTFILE" || R=$?
+        snping -c$dist -tr --delay 5s -S "$sip" "$dip" >"$OUTFILE" || R=$?
         end_subtest tracefilter "$dist" $N "$sip" "$dip" "$OUTFILE" "$R"
-      )& condwait
+      )
+      sleep 5
     done
   done
   wait
