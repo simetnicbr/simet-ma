@@ -502,7 +502,7 @@ static int sendUploadPackets(const MeasureContext ctx)
 
 static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const res, unsigned int *numres)
 {
-    size_t bytes_recv = 0;
+    ssize_t bytes_recv = 0;
     struct timeval tv_cur, tv_start, tv_stop_test, tv_select, tv_sampleperiod;
     fd_set rset, masterset;
     uint64_t total = 0;
