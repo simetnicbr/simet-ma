@@ -511,7 +511,8 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
     long interval = ctx.sample_period_ms * 1000L;
     unsigned int maxResults = ((unsigned long)ctx.test_duration * 1000U) / ctx.sample_period_ms + 1;
 
-    assert(res && numres);
+    assert(res && numres && sockBufferSz > 0);
+    const size_t io_size = sockBufferSz;
 
     DownResult *downloadResults = calloc(maxResults, sizeof(DownResult));
     *res = downloadResults;
@@ -538,10 +539,15 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
 	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &rset)) {
-		    bytes_recv = recv(sockList[i], sockBuffer, sockBufferSz-1, MSG_DONTWAIT | MSG_TRUNC);
-		    if (bytes_recv > 0) {
-			total += bytes_recv;
-		    } else if (!bytes_recv) {
+		    /* drain stream buffer before switching to next,
+		     * try to avoid the recv() that would result in EAGAIN */
+		    do {
+			bytes_recv = recv(sockList[i], sockBuffer, io_size, MSG_DONTWAIT | MSG_TRUNC);
+			if (bytes_recv > 0)
+			    total += bytes_recv;
+		    } while (bytes_recv == io_size);
+		    if (!bytes_recv) {
+			/* EOF */
 			FD_CLR(sockList[i], &masterset);
 		    }
 		}
