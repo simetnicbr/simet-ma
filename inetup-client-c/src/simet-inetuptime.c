@@ -1059,8 +1059,8 @@ err_exit:
 }
 
 static int simet_uptime2_msghdl_serverdisconnect(struct simet_inetup_server * const s,
-                    const struct simet_inetup_msghdr * const hdr,
-                    const void * const data)
+                    const struct simet_inetup_msghdr * const hdr __attribute__((__unused__)),
+                    const void * const data __attribute__((__unused__)) )
 {
     protocol_info(s, "received global disconnection message from server");
     got_disconnect_msg = 1;
