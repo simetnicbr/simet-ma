@@ -396,7 +396,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
         protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
     }
-    s->out_queue.rd_pos += sent;
+    s->out_queue.rd_pos += sent; /* sent verified to be >= 0 */
 
 #if 0
     /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
@@ -442,7 +442,7 @@ static int xx_tcpaq_is_in_queue_empty(struct simet_inetup_server * const s)
 static int tcpaq_drain(struct simet_inetup_server * const s)
 {
     size_t remaining = 0;
-    int res = 0;
+    ssize_t res = 0;
 
     assert(s);
 
@@ -490,7 +490,7 @@ static int tcpaq_discard(struct simet_inetup_server * const s, size_t object_siz
 
     /* try to discard wr_pos_reserved bytes from socket buffer */
     if (s->socket != -1) {
-        int res;
+        ssize_t res;
 
         do {
             res = recv(s->socket, NULL, s->in_queue.wr_pos_reserved,
@@ -513,6 +513,7 @@ static int tcpaq_discard(struct simet_inetup_server * const s, size_t object_siz
 static int tcpaq_request_receive_nowait(struct simet_inetup_server * const s, size_t object_size)
 {
     int res;
+    ssize_t rcvres;
 
     assert(s && s->in_queue.buffer);
 
@@ -546,17 +547,17 @@ static int tcpaq_request_receive_nowait(struct simet_inetup_server * const s, si
         return -EFAULT;
 
     do {
-        res = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos, object_size, MSG_DONTWAIT);
-    } while (res == -1 && errno == EINTR);
-    if (res == -1) {
+        rcvres = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos, object_size, MSG_DONTWAIT);
+    } while (rcvres == -1 && errno == EINTR);
+    if (rcvres == -1) {
         int err = errno;
         if (is_EAGAIN_WOULDBLOCK(err))
             return 0;
         protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
         return -err;
     }
-    s->in_queue.wr_pos += res; /* recv() ensures 0 <= res <= wr_pos */
-    object_size -= res;  /* recv() ensures 0 <= res <= wr_pos */
+    s->in_queue.wr_pos += rcvres; /* recv() ensures 0 <= rcvres <= wr_pos */
+    object_size -= rcvres;  /* recv() ensures 0 <= rcvres <= wr_pos */
 
     return (object_size == 0);
 }
