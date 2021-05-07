@@ -75,7 +75,7 @@ struct simet_inetup_server {
     struct simet_tcpqueue in_queue;
     struct simet_tcpqueue out_queue;
 
-    int ai_family;
+    sa_family_t ai_family;
     int socket;
 
     enum simet_inetup_protocol_state state;

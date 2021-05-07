@@ -1828,7 +1828,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
     return rc;
 }
 
-static int uptimeserver_create(struct simet_inetup_server **sp, int ai_family)
+static int uptimeserver_create(struct simet_inetup_server **sp, sa_family_t ai_family)
 {
     static unsigned int next_connection_id = 1;
 
