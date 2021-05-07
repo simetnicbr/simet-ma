@@ -19,8 +19,23 @@
 #define SIMET_SYSLINUX_H
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <errno.h>
 
 #ifdef __linux__
+
+/*
+ * Because gcc has been sitting on this since 2016.
+ */
+static bool is_EAGAIN_WOULDBLOCK(const int e) __attribute__((__unused__,__const__));
+static bool is_EAGAIN_WOULDBLOCK(const int e)
+{
+#if defined(EAGAIN) && defined (EWOULDBLOCK) && (EAGAIN == EWOULDBLOCK)
+    return (e == EAGAIN);
+#else
+    return (e == EAGAIN || e == EWOULDBLOCK);
+#endif
+}
 
 /*
  * Notes:
@@ -31,6 +46,7 @@
  */
 
 /* returns 1 if os_get_netdev_counters() is supported */
+static int os_netdev_bytecount_supported(void) __attribute__((__unused__));
 static int os_netdev_bytecount_supported(void) { return 1; }
 
 /* allocates a context, returns 0 ok, -EINVAL/-ENOMEM otherwise */

@@ -391,7 +391,7 @@ static int tcpaq_send_nowait(struct simet_inetup_server * const s)
     sent = send(s->socket, &s->out_queue.buffer[s->out_queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (sent < 0) {
         int err = errno;
-        if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
+        if (is_EAGAIN_WOULDBLOCK(err) || err == EINTR)
             return 0;
         protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
@@ -456,7 +456,7 @@ static int tcpaq_drain(struct simet_inetup_server * const s)
         } while (res == -1 && errno == EINTR);
         if (res == -1) {
             int err = errno;
-            if (err == EAGAIN || err == EWOULDBLOCK)
+            if (is_EAGAIN_WOULDBLOCK(err))
                 return 0;
             protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
             return -err;
@@ -498,7 +498,7 @@ static int tcpaq_discard(struct simet_inetup_server * const s, size_t object_siz
         } while (res == -1 && errno == EINTR);
         if (res == -1) {
             int err = errno;
-            if (err == EAGAIN || err == EWOULDBLOCK)
+            if (is_EAGAIN_WOULDBLOCK(err))
                 return 0;
             protocol_trace(s, "tcpaq_discard: recv() error: %s", strerror(err));
             return -err;
@@ -550,7 +550,7 @@ static int tcpaq_request_receive_nowait(struct simet_inetup_server * const s, si
     } while (res == -1 && errno == EINTR);
     if (res == -1) {
         int err = errno;
-        if (err == EAGAIN || err == EWOULDBLOCK)
+        if (is_EAGAIN_WOULDBLOCK(err))
             return 0;
         protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
         return -err;
