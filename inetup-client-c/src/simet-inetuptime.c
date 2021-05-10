@@ -25,6 +25,7 @@
 
 #include <limits.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <assert.h>
@@ -59,7 +60,9 @@
 int  log_level = 2;
 const char *progname = PACKAGE_NAME;
 
+static struct simet_inetup_server_cluster *server_clusters = NULL;
 static struct simet_inetup_server **servers = NULL;
+static unsigned int servers_count = 0;
 static struct simet_inetup_server *telemetry_server = NULL;
 static const char *agent_id_file = NULL;
 static const char *agent_id = NULL;
@@ -99,6 +102,34 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 
 /* lets not blind the type system just to squash a false-positive */
 static inline void free_constchar(const char *p) { free((void *)p); }
+
+/* trim spaces, note we return NULL if the result is empty or ENOMEM */
+static char *strndup_trim(const char *s, size_t l)
+{
+    if (!s)
+        return NULL;
+
+    while (isspace(*s) && l > 0) {
+        s++;
+        l--;
+    };
+
+    if (!*s || l <= 0)
+        return NULL;
+
+    while (l > 0 && isspace(s[l-1]))
+        l--;
+
+    return (l > 0) ? strndup(s, l) : NULL;
+}
+
+/* trim spaces, note we return NULL if the result is empty or ENOMEM */
+static char *strdup_trim(const char *s)
+{
+    if (!s)
+        return NULL;
+    return strndup_trim(s, strlen(s));
+}
 
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s);
 
@@ -182,6 +213,18 @@ static const char *str_ipv46(int ai_family)
     }
     return "IP";
 }
+
+#define cluster_trace(acluster, format, arg...) \
+    do { \
+        if (log_level >= MSG_TRACE) { \
+            fflush(stdout); \
+            fprintf(stderr, "%s: trace@%lds: %s:%s: " format "\n", progname, \
+                    (long int)reltime() - client_start_timestamp, \
+                    (acluster)->cluster_name ? (acluster)->cluster_name : "unknown", \
+                    (acluster)->cluster_port ? (acluster)->cluster_port : "unknown", \
+                    ## arg); \
+        } \
+    } while (0)
 
 #define protocol_trace(protocol_stream, format, arg...) \
     do { \
@@ -1828,14 +1871,30 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
     return rc;
 }
 
-static int uptimeserver_create(struct simet_inetup_server **sp, sa_family_t ai_family)
+static void uptimeserver_destroy(struct simet_inetup_server *s)
+{
+    if (s) {
+        if (s->socket != -1) {
+            tcpaq_close(s);
+            s->socket = -1;
+            protocol_info(s, "client forcefully disconnected");
+        }
+        free(s->out_queue.buffer);
+        free(s->in_queue.buffer);
+        free(s);
+    }
+}
+
+static int uptimeserver_create(struct simet_inetup_server ** const sp,
+                               const sa_family_t ai_family,
+                               const struct simet_inetup_server_cluster * const sc)
 {
     static unsigned int next_connection_id = 1;
 
     struct simet_inetup_server *s;
 
-    assert(sp);
-    assert(ai_family == AF_INET || ai_family == AF_INET6);
+    if (!sp || !sc || (ai_family != AF_INET && ai_family != AF_INET6))
+        return -EINVAL;
 
     /* this zero-fills the allocated data area */
     s = calloc(1, sizeof(struct simet_inetup_server));
@@ -1846,6 +1905,7 @@ static int uptimeserver_create(struct simet_inetup_server **sp, sa_family_t ai_f
     s->state = SIMET_INETUP_P_C_INIT;
     s->ai_family = ai_family;
     s->connection_id = next_connection_id;
+    s->cluster = sc;
     s->out_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
     s->in_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
     if (!s->out_queue.buffer || !s->in_queue.buffer) {
@@ -1862,6 +1922,27 @@ static int uptimeserver_create(struct simet_inetup_server **sp, sa_family_t ai_f
     *sp = s;
 
     return 0;
+}
+
+/*
+ * server clusters
+ */
+
+static struct simet_inetup_server_cluster * server_cluster_create(const char * const hostname, const char * const port)
+{
+    struct simet_inetup_server_cluster *sc;
+
+    if (!hostname)
+        return NULL;
+
+    /* malloc and zero-fill */
+    sc = calloc(1, sizeof(struct simet_inetup_server_cluster));
+    if (!sc)
+        return NULL;
+
+    sc->cluster_name = hostname;
+    sc->cluster_port = port;
+    return sc;
 }
 
 /*
@@ -1994,7 +2075,7 @@ static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] [-i <netdev> ] "
         "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
-        "<server name> [<server port>]\n", p);
+        "<server name>[:<server port>] ...\n", p);
 
     if (mode) {
         fprintf(stderr, "\n"
@@ -2010,7 +2091,7 @@ static void print_usage(const char * const p, int mode)
             "\t-j\tpath to a file with the access credentials\n"
             "\t-i\tmonitor amount of traffic on this network device\n"
             "\n"
-            "server name: DNS name of server\n"
+            "server name: DNS name of server(s)\n"
             "server port: TCP port on server\n"
             "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server");
     }
@@ -2061,6 +2142,136 @@ static void sanitize_std_fds(void)
    fix_fds(STDERR_FILENO, O_RDWR);
 }
 
+static int cmdln_parse_server(char *name, struct simet_inetup_server_cluster ***ps)
+{
+    struct simet_inetup_server_cluster *ne = NULL;
+    char *hostname = NULL;
+    char *port = NULL;
+    char *r;
+
+    assert(ps && *ps);
+
+    while (*name && isspace(*name))
+        name++;
+
+    if (!*name)
+        return 1;
+
+    r = name;
+
+    /* handle IPv6 [<ip address>]:<port> */
+    /* FIXME: this is lax, accepts [<dns hostname>] as well, and [<ipv4>], etc */
+    if (*name == '[') {
+        name++;
+        r = strchr(name, ']');
+        if (!r)
+            goto err_exit;
+
+        hostname = strndup_trim(name, r - name);
+        r++;
+
+        if (*r && *r != ':') {
+            while (*r && isspace(*r))
+                r++;
+            if (*r)
+                goto err_exit;
+            r = NULL;
+        }
+    } else {
+        r = strrchr(r, ':');
+        if (r) {
+            hostname = strndup_trim(name, r - name);
+        } else {
+            hostname = strdup_trim(name);
+        }
+    }
+
+    if (r) {
+        /* parse optional :<port> */
+        r++;
+        if (!*r)
+            goto err_exit;
+        port = strdup_trim(r);
+    }
+
+    if (!hostname)
+        goto err_exit;
+
+    if (!port) {
+        port = strdup(SIMET_UPTIME2_DEFAULT_PORT);
+        if (!port)
+            goto err_exit;
+    }
+
+    ne = server_cluster_create(hostname, port);
+    if (!ne)
+        goto err_exit;
+
+    **ps = ne;
+    *ps = &(ne->next);
+
+    return 0;
+
+err_exit:
+    free(ne);
+    free(hostname);
+    free(port);
+    return 1;
+}
+
+static void free_server_structures(struct simet_inetup_server ***as, unsigned int *as_len)
+{
+    assert(as && as_len);
+    if (*as) {
+        for (unsigned int i = 0; i < *as_len; i++) {
+            uptimeserver_destroy((*as)[i]);
+        }
+        free(*as);
+        *as = NULL;
+    }
+    *as_len = 0;
+}
+
+static int init_server_structures(struct simet_inetup_server_cluster * const asc,
+                       struct simet_inetup_server ***pservers,
+                       unsigned int *pservers_count)
+{
+    struct simet_inetup_server_cluster *sc;
+    struct simet_inetup_server **asrv = NULL;
+    unsigned int nservers = 0;
+    unsigned int i;
+
+    assert(pservers && pservers_count);
+
+    for (sc = asc; sc != NULL; sc = sc->next)
+        nservers += 2; /* one IPv4 and one IPv6 server per cluster */
+    if (nservers <= 0) {
+        free_server_structures(pservers, pservers_count);
+        return 0;
+    }
+
+    asrv = calloc(nservers, sizeof(struct simet_inetup_server *));
+    if (!asrv)
+        return -ENOMEM;
+
+    for (sc = asc, i = 0; sc != NULL && i < nservers; sc = sc->next) {
+        print_msg(MSG_DEBUG, "server cluster: %s port %s", sc->cluster_name, sc->cluster_port);
+        if (uptimeserver_create(&(asrv[i++]), AF_INET, sc) ||
+            uptimeserver_create(&(asrv[i++]), AF_INET6, sc))
+            goto err_nomemexit; /* -EINVAL should be impossible: as long as we exit, it is fine */
+    }
+
+    free_server_structures(pservers, pservers_count);
+    *pservers = asrv;
+    *pservers_count = nservers;
+    return 0;
+
+err_nomemexit:
+    free_server_structures(&asrv, &nservers);
+
+    return -ENOMEM;
+}
+
 static void ml_update_wait(int * const pwait, const int nwait)
 {
     if (nwait >= 0 && nwait < *pwait)
@@ -2068,8 +2279,6 @@ static void ml_update_wait(int * const pwait, const int nwait)
 }
 
 int main(int argc, char **argv) {
-    const char *server_name = NULL;
-    const char *server_port = "22000";
     int intarg;
 
     progname = argv[0];
@@ -2132,29 +2341,33 @@ int main(int argc, char **argv) {
         }
     };
 
-    if (optind >= argc || argc - optind > 2)
+    if (optind >= argc)
         print_usage(progname, 0);
 
-    server_name = argv[optind++];
-    if (optind < argc)
-        server_port = argv[optind];
+    struct simet_inetup_server_cluster **ps = &server_clusters;
+    while (optind < argc) {
+        if (cmdln_parse_server(argv[optind], &ps)) {
+            print_err("incorrect server name or port: %s", argv[optind] ? argv[optind] : "(NULL)");
+            print_usage(progname, 0);
+        }
+        optind++;
+    }
+
+    if (!server_clusters) {
+        print_err("at least one server is required");
+        print_usage(progname, 0);
+    }
 
     init_signals();
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
-    print_msg(MSG_DEBUG, "initial timeout=%us, server=\"%s\", port=%s",
-              simet_uptime2_tcp_timeout, server_name, server_port);
 
     /* init */
-    /* this can be easily converted to use up-to-# servers per ai_family, etc */
-    const unsigned int servers_count = 2;
+
+    if (init_server_structures(server_clusters, &servers, &servers_count) < 0)
+        goto err_enomem;
+
     struct pollfd *servers_pollfds = calloc(servers_count, sizeof(struct pollfd));
-    servers = calloc(servers_count, sizeof(struct simet_inetup_server *));
-    if (!servers_pollfds || !servers ||
-            uptimeserver_create(&servers[0], AF_INET) || uptimeserver_create(&servers[1], AF_INET6)) {
-        print_err("out of memory");
-        return SEXIT_OUTOFRESOURCE;
-    }
 
     if (load_agent_data(agent_id_file, agent_token_file)) {
         print_err("failed to read agent identification credentials");
@@ -2195,7 +2408,7 @@ int main(int argc, char **argv) {
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
-                assert(s->socket == -1 && s->out_queue.buffer && s->in_queue.buffer);
+                assert(s->socket == -1 && s->out_queue.buffer && s->in_queue.buffer && s->cluster);
                 servers_pollfds[j].fd = -1;
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
@@ -2206,7 +2419,7 @@ int main(int argc, char **argv) {
                     protocol_trace(s, "global disconnect: will attempt to reconnect in %u seconds",
                             backoff_times[s->backoff_level]);
                 }
-                wait = uptimeserver_connect(s, server_name, server_port);
+                wait = uptimeserver_connect(s, s->cluster->cluster_name, s->cluster->cluster_port);
                 servers_pollfds[j].fd = s->socket;
                 break;
             case SIMET_INETUP_P_C_REFRESH:
@@ -2342,6 +2555,10 @@ int main(int argc, char **argv) {
         print_msg(MSG_NORMAL, "all servers connections have been shutdown, exiting...");
 
     return SEXIT_SUCCESS;
+
+err_enomem:
+    print_err("out of memory");
+    return SEXIT_OUTOFRESOURCE;
 }
 
 /* vim: set et ts=4 sw=4 : */

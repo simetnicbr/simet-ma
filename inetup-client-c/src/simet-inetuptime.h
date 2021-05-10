@@ -23,6 +23,8 @@
 #include <time.h>
 #include <sys/socket.h>
 
+#define SIMET_UPTIME2_DEFAULT_PORT	"22000"
+
 /* SIMET2 Uptime2 defaults and limits */
 #define SIMET_UPTIME2_DEFAULT_TIMEOUT    60    /* seconds */
 #define SIMET_UPTIME2_SHORTEST_TIMEOUT   15    /* seconds, lower limit on acceptable timeouts */
@@ -71,6 +73,12 @@ struct simet_tcpqueue {
     size_t wr_pos;
 };
 
+struct simet_inetup_server_cluster {
+    struct simet_inetup_server_cluster *next;
+    const char * cluster_name;
+    const char * cluster_port;
+};
+
 struct simet_inetup_server {
     struct simet_tcpqueue in_queue;
     struct simet_tcpqueue out_queue;
@@ -87,6 +95,7 @@ struct simet_inetup_server {
     time_t backoff_reset_clock;
 
     unsigned int connection_id;
+    const struct simet_inetup_server_cluster *cluster;  /* not owned */
 
     /* post connect() metadata */
     time_t connect_timestamp;
