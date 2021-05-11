@@ -1989,6 +1989,7 @@ static void print_version(void)
  * currently, implements only foreground mode.
  */
 
+static void print_usage(const char * const p, int mode) __attribute__((__noreturn__));
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] "
