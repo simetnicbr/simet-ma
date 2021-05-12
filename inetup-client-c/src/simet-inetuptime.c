@@ -1992,8 +1992,8 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode) __attribute__((__noreturn__));
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] "
-        "[-d <agent-id>] [-m <string>] [-b <boot id>] [-j <token> ] [-M <string>] "
+    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] [-i <netdev> ] "
+        "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
         "<server name> [<server port>]\n", p);
 
     if (mode) {
@@ -2008,6 +2008,7 @@ static void print_usage(const char * const p, int mode)
             "\t-M\tmeasurement task name\n"
             "\t-b\tboot id (e.g. from /proc/sys/kernel/random/boot_id)\n"
             "\t-j\tpath to a file with the access credentials\n"
+            "\t-i\tmonitor amount of traffic on this network device\n"
             "\n"
             "server name: DNS name of server\n"
             "server port: TCP port on server\n"
