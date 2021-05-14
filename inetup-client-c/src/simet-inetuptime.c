@@ -103,6 +103,18 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 /* lets not blind the type system just to squash a false-positive */
 static inline void free_constchar(const char *p) { free((void *)p); }
 
+/* strcmp with proper semanthics for NULL */
+static inline int xstrcmp(const char * const s1, const char * const s2)
+{
+    if (s1 && s2)
+        return strcmp(s1, s2);
+    if (!s1 && !s2)
+        return 0;
+    if (!s1)
+        return -1;
+    return 1;
+}
+
 /* trim spaces, note we return NULL if the result is empty or ENOMEM */
 static char *strndup_trim(const char *s, size_t l)
 {
@@ -937,6 +949,39 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
     return 0;
 }
 
+static int xx_maconfig_getstr(struct simet_inetup_server * const s,
+                        struct json_object * const jconf,
+                        const char * const param_name,
+                        const char * * const param)
+{
+    struct json_object *jo;
+
+    if (json_object_object_get_ex(jconf, param_name, &jo)) {
+        if (json_object_is_type(jo, json_type_string)) {
+            errno = 0;
+            const char *val = json_object_get_string(jo);
+            if (errno == 0) {
+                if (!xstrcmp(val, *param)) {
+                    return 1;
+                }
+                if (val) {
+                    val = strdup(val);
+                    if (!val)
+                        return -ENOMEM;
+                }
+                free_constchar(*param);
+                *param = val;
+                return 2;
+            }
+        }
+        protocol_trace(s, "ma_config: invalid %s: %s",
+                      param_name, json_object_to_json_string(jo));
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 /*
  * MA_CONFIG message:
  *
@@ -944,7 +989,10 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
  *   "capabilities-enabled": [ "..." ],
  *   "client-timeout-seconds": 60,
  *   "server-timeout-seconds": 60,
- *   "measurement-period-seconds": 300
+ *   "measurement-period-seconds": 300,
+ *   "uptime-group": "<uptime availability group>",
+ *   "server-hostname": "<hostname>",
+ *   "server-description": "<description for this server>"
  *    } }
  *
  * all fields optional.  fields completely override previous settings.
@@ -1010,6 +1058,31 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         xx_set_tcp_timeouts(s);
     xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
     xx_maconfig_getuint(s, jconf, "measurement-period-seconds", &s->measurement_period, 0, 86400);
+
+    if (xx_maconfig_getstr(s, jconf, "server-hostname", &s->server_hostname) > 0
+            && s->server_hostname) {
+        protocol_info(s, "ma_config: server hostname is \"%s\"", s->server_hostname);
+    }
+    if (xx_maconfig_getstr(s, jconf, "server-description", &s->server_description) > 0
+            && s->server_description) {
+        protocol_info(s, "ma_config: server description is \"%s\"", s->server_description);
+    }
+
+    /* FIXME: it would be nice to actually cause a connection drop if uptime-group
+     * can't be correctly processed, but returning an error here isn't enough */
+    const char *new_sg = NULL;
+    if (xx_maconfig_getstr(s, jconf, "uptime-group", &new_sg) > 1) {
+        if (!s->uptime_group) {
+            s->uptime_group = new_sg;
+        } else {
+            protocol_info(s, "server tried to change availability group from \"%s\" to \"%s\", ignoring",
+                    s->uptime_group, new_sg ? new_sg : "(none)");
+            free_constchar(new_sg);
+        }
+    }
+    if (s->uptime_group) {
+        protocol_info(s, "ma_config: availability group set to \"%s\"", s->uptime_group);
+    }
 
     res = 1;
 
@@ -1707,6 +1780,10 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     s->client_timeout = simet_uptime2_tcp_timeout;
     s->measurement_period = SIMET_UPTIME2_DFL_MSR_PERIOD;
     s->remote_keepalives_enabled = 0;
+    free_constchar(s->uptime_group);
+    s->uptime_group = NULL;
+    free_constchar(s->server_description);
+    s->server_description = NULL;
 
     memset(&ai, 0, sizeof(ai));
     ai.ai_flags = AI_ADDRCONFIG;
