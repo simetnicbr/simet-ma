@@ -683,7 +683,12 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
 {
     /* The use of SO_SNDTIMEO for blocking connect() timeout is not
      * mandated by POSIX and it is implemented only in [non-ancient]
-     * Linux */
+     * Linux
+     *
+     * FIXME: now that we're doing non-blocking connect(), we could
+     * implement it explicitly ourselves, perhaps in addition to using
+     * this.
+     */
     const struct timeval so_timeout = {
         .tv_sec = s->client_timeout,
         .tv_usec = 0,
@@ -1744,15 +1749,12 @@ static int xx_cmpnameinfo(const struct addrinfo * const ai,
     return (strncmp(namebuf, hostname, sizeof(namebuf)) == 0);
 }
 
-static int uptimeserver_connect(struct simet_inetup_server * const s,
+static int uptimeserver_connect_init(struct simet_inetup_server * const s,
                        const char * const server_name, const char * const server_port)
 {
-    struct addrinfo *air = NULL, *airp;
     struct addrinfo ai;
     int backoff;
     int r;
-
-    const int int_one = 1;
 
     assert(s && server_name && server_port);
     assert(s->state == SIMET_INETUP_P_C_INIT || s->state == SIMET_INETUP_P_C_RECONNECT);
@@ -1785,27 +1787,63 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
     free_constchar(s->server_description);
     s->server_description = NULL;
 
+    /* cleanup any leftover data from previous attempts */
+    if (s->peer_gai) {
+        freeaddrinfo(s->peer_gai);
+        s->peer_gai = NULL;
+        s->peer_ai = NULL;
+    }
+
     memset(&ai, 0, sizeof(ai));
     ai.ai_flags = AI_ADDRCONFIG;
     ai.ai_socktype = SOCK_STREAM;
     ai.ai_family = s->ai_family;
     ai.ai_protocol = IPPROTO_TCP;
 
-    r = getaddrinfo(server_name, server_port, &ai, &air);
+    r = getaddrinfo(server_name, server_port, &ai, &s->peer_gai);
     if (r != 0) {
-        protocol_trace(s, "getaddrinfo returned %s", gai_strerror(r));
+        protocol_trace(s, "getaddrinfo() returned %s", gai_strerror(r));
         return backoff;
     }
-    for (airp = air; airp != NULL; airp = airp->ai_next) {
+
+    s->peer_ai = s->peer_gai;
+
+    if (!s->peer_gai) {
+        protocol_trace(s, "successfull getaddrinfo() with an empty result set!");
+        return backoff;
+    }
+
+    s->state = SIMET_INETUP_P_C_CONNECT;
+    return 0;
+}
+
+static int uptimeserver_connect(struct simet_inetup_server * const s)
+{
+    int connected = 0;
+    int r;
+
+    const int int_one = 1;
+
+    assert(s && s->state == SIMET_INETUP_P_C_CONNECT);
+
+    while (s->socket == -1 && s->peer_ai != NULL) {
+        struct addrinfo * const airp = s->peer_ai;
+
         /* avoid fast reconnect to same peer */
         if (s->peer_noconnect_ttl && xx_cmpnameinfo(airp, s->ai_family, s->peer_name)) {
             protocol_trace(s, "skipping peer %s on this attempt", s->peer_name);
+
+            s->peer_ai = s->peer_ai->ai_next;
             continue;
         }
 
-        s->socket = socket(airp->ai_family, airp->ai_socktype | SOCK_CLOEXEC, airp->ai_protocol);
-        if (s->socket == -1)
+        s->socket = socket(airp->ai_family,
+                           airp->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK,
+                           airp->ai_protocol);
+        if (s->socket == -1) {
+            s->peer_ai = s->peer_ai->ai_next;
             continue;
+        }
 
         xx_set_tcp_timeouts(s);
 
@@ -1830,42 +1868,154 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         }
 #endif /* TCP_THIN_DUPACK */
 
-        /* FIXME: do this using select()/poll(), but we have to make it
-         * indepondent and async so that we can return to caller to process
-         * other concurrent connect()s to other server streams in the
-         * meantime.  And that must happen in the middle of the
-         * getaddrinfo() loop */
-        if (connect(s->socket, airp->ai_addr, airp->ai_addrlen) != -1)
-            break;
+        /*
+         * connect() can be hard outside of Linux, basically, we cannot
+         * portably deal with EINTR.  The only sane path needs a close(),
+         * and this is the only reason this whole loop had to be complex
+         *
+         * http://cr.yp.to/docs/connect.html
+         * http://www.madore.org/~david/computers/connect-intr.html
+         */
+        r = connect(s->socket, airp->ai_addr, airp->ai_addrlen);
+        if (!r) {
+            connected = 1;
+            break; /* connected immediately */
+        }
+        if (errno == EINPROGRESS) {
+            if (log_level >= MSG_TRACE) {
+                char namebuf[256], portbuf[32];
+                if (!getnameinfo(airp->ai_addr, airp->ai_addrlen,
+                               namebuf, sizeof(namebuf), portbuf, sizeof(portbuf),
+                               NI_NUMERICHOST | NI_NUMERICSERV)) {
+                    protocol_trace(s, "attempting connection to measurement peer %s port %s", namebuf, portbuf);
+                }
+            }
+            break; /* trying to connect */
+        }
+
+        if (errno == EINTR) {
+            /* redo loop without advancing */
+            close(s->socket);
+            s->socket = -1;
+            continue;
+        }
+
         close(s->socket);
         s->socket = -1;
+        s->peer_ai = s->peer_ai->ai_next;
     }
-
-    freeaddrinfo(air);
-    air = airp = NULL;
-
-    /* FIXME: backoff_clock update required because we are doing blocking connects(),
-     * so several seconds will have elapsed already */
-    s->backoff_clock = reltime();
 
     if (s->socket == -1) {
         if (s->peer_noconnect_ttl)
             s->peer_noconnect_ttl--;
-        protocol_trace(s, "could not connect, will retry in %d seconds", backoff);
-        return backoff;
+
+        const int waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
+        if (waittime_left > 0)
+            protocol_trace(s, "could not connect, will retry in %d seconds", waittime_left);
+
+        /* go back to the previous state, so that we getaddrinfo() again */
+        s->state = SIMET_INETUP_P_C_RECONNECT;
+        return (waittime_left > 0)? waittime_left : 0;
     }
 
-    /* Disable Naggle, we don't need it (but we can tolerate it) */
-    setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
+    if (connected) {
+        s->state = SIMET_INETUP_P_C_CONNECTED;
+        return 0;
+    }
 
-    /* Get metadata of the connected socket */
+    s->state = SIMET_INETUP_P_C_CONNECTWAIT;
+    return (int) simet_uptime2_tcp_timeout;
+}
+
+static int uptimeserver_connectwait(struct simet_inetup_server * const s)
+{
+    int socket_err;
+    socklen_t socket_err_sz = sizeof(socket_err);
+    int r;
+
+    assert(s && s->state == SIMET_INETUP_P_C_CONNECTWAIT);
+
+    if (s->socket == -1 || !s->peer_ai) {
+        /* should never happen, recover */
+        s->state = SIMET_INETUP_P_C_RECONNECT;
+        return 0;
+    }
+
+    /* We could hit this codepath before poll() returned ready for writing or an error */
+    struct pollfd pfd = {
+        .fd     = s->socket,
+        .events = POLLOUT | POLLERR | POLLRDHUP | POLLHUP,
+    };
+    do {
+        r = poll(&pfd, 1, 0);
+    } while (r == -1 && errno == EINTR);
+#if 0
+    protocol_trace(s, "connectwait: pollfd.fd = %d, pollfd.events = 0x%04x, pollfd.revents = 0x%04x",
+                   pfd.fd, (unsigned int)pfd.events, (unsigned int)pfd.revents);
+#endif
+    if (pfd.revents == 0)
+        return (int) simet_uptime2_tcp_timeout; /* FIXME: timeout accounting? */
+
+    /* Detect if a pending connect() failed, modern version.
+     *
+     * Portability hazard:
+     * http://cr.yp.to/docs/connect.html
+     * http://www.madore.org/~david/computers/connect-intr.html
+     */
+    if (getsockopt(s->socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz))
+        socket_err = errno;
+    switch (socket_err) {
+    case 0:
+    case EISCONN:
+        /* socket connected */
+        s->state = SIMET_INETUP_P_C_CONNECTED;
+        break;
+    case EALREADY:
+    case EINPROGRESS:
+        /* Unusual, poll().revents == 0 above is the normal path for this */
+        protocol_trace(s, "connectwait: still waiting for connection to complete");
+        /* FIXME: timeout accounting explicitly ? */
+        return (int) simet_uptime2_tcp_timeout;
+    default:
+        protocol_trace(s, "connection attempt failed: %s", strerror(socket_err));
+
+        /* connection attempt failed */
+        s->peer_ai = s->peer_ai->ai_next;
+        close(s->socket);
+        s->socket = -1;
+
+        /* go back to the previous state, to loop */
+        s->state = SIMET_INETUP_P_C_CONNECT;
+    }
+
+    return 0;
+}
+
+static int uptimeserver_connected(struct simet_inetup_server * const s)
+{
+    const int int_one = 1;
     struct sockaddr_storage sa;
     socklen_t sa_len;
 
+    /* Get metadata of the connected socket */
     sa_len = sizeof(struct sockaddr_storage);
     sa.ss_family = AF_UNSPEC;
-    if (getpeername(s->socket, (struct sockaddr *)&sa, &sa_len) || 
-        xx_nameinfo(&sa, sa_len, &s->peer_family, &s->peer_name, &s->peer_port))
+    if (getpeername(s->socket, (struct sockaddr *)&sa, &sa_len)) {
+        /* Resilience: ENOTCON here is sometimes the only thing that works */
+        if (errno == ENOTCONN) {
+            protocol_trace(s, "connect: late detection of connection failure");
+            /* connection attempt failed */
+            s->peer_ai = s->peer_ai->ai_next;
+            close(s->socket);
+            s->socket = -1;
+
+            /* go back to the previous state, to loop */
+            s->state = SIMET_INETUP_P_C_CONNECT;
+            return 0;
+        }
+        protocol_trace(s, "connect: getpeername failed: %s", strerror(errno));
+    }
+    if (xx_nameinfo(&sa, sa_len, &s->peer_family, &s->peer_name, &s->peer_port))
         print_warn("failed to get peer metadata, coping with it");
     s->peer_noconnect_ttl = 0;
 
@@ -1875,13 +2025,23 @@ static int uptimeserver_connect(struct simet_inetup_server * const s,
         xx_nameinfo(&sa, sa_len, &s->local_family, &s->local_name, &s->local_port))
         print_warn("failed to get local metadata, coping with it");
 
+    /* Disable Naggle, we don't need it (but we can tolerate it) */
+    setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
+
     /* done... */
     s->connect_timestamp = reltime();
-    protocol_info(s, "connect: connected over %s to measurement peer %s, port %s",
-            str_ipv46(s->local_family), server_name, server_port);
+    if (s->cluster) {
+        protocol_info(s, "connect: connected over %s to measurement peer cluster %s, port %s",
+               str_ipv46(s->local_family), s->cluster->cluster_name, s->cluster->cluster_port);
+    }
     protocol_info(s, "connect: local %s address [%s]:%s, remote %s address [%s]:%s",
-            str_ipv46(s->local_family), s->local_name, s->local_port,
-            str_ipv46(s->peer_family), s->peer_name, s->peer_port);
+                  str_ipv46(s->local_family), s->local_name, s->local_port,
+                  str_ipv46(s->peer_family), s->peer_name, s->peer_port);
+
+    if (s->peer_gai)
+        freeaddrinfo(s->peer_gai);
+    s->peer_gai = NULL;
+    s->peer_ai = NULL;
 
     s->state = SIMET_INETUP_P_C_REFRESH;
     return 0;
@@ -1958,6 +2118,8 @@ static void uptimeserver_destroy(struct simet_inetup_server *s)
         }
         free(s->out_queue.buffer);
         free(s->in_queue.buffer);
+        if (s->peer_gai)
+            freeaddrinfo(s->peer_gai);
         free(s);
     }
 }
@@ -2487,7 +2649,6 @@ int main(int argc, char **argv) {
             case SIMET_INETUP_P_C_INIT:
                 assert(s->socket == -1 && s->out_queue.buffer && s->in_queue.buffer && s->cluster);
                 servers_pollfds[j].fd = -1;
-                servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
                 if (queued_msg_disconnect) {
@@ -2496,8 +2657,20 @@ int main(int argc, char **argv) {
                     protocol_trace(s, "global disconnect: will attempt to reconnect in %u seconds",
                             backoff_times[s->backoff_level]);
                 }
-                wait = uptimeserver_connect(s, s->cluster->cluster_name, s->cluster->cluster_port);
+                wait = uptimeserver_connect_init(s, s->cluster->cluster_name, s->cluster->cluster_port);
+                servers_pollfds[j].fd = -1;
+                break;
+            case SIMET_INETUP_P_C_CONNECT:
+                wait = uptimeserver_connect(s);
                 servers_pollfds[j].fd = s->socket;
+                servers_pollfds[j].events = POLLRDHUP | POLLIN | POLLOUT | POLLERR;
+                break;
+            case SIMET_INETUP_P_C_CONNECTWAIT:
+                wait = uptimeserver_connectwait(s);
+                break;
+            case SIMET_INETUP_P_C_CONNECTED:
+                wait = uptimeserver_connected(s);
+                servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 break;
             case SIMET_INETUP_P_C_REFRESH:
                 s->remote_keepalive_clock = 0;
@@ -2589,13 +2762,23 @@ int main(int argc, char **argv) {
             if (poll_res > 0) {
                 for (j = 0; j < servers_count; j++) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
-                        if (servers[j]->state != SIMET_INETUP_P_C_RECONNECT) {
+                        if (servers[j]->state >= SIMET_INETUP_P_C_CONNECTED
+                            && servers[j]->state < SIMET_INETUP_P_C_SHUTDOWN)
+                        {
                             /* ugly, but less ugly than having reconnect close the socket immediately */
                             protocol_info(servers[j], "connection to measurement peer lost");
                             simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
                         }
                         servers_pollfds[j].fd = -1;
-                    } else if (servers_pollfds[j].revents & ~POLLIN) {
+                    } else if (servers_pollfds[j].revents & POLLNVAL) {
+                        /* We screwed up and left an outdated socket in pollfds */
+                        protocol_trace(servers[j], "internal error: POLLNVAL: state[%u]=%u, fd=%d, events=0x%04x, revents=0x%04x",
+                            j, servers[j]->state, servers_pollfds[j].fd,
+                            (unsigned int)servers_pollfds[j].events,
+                            (unsigned int)servers_pollfds[j].revents);
+                        /* Work around the bug */
+                        servers_pollfds[j].fd = -1;
+                    } else if (servers_pollfds[j].revents & ~(POLLIN|POLLOUT)) {
                         protocol_trace(servers[j],
                             "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
                             j, servers_pollfds[j].fd,
