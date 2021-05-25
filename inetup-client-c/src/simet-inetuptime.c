@@ -226,45 +226,22 @@ static const char *str_ipv46(int ai_family)
     return "IP";
 }
 
-#define cluster_trace(acluster, format, arg...) \
+#define protocol_msg(aloglevel, protocol_stream, format, arg...) \
     do { \
-        if (log_level >= MSG_TRACE) { \
+        if (log_level >= aloglevel) { \
             fflush(stdout); \
-            fprintf(stderr, "%s: trace@%lds: %s:%s: " format "\n", progname, \
+            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
                     (long int)reltime() - client_start_timestamp, \
-                    (acluster)->cluster_name ? (acluster)->cluster_name : "unknown", \
-                    (acluster)->cluster_port ? (acluster)->cluster_port : "unknown", \
+                    str_ipv46(protocol_stream->ai_family), protocol_stream->connection_id, \
+                    (protocol_stream->connect_timestamp) ? \
+                        (long int)reltime() - protocol_stream->connect_timestamp : \
+                        0, \
                     ## arg); \
         } \
     } while (0)
 
 #define protocol_trace(protocol_stream, format, arg...) \
-    do { \
-        if (log_level >= MSG_TRACE) { \
-            fflush(stdout); \
-            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
-                    (long int)reltime() - client_start_timestamp, \
-                    str_ipv46(protocol_stream->ai_family), protocol_stream->connection_id, \
-                    (protocol_stream->connect_timestamp) ? \
-                        (long int)reltime() - protocol_stream->connect_timestamp : \
-                        0, \
-                    ## arg); \
-        } \
-    } while (0)
-
-#define protocol_info(protocol_stream, format, arg...) \
-    do { \
-        if (log_level >= MSG_NORMAL) { \
-            fflush(stdout); \
-            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
-                    (long int)reltime() - client_start_timestamp, \
-                    str_ipv46(protocol_stream->ai_family), protocol_stream->connection_id, \
-                    (protocol_stream->connect_timestamp) ? \
-                        (long int)reltime() - protocol_stream->connect_timestamp : \
-                        0, \
-                    ## arg); \
-        } \
-    } while (0)
+    protocol_msg(MSG_TRACE, protocol_stream, format, ## arg)
 
 #if 0
 static struct json_object * xx_json_object_new_in64_as_str(const int64_t v)
@@ -756,7 +733,7 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
     struct simet_inetup_msghdr hdr;
 
     if (msgsize > SIMET_UPTIME2_MAXDATASIZE) {
-        protocol_info(s, "internal error: tried to send too large a message, discarded it instead");
+        protocol_msg(MSG_IMPORTANT, s, "internal error: tried to send too large a message, discarded it instead");
         return 0; /* or abort the program, which would be worse */
     }
 
@@ -815,7 +792,7 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
 
     /* messages larger than 64KiB are illegal and must cause a connection drop */
     if (hdr.message_size > 65535) {
-        protocol_info(s, "recvmsg: message too large (%u bytes), sync might have been lost",
+        protocol_msg(MSG_IMPORTANT, s, "recvmsg: message too large (%u bytes), sync might have been lost",
                 (unsigned int) hdr.message_size);
         return -EFAULT;
     }
@@ -941,12 +918,12 @@ static int xx_maconfig_getuint(struct simet_inetup_server * const s,
                 const unsigned int uival = (unsigned int)val; /* safe: 0 <= low <= val <= high <= UINT_MAX */
                 if (*param != uival) {
                     *param = uival;
-                    protocol_info(s, "ma_config: set %s to %u", param_name, *param);
+                    protocol_msg(MSG_DEBUG, s, "ma_config: set %s to %u", param_name, *param);
                 }
                 return 1;
             }
         }
-        protocol_trace(s, "ma_config: invalid %s: %s",
+        protocol_msg(MSG_NORMAL, s, "ma_config: invalid %s: %s",
                       param_name, json_object_to_json_string(jo));
         return -EINVAL;
     }
@@ -979,7 +956,7 @@ static int xx_maconfig_getstr(struct simet_inetup_server * const s,
                 return 2;
             }
         }
-        protocol_trace(s, "ma_config: invalid %s: %s",
+        protocol_msg(MSG_NORMAL, s, "ma_config: invalid %s: %s",
                       param_name, json_object_to_json_string(jo));
         return -EINVAL;
     }
@@ -1066,11 +1043,11 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
 
     if (xx_maconfig_getstr(s, jconf, "server-hostname", &s->server_hostname) > 0
             && s->server_hostname) {
-        protocol_info(s, "ma_config: server hostname is \"%s\"", s->server_hostname);
+        protocol_msg(MSG_DEBUG, s, "ma_config: measurement peer hostname is \"%s\"", s->server_hostname);
     }
     if (xx_maconfig_getstr(s, jconf, "server-description", &s->server_description) > 0
             && s->server_description) {
-        protocol_info(s, "ma_config: server description is \"%s\"", s->server_description);
+        protocol_msg(MSG_DEBUG, s, "ma_config: measurement peer description is \"%s\"", s->server_description);
     }
 
     /* FIXME: it would be nice to actually cause a connection drop if uptime-group
@@ -1080,13 +1057,13 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         if (!s->uptime_group) {
             s->uptime_group = new_sg;
         } else {
-            protocol_info(s, "server tried to change availability group from \"%s\" to \"%s\", ignoring",
+            protocol_msg(MSG_IMPORTANT, s, "measurement peer tried to change availability group from \"%s\" to \"%s\", ignoring",
                     s->uptime_group, new_sg ? new_sg : "(none)");
             free_constchar(new_sg);
         }
     }
     if (s->uptime_group) {
-        protocol_info(s, "ma_config: availability group set to \"%s\"", s->uptime_group);
+        protocol_msg(MSG_DEBUG, s, "ma_config: availability group set to \"%s\"", s->uptime_group);
     }
 
     res = 1;
@@ -1150,12 +1127,12 @@ static int simet_uptime2_msghdl_serverevents(struct simet_inetup_server * const 
         const char *event_name = json_object_get_string(jo);
         if (!event_name)
             goto err_exit;
-        protocol_trace(s, "events: received server event \"%s\"", event_name);
+        protocol_trace(s, "events: received measurement peer event \"%s\"", event_name);
 
         /* handle events */
         if (!strcmp(event_name, "mp_disconnect")) {
             /* server told us to disconnect, and not reconnect back for a while */
-            protocol_info(s, "server closing connection... trying to change servers");
+            protocol_msg(MSG_NORMAL, s, "measurement peer closing connection... trying to change to another peer");
             s->peer_noconnect_ttl = SIMET_UPTIME2_DISCONNECT_BACKOFF;
             simet_uptime2_reconnect(s);
             /* no further event processing after this */
@@ -1168,10 +1145,10 @@ static int simet_uptime2_msghdl_serverevents(struct simet_inetup_server * const 
 
 err_exit:
     if (json_tokener_get_error(jtok) != json_tokener_success) {
-        protocol_info(s, "events: ignoring invalid message: %s",
+        protocol_trace(s, "events: ignoring invalid message: %s",
                       json_tokener_error_desc(json_tokener_get_error(jtok)));
     } else if (res > 1) {
-        protocol_info(s, "events: received malformed message");
+        protocol_trace(s, "events: received malformed message");
     }
     json_tokener_free(jtok);
     if (jroot)
@@ -1183,7 +1160,7 @@ static int simet_uptime2_msghdl_serverdisconnect(struct simet_inetup_server * co
                     const struct simet_inetup_msghdr * const hdr __attribute__((__unused__)),
                     const void * const data __attribute__((__unused__)) )
 {
-    protocol_info(s, "received global disconnection message from server");
+    protocol_msg(MSG_IMPORTANT, s, "received global disconnection message from measurement peer");
     got_disconnect_msg = 1;
     return 1;
 }
@@ -1617,7 +1594,11 @@ static void simet_uptime2_measurements_global_done(void)
 static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
 {
     if (s->state != SIMET_INETUP_P_C_RECONNECT && !got_exit_signal) {
-        protocol_trace(s, "will attempt to reconnect in %u seconds", backoff_times[s->backoff_level]);
+        if (s->backoff_level) {
+            protocol_msg(MSG_NORMAL, s, "will attempt to reconnect after %u seconds", backoff_times[s->backoff_level]);
+        } else {
+            protocol_msg(MSG_NORMAL, s, "attempting to reconnect...");
+        }
         s->state = SIMET_INETUP_P_C_RECONNECT;
         s->backoff_clock = reltime();
 
@@ -1636,7 +1617,7 @@ static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
 
         decline_as_telemetry_server(s);
 
-        protocol_info(s, "client disconnecting...");
+        protocol_msg(MSG_NORMAL, s, "client disconnecting...");
     }
 }
 
@@ -1773,7 +1754,7 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
         s->backoff_level++;
     backoff = (int) backoff_times[s->backoff_level];
 
-    protocol_trace(s, "attempting connection to %s, port %s", server_name, server_port);
+    protocol_trace(s, "attempting connection to cluster %s, port %s", server_name, server_port);
 
     s->connect_timestamp = 0;
 
@@ -2031,10 +2012,10 @@ static int uptimeserver_connected(struct simet_inetup_server * const s)
     /* done... */
     s->connect_timestamp = reltime();
     if (s->cluster) {
-        protocol_info(s, "connect: connected over %s to measurement peer cluster %s, port %s",
+        protocol_msg(MSG_NORMAL, s, "connect: connected over %s to measurement peer cluster %s, port %s",
                str_ipv46(s->local_family), s->cluster->cluster_name, s->cluster->cluster_port);
     }
-    protocol_info(s, "connect: local %s address [%s]:%s, remote %s address [%s]:%s",
+    protocol_msg(MSG_NORMAL, s, "connect: local %s address [%s]:%s, remote %s address [%s]:%s",
                   str_ipv46(s->local_family), s->local_name, s->local_port,
                   str_ipv46(s->peer_family), s->peer_name, s->peer_port);
 
@@ -2099,7 +2080,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
         s->socket = -1;
         s->disconnect_clock = 0;
 
-        protocol_info(s, "client disconnected");
+        protocol_msg(MSG_IMPORTANT, s, "client disconnected");
 
         s->state = SIMET_INETUP_P_C_SHUTDOWN;
         return 0;
@@ -2114,7 +2095,7 @@ static void uptimeserver_destroy(struct simet_inetup_server *s)
         if (s->socket != -1) {
             tcpaq_close(s);
             s->socket = -1;
-            protocol_info(s, "client forcefully disconnected");
+            protocol_msg(MSG_IMPORTANT, s, "client forcefully disconnected");
         }
         free(s->out_queue.buffer);
         free(s->in_queue.buffer);
@@ -2494,7 +2475,7 @@ static int init_server_structures(struct simet_inetup_server_cluster * const asc
         return -ENOMEM;
 
     for (sc = asc, i = 0; sc != NULL && i < nservers; sc = sc->next) {
-        print_msg(MSG_DEBUG, "server cluster: %s port %s", sc->cluster_name, sc->cluster_port);
+        print_msg(MSG_NORMAL, "measurement cluster: %s port %s", sc->cluster_name, sc->cluster_port);
         if (uptimeserver_create(&(asrv[i++]), AF_INET, sc) ||
             uptimeserver_create(&(asrv[i++]), AF_INET6, sc))
             goto err_nomemexit; /* -EINVAL should be impossible: as long as we exit, it is fine */
@@ -2618,6 +2599,8 @@ int main(int argc, char **argv) {
 
     simet_uptime2_measurements_global_init();
 
+    print_msg(MSG_ALWAYS, "connecting to measurement peers...");
+
     /* state machine loop */
     do {
         time_t minwait = 300;
@@ -2703,7 +2686,7 @@ int main(int argc, char **argv) {
 
                 if (!uptimeserver_remotetimeout(s)) {
                     /* remote keepalive timed out */
-                    protocol_trace(s, "remote keepalive timed out");
+                    protocol_msg(MSG_NORMAL, s, "measurement peer connection lost: silent for too long");
                     simet_uptime2_reconnect(s);
                     wait = 0;
                     break;
@@ -2766,7 +2749,7 @@ int main(int argc, char **argv) {
                             && servers[j]->state < SIMET_INETUP_P_C_SHUTDOWN)
                         {
                             /* ugly, but less ugly than having reconnect close the socket immediately */
-                            protocol_info(servers[j], "connection to measurement peer lost");
+                            protocol_msg(MSG_NORMAL, servers[j], "connection to measurement peer lost");
                             simet_uptime2_reconnect(servers[j]); /* fast close/shutdown detection */
                         }
                         servers_pollfds[j].fd = -1;
@@ -2780,10 +2763,10 @@ int main(int argc, char **argv) {
                         servers_pollfds[j].fd = -1;
                     } else if (servers_pollfds[j].revents & ~(POLLIN|POLLOUT)) {
                         protocol_trace(servers[j],
-                            "unhandled: pollfd[%u].fd = %d, pollfd[%u].events = 0x%04x, pollfd[%u].revents = 0x%04x",
-                            j, servers_pollfds[j].fd,
-                            j, (unsigned int)servers_pollfds[j].events,
-                            j, (unsigned int)servers_pollfds[j].revents);
+                            "unhandled: state=%u, pollfd[%u].fd=%d, .events=0x%04x, .revents=0x%04x",
+                            servers[j]->state, j, servers_pollfds[j].fd,
+                            (unsigned int)servers_pollfds[j].events,
+                            (unsigned int)servers_pollfds[j].revents);
                     }
                 }
             } else if (poll_res == -1 && (errno != EINTR && errno != EAGAIN)) {
