@@ -2097,10 +2097,22 @@ static void uptimeserver_destroy(struct simet_inetup_server *s)
             s->socket = -1;
             protocol_msg(MSG_IMPORTANT, s, "client forcefully disconnected");
         }
+
         free(s->out_queue.buffer);
         free(s->in_queue.buffer);
+
         if (s->peer_gai)
             freeaddrinfo(s->peer_gai);
+
+        free_constchar(s->peer_name);
+        free_constchar(s->peer_port);
+        free_constchar(s->local_name);
+        free_constchar(s->local_port);
+
+        free_constchar(s->uptime_group);
+        free_constchar(s->server_hostname);
+        free_constchar(s->server_description);
+
         free(s);
     }
 }
