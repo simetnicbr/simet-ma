@@ -46,8 +46,11 @@
 #define SIMET_ENGINE_NAME "nic_simet2_simet-ma"
 
 enum simet_inetup_protocol_state {
-    SIMET_INETUP_P_C_INIT = 0,		/* Initial setup, go to connect */
-    SIMET_INETUP_P_C_RECONNECT,		/* TCP (re)connection with backoff control, go to refresh */
+    SIMET_INETUP_P_C_INIT = 0,		/* Initial setup */
+    SIMET_INETUP_P_C_RECONNECT,		/* TCP (re)connection with backoff control */
+    SIMET_INETUP_P_C_CONNECT,		/* Loop over DNS results, TCP nonblock connect() */
+    SIMET_INETUP_P_C_CONNECTWAIT,	/* Wait TCP connect() reply */
+    SIMET_INETUP_P_C_CONNECTED,		/* TCP connected, go to refresh */
     SIMET_INETUP_P_C_REFRESH,		/* (re-)send full state, go to mainloop */
     SIMET_INETUP_P_C_MAINLOOP,		/* keepalive and events loop */
     SIMET_INETUP_P_C_DISCONNECT,	/* send shutdown notification */
@@ -96,6 +99,10 @@ struct simet_inetup_server {
 
     unsigned int connection_id;
     const struct simet_inetup_server_cluster *cluster;  /* not owned */
+
+    /* state CONNECTING metadata */
+    struct addrinfo *peer_gai;	        /* result from getaddrinfo() */
+    struct addrinfo *peer_ai;	         /* current peers_gai member */
 
     /* post connect() metadata */
     time_t connect_timestamp;
