@@ -1049,6 +1049,10 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
             && s->server_description) {
         protocol_msg(MSG_DEBUG, s, "ma_config: measurement peer description is \"%s\"", s->server_description);
     }
+    if (xx_maconfig_getstr(s, jconf, "cluster-hostname", &s->s_cluster_hostname) > 0
+            && s->s_cluster_hostname) {
+        protocol_msg(MSG_DEBUG, s, "ma_config: measurement peer cluster is \"%s\"", s->s_cluster_hostname);
+    }
 
     /* FIXME: it would be nice to actually cause a connection drop if uptime-group
      * can't be correctly processed, but returning an error here isn't enough */
@@ -2116,6 +2120,7 @@ static void uptimeserver_destroy(struct simet_inetup_server *s)
         free_constchar(s->uptime_group);
         free_constchar(s->server_hostname);
         free_constchar(s->server_description);
+        free_constchar(s->s_cluster_hostname);
 
         free(s);
     }
