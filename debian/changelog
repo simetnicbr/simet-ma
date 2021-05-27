@@ -1,12 +1,13 @@
-simet-ma (0.17.6.1) unstable; urgency=medium
+simet-ma (0.17.6.2) unstable; urgency=medium
 
-  * simet-ma version 0.17.6.1
-  * inetup: support multiple server clusters on the command line, and
-    try to keep a connection open to one ipv4 and one ipv6 server for
-    each cluster.
+  * simet-ma version 0.17.6.2
+  * inetup: support multiple measurement peer clusters on the command line,
+    and try to keep a connection open to one ipv4 and one ipv6 peer for each
+    cluster.
   * inetup: switch to non-blocking, concurrent TCP connect()
-  * inetup: record (and log) new server metadata:
-    server description, server hostname, and uptime group.
+  * inetup: record (and log) new measurement peer metadata:
+    server description, server hostname, cluster hostname, and uptime group.
+  * inetup: fix minor memory leak when reconnecting to a measurement peer
 
  -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 26 May 2021 10:18:47 -0300
 
