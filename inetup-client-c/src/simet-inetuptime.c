@@ -1696,23 +1696,27 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
                         sa_family_t *family, const char **hostname, const char **hostport)
 {
-    char namebuf[256], portbuf[32];
+    char namebuf[256] = "unknown";
+    char portbuf[32]  = "unknown";
+    sa_family_t af = AF_UNSPEC;
 
-    if (sa->ss_family == AF_UNSPEC || getnameinfo((struct sockaddr *)sa, sl,
+    if (sa->ss_family != AF_UNSPEC && !getnameinfo((struct sockaddr *)sa, sl,
                                                    namebuf, sizeof(namebuf), portbuf, sizeof(portbuf),
                                                    NI_NUMERICHOST | NI_NUMERICSERV)) {
-        *family = AF_UNSPEC;
-        *hostname = strdup("unknown");
-        *hostport = strdup("error");
-
-        return 1;
+        af = sa->ss_family;
     }
 
-    *hostname = strdup(namebuf);
-    *hostport = strdup(portbuf);
-    *family = sa->ss_family;
+    if (!(*hostname) || strncmp(namebuf, *hostname, sizeof(namebuf))) {
+        free_constchar(*hostname);
+        *hostname = strdup(namebuf);
+    }
+    if (!(*hostport) || strncmp(portbuf, *hostport, sizeof(portbuf))) {
+        free_constchar(*hostport);
+        *hostport = strdup(portbuf);
+    }
+    *family = af;
 
-    return 0;
+    return (af != AF_UNSPEC)? 0 : 1;
 }
 
 /* ensure it is compatible with xx_nameinfo()! */
