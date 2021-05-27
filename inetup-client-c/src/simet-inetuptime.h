@@ -122,6 +122,7 @@ struct simet_inetup_server {
     const char *uptime_group;     /* availability group, e.g. IX.br location */
     const char *server_hostname;                          /* server hostname */
     const char *server_description;        /* server description, for humans */
+    const char *s_cluster_hostname;      /* server-informed cluster hostname */
 };
 
 /* message handler, returns 0 if not handled, < 0 error, 1 if handled */

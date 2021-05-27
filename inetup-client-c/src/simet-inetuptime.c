@@ -1049,6 +1049,10 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
             && s->server_description) {
         protocol_msg(MSG_DEBUG, s, "ma_config: measurement peer description is \"%s\"", s->server_description);
     }
+    if (xx_maconfig_getstr(s, jconf, "cluster-hostname", &s->s_cluster_hostname) > 0
+            && s->s_cluster_hostname) {
+        protocol_msg(MSG_DEBUG, s, "ma_config: measurement peer cluster is \"%s\"", s->s_cluster_hostname);
+    }
 
     /* FIXME: it would be nice to actually cause a connection drop if uptime-group
      * can't be correctly processed, but returning an error here isn't enough */
@@ -1696,23 +1700,27 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
                         sa_family_t *family, const char **hostname, const char **hostport)
 {
-    char namebuf[256], portbuf[32];
+    char namebuf[256] = "unknown";
+    char portbuf[32]  = "unknown";
+    sa_family_t af = AF_UNSPEC;
 
-    if (sa->ss_family == AF_UNSPEC || getnameinfo((struct sockaddr *)sa, sl,
+    if (sa->ss_family != AF_UNSPEC && !getnameinfo((struct sockaddr *)sa, sl,
                                                    namebuf, sizeof(namebuf), portbuf, sizeof(portbuf),
                                                    NI_NUMERICHOST | NI_NUMERICSERV)) {
-        *family = AF_UNSPEC;
-        *hostname = strdup("unknown");
-        *hostport = strdup("error");
-
-        return 1;
+        af = sa->ss_family;
     }
 
-    *hostname = strdup(namebuf);
-    *hostport = strdup(portbuf);
-    *family = sa->ss_family;
+    if (!(*hostname) || strncmp(namebuf, *hostname, sizeof(namebuf))) {
+        free_constchar(*hostname);
+        *hostname = strdup(namebuf);
+    }
+    if (!(*hostport) || strncmp(portbuf, *hostport, sizeof(portbuf))) {
+        free_constchar(*hostport);
+        *hostport = strdup(portbuf);
+    }
+    *family = af;
 
-    return 0;
+    return (af != AF_UNSPEC)? 0 : 1;
 }
 
 /* ensure it is compatible with xx_nameinfo()! */
@@ -2097,10 +2105,23 @@ static void uptimeserver_destroy(struct simet_inetup_server *s)
             s->socket = -1;
             protocol_msg(MSG_IMPORTANT, s, "client forcefully disconnected");
         }
+
         free(s->out_queue.buffer);
         free(s->in_queue.buffer);
+
         if (s->peer_gai)
             freeaddrinfo(s->peer_gai);
+
+        free_constchar(s->peer_name);
+        free_constchar(s->peer_port);
+        free_constchar(s->local_name);
+        free_constchar(s->local_port);
+
+        free_constchar(s->uptime_group);
+        free_constchar(s->server_hostname);
+        free_constchar(s->server_description);
+        free_constchar(s->s_cluster_hostname);
+
         free(s);
     }
 }
