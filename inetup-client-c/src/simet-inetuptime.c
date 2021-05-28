@@ -1400,9 +1400,9 @@ static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * co
     json_object_object_add(jo, "tx_bytes", json_object_new_int64(itx));
     json_object_object_add(jo, "rx_bytes", json_object_new_int64(irx));
     json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(t2_s));
-    json_object_object_add(jo, "timestamp-microsseconds-since-second", json_object_new_int64(t2_us));
+    json_object_object_add(jo, "timestamp-microseconds-since-second", json_object_new_int64(t2_us));
     json_object_object_add(jo, "since-timestamp-seconds", json_object_new_int64(t1_s));
-    json_object_object_add(jo, "since-timestamp-microsseconds-since-second", json_object_new_int64(t1_us));
+    json_object_object_add(jo, "since-timestamp-microseconds-since-second", json_object_new_int64(t1_us));
     json_object_object_add(jo, "tx_delta_bytes", json_object_new_int64(idtx));
     json_object_object_add(jo, "rx_delta_bytes", json_object_new_int64(idrx));
 
