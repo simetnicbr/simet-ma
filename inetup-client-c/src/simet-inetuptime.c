@@ -656,6 +656,26 @@ static int tcpaq_peek_nowait(struct simet_inetup_server * const s, size_t object
  * SIMET2 Uptime2 protocol helpers
  */
 
+/*
+ * First value returned on program start must be 1, not zero.
+ * Must wrap around UINT32_MAX+1 to zero.
+ *
+ * note: C11 atomics are probably not available in openwrt 15.05;
+ * FIXME: if we ever go multithreaded, deal with this! */
+static uint32_t get_uptime2_seqnumber(void)
+{
+    static uint32_t uptime2_seqnumber = 0;
+
+    uptime2_seqnumber++;
+
+    return uptime2_seqnumber;
+}
+static void xx_json_object_seqnum_add(struct json_object * const j)
+{
+    json_object_object_add(j, "seqnum",
+                    json_object_new_int64(get_uptime2_seqnumber()));
+}
+
 static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
 {
     /* The use of SO_SNDTIMEO for blocking connect() timeout is not
@@ -877,6 +897,8 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
 
     json_object_object_add(jroot, "events", jarray);
     jarray = NULL;
+
+    xx_json_object_seqnum_add(jroot);
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
@@ -1250,12 +1272,20 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - client will send MEASUREMENT messages when needed
      *    - client processes optional measurement-period-seconds
      *      parameter in MA_CONFIG
+     *
+     * Protocol v2: client-seqnum-v1 capability
+     *    - client will add client-sequence-number fields to:
+     *      CONNECT, MEASUREMENT, EVENTS
+     *      the sequence number is global to the client, and strictly
+     *      monotonic [until wraparound / client restart].
+     *      It wraps at UINT32_MAX to 0.
      */
     if (simet_uptime2_request_remotekeepalive) {
         json_object_array_add(jcap, json_object_new_string("server-keepalive"));
     }
     json_object_array_add(jcap, json_object_new_string("msg-disconnect"));
     json_object_array_add(jcap, json_object_new_string("msg-measurement"));
+    json_object_array_add(jcap, json_object_new_string("client-seqnum-v1"));
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -1299,6 +1329,8 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
 #endif
     if (s->connect_timestamp)
         json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
+
+    xx_json_object_seqnum_add(jo);
 
     const char *jsonstr = json_object_to_json_string(jo);
     if (jsonstr) {
@@ -1412,6 +1444,7 @@ static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * co
 
     json_object_object_add(jroot, "measurements", jarray);
     jarray = NULL;
+    xx_json_object_seqnum_add(jroot);
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
