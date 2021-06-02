@@ -2330,7 +2330,7 @@ static void print_usage(const char * const p, int mode)
             "\t-M\tmeasurement task name\n"
             "\t-b\tboot id (e.g. from /proc/sys/kernel/random/boot_id)\n"
             "\t-j\tpath to a file with the access credentials\n"
-            "\t-i\tmonitor amount of traffic on this network device\n"
+            "\t-i\tpath to a file with network devices to monitor for amount of traffic\n"
             "\n"
             "server name: DNS name of server(s)\n"
             "server port: TCP port on server\n"
