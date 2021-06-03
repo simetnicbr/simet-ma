@@ -1400,9 +1400,9 @@ static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * co
     json_object_object_add(jo, "tx_bytes", json_object_new_int64(itx));
     json_object_object_add(jo, "rx_bytes", json_object_new_int64(irx));
     json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(t2_s));
-    json_object_object_add(jo, "timestamp-microsseconds-since-second", json_object_new_int64(t2_us));
+    json_object_object_add(jo, "timestamp-microseconds-since-second", json_object_new_int64(t2_us));
     json_object_object_add(jo, "since-timestamp-seconds", json_object_new_int64(t1_s));
-    json_object_object_add(jo, "since-timestamp-microsseconds-since-second", json_object_new_int64(t1_us));
+    json_object_object_add(jo, "since-timestamp-microseconds-since-second", json_object_new_int64(t1_us));
     json_object_object_add(jo, "tx_delta_bytes", json_object_new_int64(idtx));
     json_object_object_add(jo, "rx_delta_bytes", json_object_new_int64(idrx));
 
@@ -2330,7 +2330,7 @@ static void print_usage(const char * const p, int mode)
             "\t-M\tmeasurement task name\n"
             "\t-b\tboot id (e.g. from /proc/sys/kernel/random/boot_id)\n"
             "\t-j\tpath to a file with the access credentials\n"
-            "\t-i\tmonitor amount of traffic on this network device\n"
+            "\t-i\tpath to a file with network devices to monitor for amount of traffic\n"
             "\n"
             "server name: DNS name of server(s)\n"
             "server port: TCP port on server\n"
