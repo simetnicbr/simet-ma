@@ -61,6 +61,10 @@ void os_netdev_done(void *netdev_ctx);
 /* reads interface counters, returns 0 (ok) or -ERRNO */
 int os_get_netdev_counters(uint64_t *tx_bytes, uint64_t *rx_bytes, void * const netdev_ctx);
 
+/* Get the number of seconds since boot in *val, limited to LONG_MAX.
+ * returns 0 if sucessful, -EINVAL or -ENOTSUP otherwise */
+int os_seconds_since_boot(int64_t * const uptime);
+
 #else
 
 static int os_netdev_bytecount_supported(void) { return 0; }
@@ -68,6 +72,7 @@ static int os_netdev_init(const char * const netdev_name, void **netdev_ctx) { r
 static int os_netdev_change(const char * const netdev_name, void *netdev_ctx) { return -ENOTSUP; }
 static void os_netdev_done(void *netdev_ctx) { return };
 static int os_get_netdev_counters(uint64_t *tx_bytes, uint64_t *rx_bytes, void * const netdev_ctx) { return -ENOTSUP; }
+static int os_seconds_since_boot(int64_t * const uptime) { return (uptime)? -ENOTSUP : -EINVAL; }
 
 #endif /* __linux__ */
 

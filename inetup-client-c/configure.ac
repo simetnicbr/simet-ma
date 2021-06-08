@@ -78,6 +78,7 @@ AC_PROG_CC_STDC
 
 dnl Checks for headers
 AC_HEADER_STDC
+AC_CHECK_HEADERS([sys/sysinfo.h])
 dnl AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h unistd.h time.h cpuid.h])
 
 # Checks for typedefs, structures, and compiler characteristics.

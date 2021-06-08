@@ -28,10 +28,15 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#ifdef HAVE_SYS_SYSINFO_H
+#include <sys/sysinfo.h>
+#endif
 
 #include "simet-inetuptime.h"
 #include "simet_err.h"
@@ -211,6 +216,30 @@ void os_netdev_done(void *netdev_ctx)
         free(ctx);
     }
 }
+
+#ifdef HAVE_SYS_SYSINFO_H
+/* May wrap around INT32_MAX on 32-bit platforms! */
+int os_seconds_since_boot(int64_t * const uptime)
+{
+    struct sysinfo si;
+
+    if (!uptime || sysinfo(&si) != 0)
+        return -EINVAL;
+
+    *uptime = (si.uptime >= 0)? si.uptime : LONG_MAX;
+
+    errno = 0;
+    return 0;
+}
+
+#else
+
+int os_seconds_since_boot(int64_t * const uptime)
+{
+    return (uptime)? -ENOTSUP : -EINVAL ;
+}
+#endif /* SYS/SYSINFO.H */
+
 
 #endif /* __linux__ */
 
