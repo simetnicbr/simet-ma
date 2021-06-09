@@ -79,6 +79,8 @@ static unsigned int simet_uptime2_tcp_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
 static clockid_t clockid = CLOCK_MONOTONIC;
 static time_t client_start_timestamp;
 static time_t client_eventrec_start_timestamp;
+static time_t client_boot_offset = 0;
+static int    client_boot_sync   = 0;
 
 static const int simet_uptime2_request_remotekeepalive = 1;
 
@@ -175,11 +177,120 @@ static time_t reltime(void)
     struct timespec now;
 
     if (!clock_gettime(clockid, &now)) {
+        now.tv_sec += client_boot_offset;
         return (now.tv_sec > 0)? now.tv_sec : 0;  /* this helps the optimizer and squashes several warnings */
     } else {
         print_err("clock_gettime(%d) failed!", clockid);
         /* FIXME: consider abort(EXIT_FAILURE) */
         return 0; /* kaboom! most likely :-( */
+    }
+}
+
+static void init_timekeeping(void)
+{
+    struct timespec ts;
+    int64_t now_boot;
+
+#ifdef CLOCK_BOOTTIME
+    /* First option: CLOCK_BOOTTIME */
+    if (!clock_gettime(CLOCK_BOOTTIME, &ts)) {
+        clockid = CLOCK_BOOTTIME;
+        client_boot_offset = 0;
+        client_boot_sync = 1;
+    } else
+#endif
+    /* Second option: CLOCK_MONOTONIC + sys/sysinfo::sysinfo() */
+    if (!os_seconds_since_boot(&now_boot)) {
+        time_t now_rel;
+        int64_t old_offset = client_boot_offset;
+
+        client_boot_offset = 0; /* reset in case this is a resync */
+        now_rel = reltime(); /* must call with offset set to zero */
+
+        /* Don't bother correcting offset errors smaller than 3s, as 1s
+         * (and maybe 2s?) requires a back-to-back retry if it fails due to
+         * landing at the wrong side of a second bondary in either clock
+         * (or worse, both clocks), and doing it for errors smaller than 1s
+         * requires either something else than os_seconds_since_boot() or a
+         * phase-lock loop that takes several *seconds* to run */
+
+        /* Keep in sync with timekeeping_needs_resync() or it will break
+         * hideously!  Time won't go backwards in a resync because we never
+         * trigger the resync in that case. */
+        client_boot_offset = (abs(now_boot - now_rel) > 2)? now_boot - now_rel : 0;
+
+        clockid = CLOCK_MONOTONIC;
+        client_boot_sync = 1;
+
+        if (client_boot_offset < old_offset) {
+            /* Should never happen: it went backwards! */
+
+            print_msg(MSG_IMPORTANT, "irrecoverable clock sync loss: (old offset %lld) > (new offset %lld)",
+                    (long long) old_offset, (long long) client_boot_offset);
+            print_msg(MSG_IMPORTANT, "switching to unsync mode, and keeping old offset");
+            client_boot_sync = 0;
+            client_boot_offset = old_offset;
+        }
+    } else {
+        /* last option: defaults */
+        clockid = CLOCK_MONOTONIC;
+        client_boot_sync = 0;
+        client_boot_offset = 0;
+    }
+}
+
+/* Returns non-zero if there is a need to resync.
+ * To resync: call init_timekeeping(), but do it with all connections
+ * down and all threads quiesced!
+ */
+static int timekeeping_needs_resync(void)
+{
+#ifdef CLOCK_BOOTTIME
+    if (clockid == CLOCK_BOOTTIME)
+        return 0;
+#endif
+
+    if (clockid == CLOCK_MONOTONIC && client_boot_sync) {
+        time_t  reltime_now = reltime();
+        int64_t boottime_now;
+
+        if (os_seconds_since_boot(&boottime_now)) {
+            /* it broke?! resync to fix */
+            return 1;
+        }
+
+        /* ignore differences of up to three seconds.  Do *not* even
+         * consider a resync if it would cause the offset to go backwards.
+         *
+         * if reltime() breaks and returns 0, it is also going to force a
+         * resync.  triggering resync at smaller differences is non-trivial
+         * as we don't sync *here* and it could happen very often due to
+         * bounded phase error at the second boundary of either (or both!)
+         * clocks.
+         *
+         * Keep the threshold in sync with init_timekeeping(), or
+         * it could break hideously.
+         * */
+        return !!(boottime_now - reltime_now > 2);
+    }
+
+    return 0;
+}
+
+static void log_timekeeping_state()
+{
+    if (client_boot_sync) {
+        print_msg(MSG_DEBUG, "timestamps are seconds since system boot");
+
+#ifdef CLOCK_BOOTTIME
+        if (clockid == CLOCK_BOOTTIME) {
+           print_msg(MSG_DEBUG, "timestamps will use CLOCK_BOOTTIME");
+        }
+#endif
+        if (client_boot_offset)  {
+           print_msg(MSG_DEBUG, "timestamps using a monotonic clock offset: %llds",
+                (long long) client_boot_offset);
+        }
     }
 }
 
@@ -1274,6 +1385,9 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - client processes optional measurement-period-seconds
      *      parameter in MA_CONFIG
      *
+     * Protocol v2: timestamp-zero-at-boot
+     *    - client timestamp has its zero at device boot
+     *
      * Protocol v2: client-seqnum-v1 capability
      *    - client will add client-sequence-number fields to:
      *      CONNECT, MEASUREMENT, EVENTS
@@ -1286,6 +1400,9 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     }
     json_object_array_add(jcap, json_object_new_string("msg-disconnect"));
     json_object_array_add(jcap, json_object_new_string("msg-measurement"));
+    if (client_boot_sync) {
+        json_object_array_add(jcap, json_object_new_string("timestamp-zero-at-boot"));
+    }
     json_object_array_add(jcap, json_object_new_string("client-seqnum-v1"));
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
@@ -1432,9 +1549,9 @@ static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * co
     json_object_object_add(jo, "name", json_object_new_string("wan_txrx"));
     json_object_object_add(jo, "tx_bytes", json_object_new_int64(itx));
     json_object_object_add(jo, "rx_bytes", json_object_new_int64(irx));
-    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(t2_s));
+    json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(t2_s + client_boot_offset));
     json_object_object_add(jo, "timestamp-microseconds-since-second", json_object_new_int64(t2_us));
-    json_object_object_add(jo, "since-timestamp-seconds", json_object_new_int64(t1_s));
+    json_object_object_add(jo, "since-timestamp-seconds", json_object_new_int64(t1_s + client_boot_offset));
     json_object_object_add(jo, "since-timestamp-microseconds-since-second", json_object_new_int64(t1_us));
     json_object_object_add(jo, "tx_delta_bytes", json_object_new_int64(idtx));
     json_object_object_add(jo, "rx_delta_bytes", json_object_new_int64(idrx));
@@ -2559,6 +2676,7 @@ int main(int argc, char **argv) {
     progname = argv[0];
     sanitize_std_fds();
 
+    init_timekeeping();
     client_start_timestamp = reltime();
     client_eventrec_start_timestamp = 0;
 
@@ -2639,6 +2757,8 @@ int main(int argc, char **argv) {
 
     /* init */
 
+    log_timekeeping_state();
+
     if (init_server_structures(server_clusters, &servers, &servers_count) < 0)
         goto err_enomem;
 
@@ -2661,12 +2781,22 @@ int main(int argc, char **argv) {
         time_t minwait = 300;
         unsigned int j, num_shutdown;
         int queued_msg_disconnect;
+        int queued_full_resync;
 
         num_shutdown = 0;
 
-        /* safe semanthics if it is ever made volatile/MT */
+        queued_full_resync = !!(timekeeping_needs_resync());
+        if (queued_full_resync) {
+            /* we will *have* to force-disconnect everything in the next pass */
+            print_msg(MSG_IMPORTANT, "resync due to system sleep required, forcing global disconnection");
+            init_timekeeping();
+            log_timekeeping_state();
+        }
+
+        /* safe semanthics if it is ever made volatile/MT
+         * if a resync is pending, resync first */
         queued_msg_disconnect = 0;
-        if (got_disconnect_msg) {
+        if (!queued_full_resync && got_disconnect_msg) {
             queued_msg_disconnect = 1;
             got_disconnect_msg = 0;
         }
@@ -2689,6 +2819,11 @@ int main(int argc, char **argv) {
                 servers_pollfds[j].fd = -1;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
+                if (queued_full_resync) {
+                    /* resync before reconnecting */
+                    wait = 0;
+                    break;
+                }
                 if (queued_msg_disconnect) {
                     s->backoff_level = BACKOFF_LEVEL_MAX-1;
                     s->backoff_clock = reltime();
@@ -2711,11 +2846,22 @@ int main(int argc, char **argv) {
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 break;
             case SIMET_INETUP_P_C_REFRESH:
+                if (queued_full_resync) {
+                    /* resync first, but we can keep the tcp connection
+                     * as we have not sent any protocol messages yet */
+                    wait = 0;
+                    break;
+                }
                 s->remote_keepalive_clock = 0;
                 s->backoff_reset_clock = reltime();
                 wait = uptimeserver_refresh(s);
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
+                if (queued_full_resync) {
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
                 if (queued_msg_disconnect) {
                     /* FIXME: queue a server-told-us-to-disconnect event to report later */
                     s->backoff_level = BACKOFF_LEVEL_MAX-1;
