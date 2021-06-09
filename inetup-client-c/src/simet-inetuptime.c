@@ -76,6 +76,7 @@ static const char *monitor_netdev = NULL;
 
 static unsigned int simet_uptime2_tcp_timeout = SIMET_UPTIME2_DEFAULT_TIMEOUT;
 
+static clockid_t clockid = CLOCK_MONOTONIC;
 static time_t client_start_timestamp;
 static time_t client_eventrec_start_timestamp;
 
@@ -173,10 +174,10 @@ static time_t reltime(void)
 {
     struct timespec now;
 
-    if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
+    if (!clock_gettime(clockid, &now)) {
         return (now.tv_sec > 0)? now.tv_sec : 0;  /* this helps the optimizer and squashes several warnings */
     } else {
-        print_err("clock_gettime(CLOCK_MONOTONIC) failed!");
+        print_err("clock_gettime(%d) failed!", clockid);
         /* FIXME: consider abort(EXIT_FAILURE) */
         return 0; /* kaboom! most likely :-( */
     }
@@ -1511,7 +1512,7 @@ static int xx_simet_uptime2_m_wantxrx_reconfig(const int enable_measurement)
         }
     }
 
-    if (clock_gettime(CLOCK_MONOTONIC, &m_wantxrx_data.last_t) ||
+    if (clock_gettime(clockid, &m_wantxrx_data.last_t) ||
         os_get_netdev_counters(&m_wantxrx_data.last_tx, &m_wantxrx_data.last_rx,
                 m_wantxrx_data.sys_context)) {
         goto err_exit;
@@ -1564,7 +1565,7 @@ static int run_measurement_wantxrx(struct simet_inetup_server * const s)
     if (rc > 0)
         return rc;
 
-    if (os_get_netdev_counters(&tx, &rx, m_wantxrx_data.sys_context) || clock_gettime(CLOCK_MONOTONIC, &now))
+    if (os_get_netdev_counters(&tx, &rx, m_wantxrx_data.sys_context) || clock_gettime(clockid, &now))
         return (s->measurement_period <= INT_MAX) ? (int) s->measurement_period : INT_MAX; /* skip data point */
 
     /* we assume a new enough kernel with 64bit counters, so no rollover at 2^32 */
