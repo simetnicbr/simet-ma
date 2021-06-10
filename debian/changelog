@@ -1,3 +1,18 @@
+simet-ma (0.17.6.3) unstable; urgency=medium
+
+  * simet-ma version 0.17.6.3
+  * inetup: support sequence numbers, protocol capability "client-seqnum-v1":
+    add 32-bit sequence numbers to most messages, helps syncronizing messages
+    delivered in a multi-peer multi-cluster scenario.
+  * inetup: support boot-time timestamps, protocol capability
+    "timestamp-zero-at-boot": a client-timestamp of 0s is system boot time
+    (as opposed to some undefined point in time) when this capability is
+    present in the client CONNECT message.
+  * inetup: correct timestamp field names for MEASUREMENT messages
+  * inetup: correct CLI help message for option "-i"
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 10 Jun 2021 15:13:39 -0300
+
 simet-ma (0.17.6.2) unstable; urgency=medium
 
   * simet-ma version 0.17.6.2
