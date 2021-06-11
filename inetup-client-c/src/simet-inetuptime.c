@@ -1122,6 +1122,7 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
     struct json_tokener *jtok;
     struct json_object *jroot = NULL;
     struct json_object *jconf, *jo;
+    int allow_client_measurements = 0;
     int res = 2;
 
     if (hdr->message_size < 2) {
@@ -1157,6 +1158,7 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         /* reset all capabilities */
         s->remote_keepalives_enabled = 0;
         s->client_seqnum_enabled = 0;
+        allow_client_measurements = 0;
 
         /* set any capabilities we know about, warn of others */
         al = json_object_array_length(jo);
@@ -1167,6 +1169,8 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
                 s->remote_keepalives_enabled = 1;
             } else if (!strcasecmp("client-seqnum-v1", cap)) {
                 s->client_seqnum_enabled = 1;
+            } else if (!strcasecmp("msg-measurement", cap)) {
+                allow_client_measurements = 1;
             /* else if (!strcasecmp("other key", cap)) ... */
             } else {
                 protocol_trace(s, "ma_config: ignoring capability %s", cap ? cap : "(empty)");
@@ -1178,6 +1182,14 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         xx_set_tcp_timeouts(s);
     xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
     xx_maconfig_getuint(s, jconf, "measurement-period-seconds", &s->measurement_period, 0, 86400);
+
+    if (allow_client_measurements && s->measurement_period) {
+        protocol_msg(MSG_DEBUG, s, "ma_config: measurements enabled, report every %u seconds",
+                     s->measurement_period);
+    } else {
+        s->measurement_period = 0; /* override a possible default value */
+        protocol_trace(s, "ma_config: will not report measurements to this server");
+    }
 
     if (xx_maconfig_getstr(s, jconf, "server-hostname", &s->server_hostname) > 0
             && s->server_hostname) {
@@ -1391,6 +1403,11 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - client will send MEASUREMENT messages when needed
      *    - client processes optional measurement-period-seconds
      *      parameter in MA_CONFIG
+     *    - client does not send MEASUREMENT to servers when
+     *      server sets measurement-period-seconds to zero
+     *    - client requires msg-measurement capability on ma_config
+     *      to send MEASUREMENT messages to that server
+     *      (old clients always send such MESSAGES)
      *
      * Protocol v2: timestamp-zero-at-boot
      *    - client timestamp has its zero at device boot
