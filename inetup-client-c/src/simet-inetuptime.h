@@ -119,6 +119,7 @@ struct simet_inetup_server {
     unsigned int client_timeout;     /* client times out the server, seconds */
     unsigned int server_timeout;     /* server times out the client, seconds */
     int remote_keepalives_enabled;           /* capability server-keepalives */
+    int client_seqnum_enabled;                /* capability client-seqnum-v1 */
     unsigned int measurement_period;    /* base (desired) measurement period */
     const char *uptime_group;     /* availability group, e.g. IX.br location */
     const char *server_hostname;                          /* server hostname */

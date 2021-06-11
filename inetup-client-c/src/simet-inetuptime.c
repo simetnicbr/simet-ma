@@ -1010,7 +1010,8 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
     json_object_object_add(jroot, "events", jarray);
     jarray = NULL;
 
-    xx_json_object_seqnum_add(jroot);
+    if (s->client_seqnum_enabled)
+        xx_json_object_seqnum_add(jroot);
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
@@ -1155,6 +1156,7 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
 
         /* reset all capabilities */
         s->remote_keepalives_enabled = 0;
+        s->client_seqnum_enabled = 0;
 
         /* set any capabilities we know about, warn of others */
         al = json_object_array_length(jo);
@@ -1163,6 +1165,8 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
             if (!strcasecmp("server-keepalive", cap)) {
                 /* this one we should enable even if we did not request it */
                 s->remote_keepalives_enabled = 1;
+            } else if (!strcasecmp("client-seqnum-v1", cap)) {
+                s->client_seqnum_enabled = 1;
             /* else if (!strcasecmp("other key", cap)) ... */
             } else {
                 protocol_trace(s, "ma_config: ignoring capability %s", cap ? cap : "(empty)");
@@ -1224,7 +1228,8 @@ err_exit:
 /*
  * EVENTS message:
  *
- * { "events": [ { "name": "<event>", "timestamp-seconds": <event timestamp> }, ... ] }
+ * { "events": [ { "name": "<event>", "timestamp-seconds": <event timestamp> }, ... ],
+ *   "seqnum": <seqnum> (optional) }
  *
  */
 static int simet_uptime2_msghdl_serverevents(struct simet_inetup_server * const s,
@@ -1396,6 +1401,10 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *      the sequence number is global to the client, and strictly
      *      monotonic [until wraparound / client restart].
      *      It wraps at UINT32_MAX to 0.
+     *    - client will stop tracking/sending sequence numbers to
+     *      an connection after it receives a ma_config message
+     *      removing the client-seqnum-v1 capability.  Note that this
+     *      could come later after a few messages have already been sent.
      */
     if (simet_uptime2_request_remotekeepalive) {
         json_object_array_add(jcap, json_object_new_string("server-keepalive"));
@@ -1405,7 +1414,9 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (client_boot_sync) {
         json_object_array_add(jcap, json_object_new_string("timestamp-zero-at-boot"));
     }
-    json_object_array_add(jcap, json_object_new_string("client-seqnum-v1"));
+    if (s->client_seqnum_enabled) {
+        json_object_array_add(jcap, json_object_new_string("client-seqnum-v1"));
+    }
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -1450,6 +1461,7 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (s->connect_timestamp)
         json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
 
+    /* always add a sequence number to the CONNECT message */
     xx_json_object_seqnum_add(jo);
 
     const char *jsonstr = json_object_to_json_string(jo);
@@ -1509,7 +1521,7 @@ static inline int need_telemetry_server(void)
  *     "timestamp-microssecond-from-seconds": <event timestamp microsseconds, 0-999999>
  *     ... (measurement data fields depend on <measurement name>)
  *   }, ...
- *   ] }
+ * ], "seqnum": <seqnum> (optional) }
  *
  *
  * Warning: we use struct timeval to carry the timestamps, but they *must* be *already*
@@ -1564,7 +1576,9 @@ static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * co
 
     json_object_object_add(jroot, "measurements", jarray);
     jarray = NULL;
-    xx_json_object_seqnum_add(jroot);
+
+    if (s->client_seqnum_enabled)
+        xx_json_object_seqnum_add(jroot);
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
@@ -1903,6 +1917,7 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
     s->client_timeout = simet_uptime2_tcp_timeout;
     s->measurement_period = SIMET_UPTIME2_DFL_MSR_PERIOD;
     s->remote_keepalives_enabled = 0;
+    s->client_seqnum_enabled = 1;
     free_constchar(s->uptime_group);
     s->uptime_group = NULL;
     free_constchar(s->server_description);
