@@ -50,8 +50,8 @@ enum simet_inetup_protocol_state {
     SIMET_INETUP_P_C_RECONNECT,		/* TCP (re)connection with backoff control */
     SIMET_INETUP_P_C_CONNECT,		/* Loop over DNS results, TCP nonblock connect() */
     SIMET_INETUP_P_C_CONNECTWAIT,	/* Wait TCP connect() reply */
-    SIMET_INETUP_P_C_CONNECTED,		/* TCP connected, go to refresh */
-    SIMET_INETUP_P_C_REFRESH,		/* (re-)send full state, go to mainloop */
+    SIMET_INETUP_P_C_CONNECTED,		/* TCP connected, sent CONNECT message */
+    SIMET_INETUP_P_C_WAITCONFIG,	/* wait for MA_CONFIG, go to mainloop */
     SIMET_INETUP_P_C_MAINLOOP,		/* keepalive and events loop */
     SIMET_INETUP_P_C_DISCONNECT,	/* send shutdown notification */
     SIMET_INETUP_P_C_DISCONNECT_WAIT,	/* wait for queue drain, force connection shutdown */
@@ -115,9 +115,11 @@ struct simet_inetup_server {
     unsigned int peer_noconnect_ttl;
 
     /* server-configurable parameters */
+    unsigned int ma_config_count;   /* 0 (not yet), 1 (once) or 2 (reconfig) */
     unsigned int client_timeout;     /* client times out the server, seconds */
     unsigned int server_timeout;     /* server times out the client, seconds */
     int remote_keepalives_enabled;           /* capability server-keepalives */
+    int client_seqnum_enabled;                /* capability client-seqnum-v1 */
     unsigned int measurement_period;    /* base (desired) measurement period */
     const char *uptime_group;     /* availability group, e.g. IX.br location */
     const char *server_hostname;                          /* server hostname */

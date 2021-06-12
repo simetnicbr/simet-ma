@@ -1010,7 +1010,8 @@ static int xx_simet_uptime2_sndevent(struct simet_inetup_server * const s,
     json_object_object_add(jroot, "events", jarray);
     jarray = NULL;
 
-    xx_json_object_seqnum_add(jroot);
+    if (s->client_seqnum_enabled)
+        xx_json_object_seqnum_add(jroot);
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
@@ -1121,6 +1122,7 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
     struct json_tokener *jtok;
     struct json_object *jroot = NULL;
     struct json_object *jconf, *jo;
+    int allow_client_measurements = 0;
     int res = 2;
 
     if (hdr->message_size < 2) {
@@ -1155,6 +1157,8 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
 
         /* reset all capabilities */
         s->remote_keepalives_enabled = 0;
+        s->client_seqnum_enabled = 0;
+        allow_client_measurements = 0;
 
         /* set any capabilities we know about, warn of others */
         al = json_object_array_length(jo);
@@ -1163,6 +1167,10 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
             if (!strcasecmp("server-keepalive", cap)) {
                 /* this one we should enable even if we did not request it */
                 s->remote_keepalives_enabled = 1;
+            } else if (!strcasecmp("client-seqnum-v1", cap)) {
+                s->client_seqnum_enabled = 1;
+            } else if (!strcasecmp("msg-measurement", cap)) {
+                allow_client_measurements = 1;
             /* else if (!strcasecmp("other key", cap)) ... */
             } else {
                 protocol_trace(s, "ma_config: ignoring capability %s", cap ? cap : "(empty)");
@@ -1174,6 +1182,14 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         xx_set_tcp_timeouts(s);
     xx_maconfig_getuint(s, jconf, "server-timeout-seconds", &s->server_timeout, 0, 86400);
     xx_maconfig_getuint(s, jconf, "measurement-period-seconds", &s->measurement_period, 0, 86400);
+
+    if (allow_client_measurements && s->measurement_period) {
+        protocol_msg(MSG_DEBUG, s, "ma_config: measurements enabled, report every %u seconds",
+                     s->measurement_period);
+    } else {
+        s->measurement_period = 0; /* override a possible default value */
+        protocol_trace(s, "ma_config: will not report measurements to this server");
+    }
 
     if (xx_maconfig_getstr(s, jconf, "server-hostname", &s->server_hostname) > 0
             && s->server_hostname) {
@@ -1204,6 +1220,8 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         protocol_msg(MSG_DEBUG, s, "ma_config: availability group set to \"%s\"", s->uptime_group);
     }
 
+    if (s->ma_config_count < 2)
+        s->ma_config_count++;
     res = 1;
 
 err_exit:
@@ -1222,7 +1240,8 @@ err_exit:
 /*
  * EVENTS message:
  *
- * { "events": [ { "name": "<event>", "timestamp-seconds": <event timestamp> }, ... ] }
+ * { "events": [ { "name": "<event>", "timestamp-seconds": <event timestamp> }, ... ],
+ *   "seqnum": <seqnum> (optional) }
  *
  */
 static int simet_uptime2_msghdl_serverevents(struct simet_inetup_server * const s,
@@ -1303,7 +1322,7 @@ static int simet_uptime2_msghdl_serverdisconnect(struct simet_inetup_server * co
     return 1;
 }
 
-/* State: MAINLOOP */
+/* State: WAITCONFIG, MAINLOOP */
 const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
     { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE,   .handler = NULL },
     { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,    .handler = &simet_uptime2_msghdl_maconfig },
@@ -1384,6 +1403,11 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *    - client will send MEASUREMENT messages when needed
      *    - client processes optional measurement-period-seconds
      *      parameter in MA_CONFIG
+     *    - client does not send MEASUREMENT to servers when
+     *      server sets measurement-period-seconds to zero
+     *    - client requires msg-measurement capability on ma_config
+     *      to send MEASUREMENT messages to that server
+     *      (old clients always send such MESSAGES)
      *
      * Protocol v2: timestamp-zero-at-boot
      *    - client timestamp has its zero at device boot
@@ -1394,6 +1418,10 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
      *      the sequence number is global to the client, and strictly
      *      monotonic [until wraparound / client restart].
      *      It wraps at UINT32_MAX to 0.
+     *    - client will stop tracking/sending sequence numbers to
+     *      an connection after it receives a ma_config message
+     *      removing the client-seqnum-v1 capability.  Note that this
+     *      could come later after a few messages have already been sent.
      */
     if (simet_uptime2_request_remotekeepalive) {
         json_object_array_add(jcap, json_object_new_string("server-keepalive"));
@@ -1403,7 +1431,9 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (client_boot_sync) {
         json_object_array_add(jcap, json_object_new_string("timestamp-zero-at-boot"));
     }
-    json_object_array_add(jcap, json_object_new_string("client-seqnum-v1"));
+    if (s->client_seqnum_enabled) {
+        json_object_array_add(jcap, json_object_new_string("client-seqnum-v1"));
+    }
     json_object_object_add(jo, "capabilities", jcap);
     jcap = NULL;
 
@@ -1448,6 +1478,7 @@ static int simet_uptime2_msg_maconnect(struct simet_inetup_server * const s)
     if (s->connect_timestamp)
         json_object_object_add(jo, "timestamp-seconds", json_object_new_int64(s->connect_timestamp));
 
+    /* always add a sequence number to the CONNECT message */
     xx_json_object_seqnum_add(jo);
 
     const char *jsonstr = json_object_to_json_string(jo);
@@ -1507,7 +1538,7 @@ static inline int need_telemetry_server(void)
  *     "timestamp-microssecond-from-seconds": <event timestamp microsseconds, 0-999999>
  *     ... (measurement data fields depend on <measurement name>)
  *   }, ...
- *   ] }
+ * ], "seqnum": <seqnum> (optional) }
  *
  *
  * Warning: we use struct timeval to carry the timestamps, but they *must* be *already*
@@ -1562,7 +1593,9 @@ static int simet_uptime2_msg_measurement_wantxrx(struct simet_inetup_server * co
 
     json_object_object_add(jroot, "measurements", jarray);
     jarray = NULL;
-    xx_json_object_seqnum_add(jroot);
+
+    if (s->client_seqnum_enabled)
+        xx_json_object_seqnum_add(jroot);
 
     const char *jsonstr = json_object_to_json_string(jroot);
     if (jsonstr) {
@@ -1783,40 +1816,7 @@ static void simet_uptime2_backoff_reset(struct simet_inetup_server * const s)
     s->backoff_reset_clock = 0;
 }
 
-/*
- * protocol state machine: state workers
- *
- * returns: N < 0 : errors (-errno)
- *          N = 0 : OK, run next state ASAP
- *          N > 0 : OK, no need to run again for N seconds
- *
- * Do not close the socket without checking first if the
- * state-machine expects it, otherwise it will poll() on
- * a closed socket.
- */
-static int uptimeserver_refresh(struct simet_inetup_server * const s)
-{
-    assert(s);
-    assert(s->state == SIMET_INETUP_P_C_REFRESH);
-
-    if (simet_uptime2_msg_maconnect(s)) {
-        simet_uptime2_reconnect(s);
-    } else {
-        simet_uptime2_keepalive_update(s);
-        s->state = SIMET_INETUP_P_C_MAINLOOP;
-        /* do this only after s->state is set to MAINLOOP */
-        propose_as_telemetry_server(s);
-    }
-
-    /* FIXME: this is correct, but not being done the right way */
-    if (simet_uptime2_msg_clientlifetime(s, 1))
-        simet_uptime2_reconnect(s);
-    else if (simet_uptime2_msg_link(s, 1))
-        simet_uptime2_reconnect(s);
-
-    return 0;
-}
-
+/* send keepalive message to remote */
 static int uptimeserver_keepalive(struct simet_inetup_server * const s)
 {
     assert(s);
@@ -1847,6 +1847,18 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
 
     return (timer_check_full(s->remote_keepalive_clock, s->client_timeout) > 0);
 }
+
+/*
+ * protocol state machine: state workers
+ *
+ * returns: N < 0 : errors (-errno)
+ *          N = 0 : OK, run next state ASAP
+ *          N > 0 : OK, no need to run again for N seconds
+ *
+ * Do not close the socket without checking first if the
+ * state-machine expects it, otherwise it will poll() on
+ * a closed socket.
+ */
 
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
                         sa_family_t *family, const char **hostname, const char **hostport)
@@ -1922,6 +1934,7 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
     s->client_timeout = simet_uptime2_tcp_timeout;
     s->measurement_period = SIMET_UPTIME2_DFL_MSR_PERIOD;
     s->remote_keepalives_enabled = 0;
+    s->client_seqnum_enabled = 1;
     free_constchar(s->uptime_group);
     s->uptime_group = NULL;
     free_constchar(s->server_description);
@@ -2183,7 +2196,38 @@ static int uptimeserver_connected(struct simet_inetup_server * const s)
     s->peer_gai = NULL;
     s->peer_ai = NULL;
 
-    s->state = SIMET_INETUP_P_C_REFRESH;
+    /* try to send first message to server */
+    if (simet_uptime2_msg_maconnect(s)) {
+        simet_uptime2_reconnect(s);
+        return 0;
+    }
+
+    /* start tracking server keepalives for timeout */
+    simet_uptime2_keepalive_update(s);
+    s->backoff_reset_clock = reltime();
+
+    s->state = SIMET_INETUP_P_C_WAITCONFIG;
+    return 0;
+}
+
+static int uptimeserver_waitconfig(struct simet_inetup_server * const s)
+{
+    assert(s);
+    assert(s->state == SIMET_INETUP_P_C_WAITCONFIG);
+
+    if (s->ma_config_count < 1)
+        return INT_MAX;
+
+    s->state = SIMET_INETUP_P_C_MAINLOOP;
+    /* do this only after s->state is set to MAINLOOP */
+    propose_as_telemetry_server(s);
+
+    /* FIXME: this is correct, but not being done the right way */
+    if (simet_uptime2_msg_clientlifetime(s, 1))
+        simet_uptime2_reconnect(s);
+    else if (simet_uptime2_msg_link(s, 1))
+        simet_uptime2_reconnect(s);
+
     return 0;
 }
 
@@ -2845,16 +2889,35 @@ int main(int argc, char **argv) {
                 wait = uptimeserver_connected(s);
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 break;
-            case SIMET_INETUP_P_C_REFRESH:
+            case SIMET_INETUP_P_C_WAITCONFIG:
                 if (queued_full_resync) {
-                    /* resync first, but we can keep the tcp connection
-                     * as we have not sent any protocol messages yet */
+                    simet_uptime2_reconnect(s);
                     wait = 0;
                     break;
                 }
-                s->remote_keepalive_clock = 0;
-                s->backoff_reset_clock = reltime();
-                wait = uptimeserver_refresh(s);
+                if (queued_msg_disconnect) {
+                    /* FIXME: queue a server-told-us-to-disconnect event to report later */
+                    s->backoff_level = BACKOFF_LEVEL_MAX-1;
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
+                /* process return channel messages, we want MA_CONFIG */
+                while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
+                if (got_disconnect_msg)
+                    break;
+
+                if (!uptimeserver_remotetimeout(s)) {
+                    /* remote keepalive timed out */
+                    protocol_msg(MSG_NORMAL, s, "measurement peer connection lost: ma_config not received");
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
+                wait = uptimeserver_waitconfig(s);
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (queued_full_resync) {
