@@ -1204,6 +1204,8 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         protocol_msg(MSG_DEBUG, s, "ma_config: availability group set to \"%s\"", s->uptime_group);
     }
 
+    if (s->ma_config_count < 2)
+        s->ma_config_count++;
     res = 1;
 
 err_exit:
@@ -1303,7 +1305,7 @@ static int simet_uptime2_msghdl_serverdisconnect(struct simet_inetup_server * co
     return 1;
 }
 
-/* State: MAINLOOP */
+/* State: WAITCONFIG, MAINLOOP */
 const struct simet_inetup_msghandlers simet_uptime2_messages_mainloop[] = {
     { .type = SIMET_INETUP_P_MSGTYPE_KEEPALIVE,   .handler = NULL },
     { .type = SIMET_INETUP_P_MSGTYPE_MACONFIG,    .handler = &simet_uptime2_msghdl_maconfig },
@@ -1783,40 +1785,7 @@ static void simet_uptime2_backoff_reset(struct simet_inetup_server * const s)
     s->backoff_reset_clock = 0;
 }
 
-/*
- * protocol state machine: state workers
- *
- * returns: N < 0 : errors (-errno)
- *          N = 0 : OK, run next state ASAP
- *          N > 0 : OK, no need to run again for N seconds
- *
- * Do not close the socket without checking first if the
- * state-machine expects it, otherwise it will poll() on
- * a closed socket.
- */
-static int uptimeserver_refresh(struct simet_inetup_server * const s)
-{
-    assert(s);
-    assert(s->state == SIMET_INETUP_P_C_REFRESH);
-
-    if (simet_uptime2_msg_maconnect(s)) {
-        simet_uptime2_reconnect(s);
-    } else {
-        simet_uptime2_keepalive_update(s);
-        s->state = SIMET_INETUP_P_C_MAINLOOP;
-        /* do this only after s->state is set to MAINLOOP */
-        propose_as_telemetry_server(s);
-    }
-
-    /* FIXME: this is correct, but not being done the right way */
-    if (simet_uptime2_msg_clientlifetime(s, 1))
-        simet_uptime2_reconnect(s);
-    else if (simet_uptime2_msg_link(s, 1))
-        simet_uptime2_reconnect(s);
-
-    return 0;
-}
-
+/* send keepalive message to remote */
 static int uptimeserver_keepalive(struct simet_inetup_server * const s)
 {
     assert(s);
@@ -1847,6 +1816,18 @@ static int uptimeserver_remotetimeout(struct simet_inetup_server * const s)
 
     return (timer_check_full(s->remote_keepalive_clock, s->client_timeout) > 0);
 }
+
+/*
+ * protocol state machine: state workers
+ *
+ * returns: N < 0 : errors (-errno)
+ *          N = 0 : OK, run next state ASAP
+ *          N > 0 : OK, no need to run again for N seconds
+ *
+ * Do not close the socket without checking first if the
+ * state-machine expects it, otherwise it will poll() on
+ * a closed socket.
+ */
 
 static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
                         sa_family_t *family, const char **hostname, const char **hostport)
@@ -2183,7 +2164,38 @@ static int uptimeserver_connected(struct simet_inetup_server * const s)
     s->peer_gai = NULL;
     s->peer_ai = NULL;
 
-    s->state = SIMET_INETUP_P_C_REFRESH;
+    /* try to send first message to server */
+    if (simet_uptime2_msg_maconnect(s)) {
+        simet_uptime2_reconnect(s);
+        return 0;
+    }
+
+    /* start tracking server keepalives for timeout */
+    simet_uptime2_keepalive_update(s);
+    s->backoff_reset_clock = reltime();
+
+    s->state = SIMET_INETUP_P_C_WAITCONFIG;
+    return 0;
+}
+
+static int uptimeserver_waitconfig(struct simet_inetup_server * const s)
+{
+    assert(s);
+    assert(s->state == SIMET_INETUP_P_C_WAITCONFIG);
+
+    if (s->ma_config_count < 1)
+        return INT_MAX;
+
+    s->state = SIMET_INETUP_P_C_MAINLOOP;
+    /* do this only after s->state is set to MAINLOOP */
+    propose_as_telemetry_server(s);
+
+    /* FIXME: this is correct, but not being done the right way */
+    if (simet_uptime2_msg_clientlifetime(s, 1))
+        simet_uptime2_reconnect(s);
+    else if (simet_uptime2_msg_link(s, 1))
+        simet_uptime2_reconnect(s);
+
     return 0;
 }
 
@@ -2845,16 +2857,35 @@ int main(int argc, char **argv) {
                 wait = uptimeserver_connected(s);
                 servers_pollfds[j].events = POLLRDHUP | POLLIN;
                 break;
-            case SIMET_INETUP_P_C_REFRESH:
+            case SIMET_INETUP_P_C_WAITCONFIG:
                 if (queued_full_resync) {
-                    /* resync first, but we can keep the tcp connection
-                     * as we have not sent any protocol messages yet */
+                    simet_uptime2_reconnect(s);
                     wait = 0;
                     break;
                 }
-                s->remote_keepalive_clock = 0;
-                s->backoff_reset_clock = reltime();
-                wait = uptimeserver_refresh(s);
+                if (queued_msg_disconnect) {
+                    /* FIXME: queue a server-told-us-to-disconnect event to report later */
+                    s->backoff_level = BACKOFF_LEVEL_MAX-1;
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
+                /* process return channel messages, we want MA_CONFIG */
+                while (simet_uptime2_recvmsg(s, simet_uptime2_messages_mainloop) > 0);
+
+                if (got_disconnect_msg)
+                    break;
+
+                if (!uptimeserver_remotetimeout(s)) {
+                    /* remote keepalive timed out */
+                    protocol_msg(MSG_NORMAL, s, "measurement peer connection lost: ma_config not received");
+                    simet_uptime2_reconnect(s);
+                    wait = 0;
+                    break;
+                }
+
+                wait = uptimeserver_waitconfig(s);
                 break;
             case SIMET_INETUP_P_C_MAINLOOP:
                 if (queued_full_resync) {
