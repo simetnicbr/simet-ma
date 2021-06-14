@@ -1,3 +1,16 @@
+simet-ma (0.17.6.4) unstable; urgency=medium
+
+  * simet-ma version 0.17.6.4
+  * inetup: wait for MA_CONFIG explicitly in state machine
+  * inetup: suppress sequence numbers when uneeded: stop sending them
+    after CONNECT if server does not echo back (enable) the capability
+    in the connection.
+  * inetup: suppress unwanted MEASUREMENT messages: do not send MEASUREMENT
+    (telemetry) messages if the server does not enable the capability in the
+    connection.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 14 Jun 2021 10:41:22 -0300
+
 simet-ma (0.17.6.3) unstable; urgency=medium
 
   * simet-ma version 0.17.6.3
