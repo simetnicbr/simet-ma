@@ -180,7 +180,7 @@ simet_lmap_sendstate() {
 # APIRES = 304 -> keep current schedule (may happen even without e-tags)
 simet_api_lmapgetsched() {
 	APIRES=$( curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-X GET -f -o "$OUTFILE" -w "%{http_code}" \
+		-X GET -o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config" ) || return 1
 	:
@@ -191,6 +191,10 @@ simet_lmap_download_schedule() {
 	simet_lmap_sendstate || true
 	simet_api_lmapgetsched || return $?
 	case "$APIRES" in
+	200)
+		simet_log simet-ma daemon.info "downloaded a proposed schedule from controller"
+		return 0
+		;;
 	204)
 		simet_log simet-ma daemon.notice "controller ordered us to switch to local schedule"
 		simet_gen_local_schedule || return 1
@@ -202,8 +206,8 @@ simet_lmap_download_schedule() {
 		return 1
 		;;
 	esac
-	simet_log simet-ma daemon.info "downloaded a proposed schedule from controller"
-	:
+	simet_log simet-ma daemon.warn "unexpected result from controller API"
+	return 1
 }
 
 simet_lmap_reload_config() {
