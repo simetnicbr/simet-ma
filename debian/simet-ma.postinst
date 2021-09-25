@@ -55,6 +55,24 @@ fix_traceroute() {
     :
 }
 
+# Refer to:
+#  - https://scotthelme.co.uk/lets-encrypt-old-root-expiration/
+#  - https://www.openssl.org/blog/blog/2021/09/13/LetsEncryptRootCertExpire/
+#  - https://community.letsencrypt.org/t/openssl-client-compatibility-changes-for-let-s-encrypt-certificates/143816
+#
+# Remove "DST Root CA X3", which expired on 2021-09-30, so that "ISRG Root X1"-based
+# trust chains from Let's Encrypt are used instead.  Otherwise, several https sites
+# fail to load.
+fix_letsencrypt() {
+	[ -s /etc/ca-certificates.conf ] \
+	  && grep -q "^mozilla/DST_Root_CA_X3.crt$" /etc/ca-certificates.conf && {
+		echo "$0: NOTICE: Disabling expired \"DST Root CA X3\" to work around potential issues..."
+		sed -i 's#^mozilla/DST_Root_CA_X3.crt$#!mozilla/DST_Root_CA_X3.crt#' /etc/ca-certificates.conf
+		update-ca-certificates
+	}
+	:
+}
+
 case "$1" in
     configure)
         adduser --quiet --system --group --no-create-home --home /opt/simet \
@@ -74,6 +92,7 @@ case "$1" in
 	}
 
 	fix_traceroute
+	fix_letsencrypt
 
 	# Remove any downloaded schedule
 	( . /opt/simet/lib/simet/simet_lib_config.sh \
