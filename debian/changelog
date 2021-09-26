@@ -1,3 +1,13 @@
+simet-ma (0.17.6.5) unstable; urgency=medium
+
+  * simet-ma version 0.17.6.5
+  * Add workaround for Let's Encrypt trust chains being rejected by
+    old gnutls and old openssl after "DST Root CA X3" expires in 2021-09-30
+  * COPYING: remove an stray non-ascii character
+  * debian/control: build-depend on automake
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sat, 25 Sep 2021 21:54:02 -0300
+
 simet-ma (0.17.6.4) unstable; urgency=medium
 
   * simet-ma version 0.17.6.4
