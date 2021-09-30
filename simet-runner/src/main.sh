@@ -37,11 +37,12 @@
 _main_locked(){
   log_important "$PACKAGE_STRING starting..."
 
-  _main_setup
-  _main_orchestrate
+  rc=0
+  _main_setup && _main_orchestrate || rc=$?
   _main_cleanup
 
-  log_debug "$PACKAGE_STRING end"
+  log_debug "$PACKAGE_STRING end, status=$rc"
+  return $rc
 }
 
 main(){
@@ -456,6 +457,7 @@ _main_setup(){
 
   # Remove $BASEDIR if interrupted to avoid wasting tmpfs space on embedded devices
   trap '_main_run_trap' INT TERM QUIT
+  trap 'erc=$? ; _main_cleanup || : ; return $erc' EXIT
 
   # 2. prepare env variables
   local _time_of_exection=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -470,6 +472,7 @@ _main_setup(){
 }
 
 _main_cleanup(){
+  trap - EXIT
   # delete files of this execution
   [ "$DEBUG" != "true" ] && [ -n "$BASEDIR" ] && [ -d "$BASEDIR" ] && rm -fr "$BASEDIR"
   :
