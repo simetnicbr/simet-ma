@@ -14,6 +14,8 @@ AGENT_LOCK="${SIMET_LOCK_DIR}/simet-ma.lock"
 AGENT_VERSION_FILE=@SIMETLIBDIR@/agent-version.txt
 
 SIMET_RUNSTATE_DIR=@SIMETRUNDIR@
+SIMET_VARSTATE_DIR=@SIMETVARDIR@
+SIMET_CACHE_DIR=@SIMETCACHEDIR@
 AGENT_VTK_FILE="$SIMET_RUNSTATE_DIR/agent-vtk"
 
 SIMET_PUBRUNSTATE_DIR=@SIMETPUBRUNDIR@
@@ -34,7 +36,7 @@ TEMPLATE_DIR=@SIMETLIBDIR@
 SIMET_INETUP_SERVER=simet-monitor-inetup.simet.nic.br
 
 API_SIMET_GEO=https://api.simet.nic.br/geolocation
-GEOLOC_CACHE="$SIMET_RUNSTATE_DIR/geoloc-cache.txt"
+GEOLOC_CACHE="$SIMET_CACHE_DIR/geoloc-cache.txt"
 
 LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"

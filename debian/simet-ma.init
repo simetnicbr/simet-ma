@@ -66,6 +66,14 @@ do_start_prepare() {
 		mkdir -m 0770 -p "$SIMET_RUNSTATE_DIR" && \
 		chgrp $SGROUP "$SIMET_RUNSTATE_DIR" && \
 		chmod 0770 "$SIMET_RUNSTATE_DIR"
+	[ -n "$SIMET_VARSTATE_DIR" ] && \
+		mkdir -m 0770 -p "$SIMET_VARSTATE_DIR" && \
+		chgrp $SGROUP "$SIMET_VARSTATE_DIR" && \
+		chmod 0770 "$SIMET_VARSTATE_DIR"
+	[ -n "$SIMET_CACHE_DIR" ] && [ "$SIMET_CACHE_DIR" != "$SIMET_VARSTATE_DIR" ] && \
+		mkdir -m 0770 -p "$SIMET_CACHE_DIR" && \
+		chgrp $SGROUP "$SIMET_CACHE_DIR" && \
+		chmod 0770 "$SIMET_CACHE_DIR"
 	[ -n "$SIMET_PUBRUNSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_PUBRUNSTATE_DIR" && \
 		chgrp $SGROUP "$SIMET_PUBRUNSTATE_DIR" && \

@@ -18,6 +18,7 @@
 simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
 simetrundir=$(localstatedir)/run/simet
+simetvardir=$(localstatedir)/lib/simet
 simetlockdir=$(localstatedir)/lock/simet
 simetpubrundir=$(localstatedir)/run/simet_public
 simetlmapspooldir=$(localstatedir)/spool/lmapd
@@ -31,12 +32,14 @@ CLEANFILES=
 simetenginename=nic_simet2_simet-ma
 
 if SIMETBOX_BUILD
+simetcachedir=$(simetrundir)
 dist_bin_SCRIPTS = simetbox_lmap-fetch-schedule.sh
 sbprefix = simetbox
 jsonfilter=jsonfilter
 theshell=/bin/sh
 smallmemory=1
 else
+simetcachedir=$(simetvardir)
 dist_bin_SCRIPTS = simet_lmap-fetch-schedule.sh simet_view_results.sh
 sbprefix = simet
 jsonfilter=$(bindir)/jsonpath
@@ -127,6 +130,7 @@ config.d/simet-ma_tasklet-config.json :
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETPUBRUNDIR@!$(simetpubrundir)!g" \
+	    -e "s!@SIMETVARDIR@!$(simetvardir)!g" -e "s!@SIMETCACHEDIR@!$(simetcachedir)!g" \
 	    -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPSPOOLDIR@!$(simetlmapspooldir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
@@ -138,6 +142,7 @@ config.d/simet-ma_tasklet-config.json :
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETPUBRUNDIR@!$(simetpubrundir)!g" \
+	    -e "s!@SIMETVARDIR@!$(simetvardir)!g" -e "s!@SIMETCACHEDIR@!$(simetcachedir)!g" \
 	    -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPSPOOLDIR@!$(simetlmapspooldir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" \
@@ -148,6 +153,7 @@ config.d/simet-ma_tasklet-config.json :
 	sed -e "s!@SIMETCONFDIR@!$(simetconfdir)!g" -e "s!@SIMETLIBDIR@!$(simetlibdir)!g" \
 	    -e "s!@BINDIR@!$(bindir)!g" -e "s!@LOCALSTATEDIR@!$(localstatedir)!g" \
 	    -e "s!@SIMETRUNDIR@!$(simetrundir)!g" -e "s!@SIMETPUBRUNDIR@!$(simetpubrundir)!g" \
+	    -e "s!@SIMETVARDIR@!$(simetvardir)!g" -e "s!@SIMETCACHEDIR@!$(simetcachedir)!g" \
 	    -e "s!@SIMETLOCKDIR@!$(simetlockdir)!g" \
 	    -e "s!@LMAPSPOOLDIR@!$(simetlmapspooldir)!g" -e "s!@SBPREFIX@!$(sbprefix)!g" \
 	    -e "s!@PACKAGEVERSION@!$(PACKAGE_VERSION)!g" -e "s!@LMAPBINDIR@!$(simetlmapbindir)!g" \
@@ -164,6 +170,7 @@ install-data-local:
 	$(MKDIR_P) -m 0755 -- "$(DESTDIR)$(simetconfdir)/lmap"
 	$(MKDIR_P) -m 0770 -- "$(DESTDIR)$(simetlmapspooldir)" "$(DESTDIR)$(simetlmapspooldir)/queue" "$(DESTDIR)$(simetlmapspooldir)/reports"
 	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetrundir)"
+	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetvardir)"
 	$(MKDIR_P) -m 0750 -- "$(DESTDIR)$(simetlockdir)"
 
 # Creates tasklet symlinks
