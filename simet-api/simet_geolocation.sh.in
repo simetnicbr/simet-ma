@@ -42,7 +42,7 @@ soft_abend() {
 
 FAIL_SILENTLY=
 CACHE_ONLY=
-MAX_AGE=259200
+MAX_AGE="${GEOLOC_MAXAGE:-259200}"
 while [ $# -gt 0 ] ; do
   case "$1" in
     --fail-silently)
