@@ -16,6 +16,9 @@
 ##   --from-cache        : return only data from cache (do not geolocate)
 ##                         fails if there is no cached data or cache is too old
 ##   --max-age <seconds> : maximum age of cached data, 0 for no-cache
+##   --max-age-spread <seconds>:
+##                         adds a stable spread (based on agent-id)
+##                         within [-max-age-spread/2, +max-age-spread/2]
 ##
 ## simet_geolocation.sh API level: 2
 
@@ -42,7 +45,8 @@ soft_abend() {
 
 FAIL_SILENTLY=
 CACHE_ONLY=
-MAX_AGE=259200
+MAX_AGE="${GEOLOC_MAXAGE:-259200}"
+MAX_AGE_RND="${GEOLOC_MAXAGE_SPREAD:-0}"
 while [ $# -gt 0 ] ; do
   case "$1" in
     --fail-silently)
@@ -54,6 +58,10 @@ while [ $# -gt 0 ] ; do
     --max-age)
       shift
       MAX_AGE="$1"
+      ;;
+    --max-age-spread)
+      shift
+      MAX_AGE_RND="$1"
       ;;
     *)
       RC=2 abend "Unknown command line argument/option $1"
@@ -71,6 +79,9 @@ API_SIMET_GEO=${API_SIMET_GEO:-https://api.simet.nic.br/geolocation}
 	exit 26
 }
 [ -z "$GEOLOC_CACHE" ] && abend "GEOLOC_CACHE missing from conf file"
+
+HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
+	|| RC=3 abend "neither md5sum nor sha256sum found!"
 
 # We *require* an agent-id and agent token to get an API key
 OLDAT=
@@ -194,13 +205,34 @@ persist_geoloc_RAM() {
   :
 }
 
+_check_cache_age() {
+  time_delta="$1"
+
+  # sanitize MAX_AGE, check no-cache
+  [ "$MAX_AGE" -gt 0 ] 2>/dev/null || MAX_AGE=0
+  [ "$MAX_AGE" -eq 0 ] && return 1
+
+  # shortcut cache still too young
+  [ "$MAX_AGE" -ge "$time_delta" ] && return 0
+
+  [ "$MAX_AGE_RND" -gt 0 ] 2>/dev/null && {
+    # stableish pseudo-random sequence for awk, fallback to time-based seed
+    awkseed=$($HASHSUM "$AGENT_ID_FILE" | sed -E -e '1 {s/^[^[:blank:]]*([^[:blank:]]{5})[[:blank:]].*/0x\1/;q}') || awkseed=
+    RND=$(awk "BEGIN { srand($awkseed); printf \"%d\", ((rand()-0.5) * $MAX_AGE_RND*0.5) + $MAX_AGE }") || RND=0
+    # sanitiy check
+    [ "$RND" -gt 0 ] 2>/dev/null && MAX_AGE="$RND"
+  }
+
+  [ "$MAX_AGE" -ge "$time_delta" ] || return 1
+}
+
 _read_cache() {
   [ -r "$GEOLOC_CACHE" ] || return 1;
   GEO_UTIME=$(sed -n -e '1 { p ; q }' "$GEOLOC_CACHE") || return 1
   [ -z "$GEO_UTIME" ] && return 1
-  # Shell could be limited to 32bits, not y2038-safe, but we don't have bc/dc :(
+  # Shell could be limited to 32bits, not y2038-safe
   time_delta=$(( $(date +%s -u) - GEO_UTIME )) || return 1
-  [ "$MAX_AGE" -ge $time_delta ] || return 1
+  _check_cache_age "$time_delta" || return 1
   GEO_LAT=$(sed -n -e '2 {s/ .*// ; p ; q}' "${GEOLOC_CACHE}")
   [ -z "$GEO_LAT" ] && return 1
   GEO_LNG=$(sed -n -e '2 {s/^ *[^ ]\+ *// ; s/ *[^ ]\+ *$// ; p ; q}' "${GEOLOC_CACHE}")
