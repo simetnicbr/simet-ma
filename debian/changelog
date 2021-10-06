@@ -1,3 +1,13 @@
+simet-ma (0.17.6.6) unstable; urgency=medium
+
+  * simet-ma version 0.17.6.6
+  * geolocation: allow easy configuration of the cache longevity
+  * geolocation: add random-spread to cache longevity control
+  * geolocation: persist cached location across reboots
+  * simet-runner: cleanup temporary files on failure paths (in non-debug mode)
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 06 Oct 2021 12:18:02 -0300
+
 simet-ma (0.17.6.5) unstable; urgency=medium
 
   * simet-ma version 0.17.6.5
