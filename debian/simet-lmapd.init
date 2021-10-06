@@ -28,7 +28,7 @@ PIDFILE="${PID_DIR}/lmapd.pid"
 LMAPCTL="/opt/simet/bin/lmapctl -j"
 
 START_ARGS="-u $SUSER -c $SUSER --background"
-STOP_ARGS="-u $SUSER"
+STOP_ARGS="-u $SUSER --retry 10"
 DAEMON_ARGS="-j"
 
 # not called on default init-d-script do_restart/reload
@@ -108,7 +108,8 @@ do_reload() {
 }
 
 do_stop_cmd_override() {
-	$LMAPCTL shutdown || return $?
+	# hunt down any lmapd running as our user, and signal it
+	start-stop-daemon --stop --quiet --name $NAME $STOP_ARGS
 }
 
 do_status_override() {

@@ -75,6 +75,11 @@ fix_letsencrypt() {
 
 case "$1" in
     configure)
+	if dpkg --compare-versions "$2" le-nl "0.17.6.7~"; then
+		# try to ensure lmapd really, really is stopped.
+		start-stop-daemon --stop -u nicbr-simet --quiet --name lmapd --retry 10 || :
+	fi
+
         adduser --quiet --system --group --no-create-home --home /opt/simet \
                 --gecos "NIC.br SIMET Measurement Agent" nicbr-simet
 	chgrp nicbr-simet /opt/simet/etc/simet
