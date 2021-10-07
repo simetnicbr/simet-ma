@@ -1,3 +1,11 @@
+simet-ma (0.17.6.7) unstable; urgency=medium
+
+  * simet-ma version 0.17.6.7
+  * deb: try much harder to stop lmapd when we stop the service
+  * deb: ensure lmapd is not running during package configuration
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 07 Oct 2021 11:47:43 -0300
+
 simet-ma (0.17.6.6) unstable; urgency=medium
 
   * simet-ma version 0.17.6.6
