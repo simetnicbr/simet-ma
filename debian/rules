@@ -65,7 +65,11 @@ override_dh_install:
 		> debian/etc.apt.sources.list.d/nicbr-simet.apt.source.list
 	dh_install
 
+# Ubuntu xenial and Debian jessie can't deal with --no-restart-after-upgrade without
+# a debhelper backport
 override_dh_installinit:
-	dh_installinit
-	dh_installinit --name=simet-lmapd
+	dh_installinit --name=simet-ma --no-restart-after-upgrade --error-handler=true \
+		|| dh_installinit --name=simet-ma --error-handler=true
+	dh_installinit --name=simet-lmapd --no-restart-after-upgrade --error-handler=true \
+		|| dh_installinit --name=simet-lmapd --error-handler=true
 
