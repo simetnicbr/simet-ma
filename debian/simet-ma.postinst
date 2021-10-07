@@ -76,7 +76,10 @@ fix_letsencrypt() {
 case "$1" in
     configure)
 	if dpkg --compare-versions "$2" le-nl "0.17.6.7~"; then
-		# try to ensure lmapd really, really is stopped.
+		# try to ensure lmapd really is stopped
+		# and that the init system knows about it
+		update-rc.d simet-ma defaults >/dev/null || :
+		invoke-rc.d simet-lmapd stop || :
 		start-stop-daemon --stop -u nicbr-simet --quiet --name lmapd --retry 10 || :
 	fi
 
