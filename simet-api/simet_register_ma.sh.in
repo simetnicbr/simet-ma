@@ -154,15 +154,36 @@ __simet_consume_api_output() {
 	:
 }
 
+__simet_quoteornull() {
+	if [ -z "$1" ] ; then
+		printf "null"
+	else
+		printf "\"%s\"" "$*"
+	fi
+	:
+}
+#override to add extra attributes
+__simet_agent_extra_attributes() {
+	return 1
+}
 __simet_agent_attributes() {
-	[ -z "$SIMET_MAC_LABEL" ] && return 0
-	echo "\"attributes\":{\"mac_address\":\"$SIMET_MAC_LABEL\"},"
+	local AMAC ADESC AHN
+	simet2_agentinfo && {
+		AMAC=$(__simet_quoteornull "$SIMET_MAC_LABEL")
+		ADESC=$(__simet_quoteornull "$SIMET2_MADESCRIPTION")
+		AHN=$(__simet_quoteornull "$SIMET2_MAHOSTNAME")
+		AEXTRA=",$(call __simet_agent_extra_attributes)" || AEXTRA=
+		printf "\"attributes\":{\"mac_address\":%s,\"description\":%s,\"hostname\":%s%s}," \
+			"$AMAC" "$ADESC" "$AHN" "$AEXTRA"
+	}
+	:
 }
 __simet_agent_environment() {
 	simet2_agentinfo && {
 		echo "\"agent_environment_name\":\"$SIMET2_AGENT_ENVNAME\","
 		echo "\"agent_environment_version\":\"$SIMET2_AGENT_ENVVERSION\","
 	}
+	:
 }
 
 __simet_create_agent_apicall() {

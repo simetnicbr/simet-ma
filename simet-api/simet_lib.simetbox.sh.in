@@ -65,6 +65,8 @@ simet2_agentinfo() {
 		/etc/openwrt_release 2>/dev/null) || return $?
 	SIMET2_AGENT_ENVVERSION=$(cat /etc/openwrt_version 2>/dev/null) \
 		|| return $?
+	SIMET2_MAHOSTNAME=$(uci get system.@system[0].hostname 2>/dev/null) || SIMET2_MAHOSTNAME=
+	SIMET2_MADESCRIPTION=$(uci get system.@system[0].description 2>/dev/null) || SIMET2_MADESCRIPTION=
 	:
 }
 
