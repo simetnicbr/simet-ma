@@ -364,6 +364,66 @@ simet_refresh_agent_status() {
 	return 0
 }
 
+__clean_participant_metadata_info() {
+	: > "$AGENT_PARTICIPANT_INFO"
+}
+
+__consume_participant_api_output() {
+	T=$($JSONFILTER -i "$OUTFILE" -t '@.attributes' 2>/dev/null) || return 1
+	[ "$T" = "object" ] || return 1
+	$JSONFILTER -i "$OUTFILE" -e '@.attributes' 2>/dev/null >"$AGENT_PARTICIPANT_INFO"
+	: > "$OUTFILE"
+}
+
+#overridable
+# overrides contents of OUTFILE!
+simet_update_participant_info() {
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
+		-H "Authorization: Bearer $AT" \
+		-X GET -o "$OUTFILE" -w "%{http_code}" \
+		"${API_SIMET_AGENT_REG}/v2/agents/$AID/participant" ) || return 1
+	case "$APIRES" in
+	204|410)
+		__clean_participant_metadata_info
+		return 0
+		;;
+	200)
+		__consume_participant_api_output
+		return 0
+		;;
+	401)
+		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
+		;;
+	403)
+		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
+		;;
+	304)
+		# just keep the status quo, whatever it is. Meh.
+		return 0
+		;;
+	#500|400|404)
+		# SIMET2 agent registry unavailable
+		# nothing to do here right now.
+		#;;
+        esac
+	return 1
+}
+
+#overridable
+simet_log_participant_info() {
+	[ -s "$AGENT_PARTICIPANT_INFO" ] || return 0
+
+	local PSNAME PNAME
+	PSNAME=$($JSONFILTER -i "$AGENT_PARTICIPANT_INFO" -e '@.short_name' 2>/dev/null) || PSNAME=
+	PNAME=$($JSONFILTER -i "$AGENT_PARTICIPANT_INFO" -e '@.name' 2>/dev/null) || PNAME=
+	[ -z "$PNAME$PSNAME" ] && return 0
+	if [ -n "$PNAME" ] && [ -n "$PSNAME" ] ; then
+		simet_log simet-ma daemon.notice "SIMET: MA owner: \"$PNAME\" ($PSNAME)"
+	else
+		simet_log simet-ma daemon.notice "SIMET: MA owner: \"$PNAME$PSNAME\""
+	fi
+}
+
 __simet_pairing_recovery_apicall() {
 	cat <<- EOFSPRC | \
 	  curl $CURLOPT --retry 30 --retry-max-time 300 \
@@ -422,8 +482,12 @@ simet_pairing_flow() {
 		call simet_register_vlabel || true
 	fi
 
+	call simet_update_participant_info || \
+		simet_log simet-ma daemon.warn "SIMET: API error while updating pairing information"
+
 	if [ "$PAIRED" = "true" ] || [ "$PAIRED" = 1 ] ; then
 		simet_log simet-ma daemon.notice "SIMET: this MA is paired to a participant in the SIMET2 web portal"
+		call simet_log_participant_info || :
 		[ -n "$AGENT_PAIRBKP_FILE" ] && rm -f "$AGENT_PAIRBKP_FILE"
 		[ -n "$AGENT_PAIR_FILE" ] && {
 			OLDPAIR=
