@@ -107,6 +107,14 @@ dnl -----------------
 dnl Configure options
 dnl -----------------
 
+AC_ARG_ENABLE([incompressible-payload],
+    [AS_HELP_STRING([--disable-incompressible-payload],
+		    [do not try to defeat link compression])],
+    [enable_incpayload="$enableval"],
+    [enable_incpayload="yes"])
+AS_IF([test "x$enable_incpayload" != "xno"],
+               [AC_DEFINE(TCPBW_DEFEAT_COMPRESSION, [], [Use incompressible payloads])])
+
 AC_ARG_ENABLE([valgrind-build],
     [AS_HELP_STRING([--enable-valgrind-build],
         [build for valgrind testing])],
