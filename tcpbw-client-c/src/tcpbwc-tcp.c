@@ -58,6 +58,7 @@
 
 static fd_set sockListFDs;
 int sockList[MAX_CONCURRENT_SESSIONS];
+size_t sndposList[MAX_CONCURRENT_SESSIONS];
 static int sockListLastFD = -1;
 static void *sockBuffer = NULL;
 static size_t sockBufferSz = 0;
@@ -529,6 +530,7 @@ static int sendUploadPackets(const MeasureContext ctx)
     assert(sockBufferSz);
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
+    memset(&sndposList, 0, sizeof(sndposList));
 
     /* FIXME: switch to blocking IO, using one thread per socket, so that it will sleep without blocking the others?
      *        right now, we return from select to write a bit to large socket buffers that are still far from empty...
@@ -558,8 +560,15 @@ static int sendUploadPackets(const MeasureContext ctx)
         if (pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL) > 0) {
 	    for (i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &wset)) {
-		    if (send(sockList[i], sockBuffer, sockBufferSz, MSG_DONTWAIT | MSG_NOSIGNAL) == -1 &&
-			(errno == EPIPE || errno == ECONNRESET)) {
+		    const uint8_t *txbuf = (uint8_t *)sockBuffer + sndposList[i];
+		    const size_t iosz = sockBufferSz - sndposList[i];
+
+		    ssize_t res = send(sockList[i], txbuf, iosz, MSG_DONTWAIT | MSG_NOSIGNAL);
+		    if (res >= 0) {
+			sndposList[i] += (size_t) res;
+			if (sndposList[i] >= sockBufferSz)
+			    sndposList[i] = 0;
+		    } else if (errno == EPIPE || errno == ECONNRESET) {
 			    FD_CLR(sockList[i], &masterset);
 		    }
 		}
