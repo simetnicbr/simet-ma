@@ -28,7 +28,7 @@ set -e
 
 RC=1
 abend() {
-	simet_log simet-ma daemon.err "error: $*"
+	simet_log simet-ma daemon.err "simet_view_results: error: $*"
 	exit "$RC"
 }
 
