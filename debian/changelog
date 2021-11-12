@@ -1,3 +1,12 @@
+simet-ma (0.17.7) unstable; urgency=medium
+
+  * simet-ma version 0.17.7
+  * simet-api: include simet_view_results.sh on SIMETBox builds
+  * simet-api: add --lang parameter to simet_view_results.sh
+  * simet-api: handle LANGUAGE properly for simet_view_results.sh
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 12 Nov 2021 20:00:46 -0300
+
 simet-ma (0.17.6.7) unstable; urgency=medium
 
   * simet-ma version 0.17.6.7
