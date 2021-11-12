@@ -33,13 +33,14 @@ abend() {
 }
 
 usage() {
-	printf 'usage: %s [--help|-h] [--url]\n' "$0"
+	printf 'usage: %s [--help|-h] [--url] [--lang <language>|none]\n' "$0"
 	:
 }
 
 simet_load_hooks view_results
 
 URLMODE=
+URLLANGOVERRIDE=
 # Handle command line
 while [ $# -gt 0 ] ; do
 	case "$1" in
@@ -49,6 +50,11 @@ while [ $# -gt 0 ] ; do
 		;;
 	--url)
 		URLMODE=1
+		;;
+	--lang)
+		URLLANGOVERRIDE="$2"
+		[ -z "$URLLANGOVERRIDE" ] && abend "--lang requires a parameter"
+		shift
 		;;
 	--)
 		break
@@ -80,10 +86,12 @@ simet_read_tokens() {
 }
 
 __get_lang() {
-	system_lang="${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-${LANG}}}}"
+	[ -n "$URLLANGOVERRIDE" ] \
+		&& system_lang="$URLLANGOVERRIDE" \
+		|| system_lang="${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-${LANG}}}}"
 	system_lang="${system_lang%%.*}"
 	system_lang="${system_lang%%@*}"
-	printf '%s' "$system_lang"
+	[ "$system_lang" != "none" ] && printf '%s' "$system_lang"
 	:
 }
 
