@@ -89,6 +89,7 @@ __get_lang() {
 	[ -n "$URLLANGOVERRIDE" ] \
 		&& system_lang="$URLLANGOVERRIDE" \
 		|| system_lang="${LANGUAGE:-${LC_ALL:-${LC_MESSAGES:-${LANG}}}}"
+	system_lang="${system_lang%%:*}"
 	system_lang="${system_lang%%.*}"
 	system_lang="${system_lang%%@*}"
 	[ "$system_lang" != "none" ] && printf '%s' "$system_lang"
