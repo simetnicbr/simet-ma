@@ -1,0 +1,17 @@
+{"ietf-lmap-control:lmap":{
+"schedules":{"schedule":[
+  { "name":"ma-local_emergency-sched-refresh",
+    "tag":["ma-local_locally-generated-schedule","ma-local_emergency-schedule"],
+    "start":"every-hour",
+    "execution-mode":"sequential",
+    "action":[{"name":"simet.nic.br_reschedule","task":"simet.nic.br_reschedule"}]
+  },
+  { "name":"ma-local_report-queue-flush",
+    "start":"every-fifteen-minutes",
+    "execution-mode":"sequential",
+    "action":[{"name":"simet.nic.br_report-queue-flush","task":"simet.nic.br_report-queue-flush"}]
+  }
+]},"events":{"event":[
+  { "name":"every-fifteen-minutes","random-spread":15,"periodic":{"interval":900} },
+  { "name":"every-hour","random-spread":90,"periodic":{"interval":3600} }
+]} }}

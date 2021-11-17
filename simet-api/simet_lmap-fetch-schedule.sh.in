@@ -306,14 +306,16 @@ getschedule() {
 	LMAPD_NEED_RELOAD=0
 	# Create a local schedule if there isn't any schedule yet.  We send it to
 	# the LMAP controller as "current".
-	[ ! -s "$LMAP_SCHEDULE_FILE" ] && call simet_gen_local_schedule && {
-		# must displace target, either mv-f or rm-f+cp/cat>
-		chmod 0644 "$OUTFILE" \
-		  && mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
-		  && LMAPD_NEED_RELOAD=1 \
-		  && simet_log simet-ma daemon.info "SIMET local schedule created"
-		OUTFILE=
-	}
+	if [ ! -s "$LMAP_SCHEDULE_FILE" ] || grep -q -s -F "ma-local_emergency-schedule" "$LMAP_SCHEDULE_FILE" ; then
+		call simet_gen_local_schedule && {
+			# must displace target, either mv-f or rm-f+cp/cat>
+			chmod 0644 "$OUTFILE" \
+			  && mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
+			  && LMAPD_NEED_RELOAD=1 \
+			  && simet_log simet-ma daemon.info "SIMET local schedule created"
+			OUTFILE=
+		}
+	fi
 
 	[ -z "$OUTFILE" ] && {
 		OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
