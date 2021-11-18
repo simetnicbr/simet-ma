@@ -191,7 +191,7 @@ install-exec-hook:
 conf/lmap-sched-template.json : conf/lmap-sched-template.$(sbprefix).json
 	cd conf && ln -sf lmap-sched-template.$(sbprefix).json lmap-sched-template.json
 
-dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-sched-template.json
+dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-sched-template.json conf/lmap-emergency-schedule.json
 EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-sched-template.simetbox.json conf/lmap-sched-template.simet.json
 CLEANFILES += conf/lmap-sched-template.json conf/simet-ma.conf agent-version.txt
 

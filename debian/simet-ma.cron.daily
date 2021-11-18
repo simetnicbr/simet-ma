@@ -13,5 +13,6 @@ test -f /opt/simet/bin/simet_register_ma.sh && /opt/simet/bin/simet_register_ma.
 	&& [ -n "$LMAP_SCHEDULE_FILE" ] \
 	&& [ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
 	&& [ -n "$(find $LMAP_SCHEDULE_FILE -mtime +1)" ] \
-	&& /opt/simet/bin/simet_lmap-fetch-schedule.sh || true
+	&& /opt/simet/bin/simet_lmap-fetch-schedule.sh \
+	&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
 :

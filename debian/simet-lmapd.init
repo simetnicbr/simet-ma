@@ -55,6 +55,15 @@ do_start_prepare() {
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown $SUSER:$SGROUP '{}' +)
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod g+r '{}' +)
 
+	# setup the emergency schedule if there is no schedule
+	# might race a schedule download, we don't want to clobber the
+	# downloaded schedule with a ln -sf.
+	[ -e "$LMAP_SCHEDULE_FILE" ] || \
+		ln -s /opt/simet/lib/simet/lmap-emergency-schedule.json \
+			"$LMAP_SCHEDULE_FILE" 2>/dev/null || true
+	# ensure the schedule has the correct owner
+	chown -h $SUSER:$SGROUP "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
+
 	mkdir -p "$LMAP_SPOOL_DIR"
 	chgrp $SGROUP "$LMAP_SPOOL_DIR" && chmod 02770 "$LMAP_SPOOL_DIR"
 	(cd "$LMAP_SPOOL_DIR" && mkdir -p queue reports && chmod 02770 queue reports)
@@ -67,7 +76,7 @@ do_start_prepare() {
 		exit 0
 	}
 
-	# contact controller at daemon start/boot, it will generate the default schedule as well if needed
+	# contact controller at daemon start/boot, or try to generate a local schedule.
 	start-stop-daemon -c "$SUSER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
 
 	# try to geolocate (as root)
