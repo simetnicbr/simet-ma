@@ -262,7 +262,7 @@ activateschedule() {
 		simet_log simet-ma daemon.info "SIMET schedule unchanged"
 	fi
 	[ $force_reload -eq 1 ] && {
-		simet_lmap_reload_config || return 1
+		trap 'trap "" TERM ; simet_lmap_reload_config || true' EXIT
 	}
 	:
 }
