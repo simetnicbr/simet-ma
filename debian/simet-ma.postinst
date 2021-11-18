@@ -103,9 +103,11 @@ case "$1" in
 	fix_letsencrypt
 
 	# Remove any downloaded schedule
-	( . /opt/simet/lib/simet/simet_lib_config.sh \
-	  && [ -f "$LMAP_SCHEDULE_FILE" ] && rm -f "$LMAP_SCHEDULE_FILE" ) 2>/dev/null >/dev/null <&- || true
 	rm -f /var/run/lmapd/*.json
+	( . /opt/simet/lib/simet/simet_lib_config.sh \
+		&& ln -sf /opt/simet/lib/simet/lmap-emergency-schedule.json "$LMAP_SCHEDULE_FILE" \
+		&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" \
+	) 2>/dev/null >/dev/null <&- || true
 
 	#FIXME:
 	# replace the [ -e ] test below if changes the contents of the
