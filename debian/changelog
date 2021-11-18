@@ -1,3 +1,15 @@
+simet-ma (0.17.7.1) unstable; urgency=medium
+
+  * simet-ma version 0.17.7.1
+  * simet-api: introduce an emergency schedule for resiliency.  It doesn't do
+    measurements: it just tries to flush report queues and fetch the proper
+    schedule.
+  * deb: use the emergency schedule while the locally generated, or remotely
+    provided schedule are not yet in place.
+  * deb: try harder to ensure user nicbr-simet owns the schedule file.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 17 Nov 2021 15:04:16 -0300
+
 simet-ma (0.17.7) unstable; urgency=medium
 
   * simet-ma version 0.17.7
