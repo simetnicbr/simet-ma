@@ -58,9 +58,11 @@ do_start_prepare() {
 	# setup the emergency schedule if there is no schedule
 	# might race a schedule download, we don't want to clobber the
 	# downloaded schedule with a ln -sf.
-	[ -r "$LMAP_SCHEDULE_FILE" ] || \
+	[ -e "$LMAP_SCHEDULE_FILE" ] || \
 		ln -s /opt/simet/lib/simet/lmap-emergency-schedule.json \
 			"$LMAP_SCHEDULE_FILE" 2>/dev/null || true
+	# ensure the schedule has the correct owner
+	chown -h $SUSER:$SGROUP "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
 
 	mkdir -p "$LMAP_SPOOL_DIR"
 	chgrp $SGROUP "$LMAP_SPOOL_DIR" && chmod 02770 "$LMAP_SPOOL_DIR"
