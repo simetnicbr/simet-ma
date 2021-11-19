@@ -67,6 +67,8 @@ simet2_agentinfo() {
 		|| return $?
 	SIMET2_MAHOSTNAME=$(uci get system.@system[0].hostname 2>/dev/null) || SIMET2_MAHOSTNAME=
 	SIMET2_MADESCRIPTION=$(uci get system.@system[0].description 2>/dev/null) || SIMET2_MADESCRIPTION=
+	SIMET2_DEVICE_MODEL=$(get_model.sh 2>/dev/null | tr -s '_' ' ') || SIMET2_DEVICE_MODEL=
+	[ "$SIMET2_DEVICE_MODEL" = "unknown" ] && SIMET2_DEVICE_MODEL=
 	:
 }
 

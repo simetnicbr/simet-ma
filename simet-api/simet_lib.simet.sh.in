@@ -60,6 +60,8 @@ simet2_agentinfo() {
 		SIMET2_MAHOSTNAME=$(sed -n 'p;q' /etc/hostname || hostname --fqdn) 2>/dev/null || SIMET2_MAHOSTNAME=
 	}
 	# SIMET2_MADESCRIPTION from config file
+	# SIMET2_DEVICE_MODEL empty for now
+	SIMET2_DEVICE_MODEL=
 	:
 }
 

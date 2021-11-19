@@ -167,14 +167,18 @@ __simet_agent_extra_attributes() {
 	return 1
 }
 __simet_agent_attributes() {
-	local AMAC ADESC AHN
+	local AMAC ADESC AHN AVEND
 	simet2_agentinfo && {
+		AVEND=$(simet_jo_pairs 0 \
+			firmware_vendor "$SIMET2_FIRMWARE_VENDOR" \
+			device_model "$SIMET2_DEVICE_MODEL" \
+		  && printf ',')
 		AMAC=$(__simet_quoteornull "$SIMET_MAC_LABEL")
 		ADESC=$(__simet_quoteornull "$SIMET2_MADESCRIPTION")
 		AHN=$(__simet_quoteornull "$SIMET2_MAHOSTNAME")
 		AEXTRA=",$(call __simet_agent_extra_attributes)" || AEXTRA=
-		printf "\"attributes\":{\"mac_address\":%s,\"description\":%s,\"hostname\":%s%s}," \
-			"$AMAC" "$ADESC" "$AHN" "$AEXTRA"
+		printf "\"attributes\":{%s\"mac_address\":%s,\"description\":%s,\"hostname\":%s%s}," \
+			"$AVEND" "$AMAC" "$ADESC" "$AHN" "$AEXTRA"
 	}
 	:
 }
