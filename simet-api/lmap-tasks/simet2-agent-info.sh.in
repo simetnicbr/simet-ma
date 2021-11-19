@@ -18,9 +18,13 @@
 set -e
 . @SIMETLIBDIR@/simet_lib.sh
 simet2_agentinfo || exit 1
-cat << EOF1AGITEMPLATE
-{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_AgentInfo__Multiple_Singleton"}],
+a1=$(simet_jo "@SIMET_ENGINE_NAME@")
+a2=$(simet_jo "@PACKAGEVERSION@")
+a3=$(simet_jo "$SIMET2_AGENT_FAMILY")
+a4=$(simet_jo "$SIMET2_AGENT_ENVNAME")
+a5=$(simet_jo "$SIMET2_AGENT_ENVVERSION")
+printf '{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_AgentInfo__Multiple_Singleton"}],
 "column":["engine_name","engine_version","agent_family","agent_environment_name","agent_environment_version"],
-"row":[{"value":["@SIMET_ENGINE_NAME@","@PACKAGEVERSION@","$SIMET2_AGENT_FAMILY","$SIMET2_AGENT_ENVNAME","$SIMET2_AGENT_ENVVERSION"]}] }
-EOF1AGITEMPLATE
+"row":[{"value":["%s","%s","%s","%s","%s"]}] }' \
+	"$a1" "$a2" "$a3" "$a4" "$a5"
 :
