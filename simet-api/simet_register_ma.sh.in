@@ -158,7 +158,7 @@ __simet_quoteornull() {
 	if [ -z "$1" ] ; then
 		printf "null"
 	else
-		printf "\"%s\"" "$*"
+		simet_jo_quoted "$*"
 	fi
 	:
 }
@@ -179,10 +179,9 @@ __simet_agent_attributes() {
 	:
 }
 __simet_agent_environment() {
-	simet2_agentinfo && {
-		echo "\"agent_environment_name\":\"$SIMET2_AGENT_ENVNAME\","
-		echo "\"agent_environment_version\":\"$SIMET2_AGENT_ENVVERSION\","
-	}
+	simet2_agentinfo && \
+		simet_jo_pairs 0 agent_environment_name "$SIMET2_AGENT_ENVNAME" agent_environment_version "$SIMET2_AGENT_ENVVERSION" && \
+		printf ','
 	:
 }
 
@@ -197,9 +196,11 @@ __simet_create_agent_apicall() {
 	{ $*
 	  $(call __simet_agent_attributes)
 	  $(call __simet_agent_environment)
-	  "engine_name":"@SIMET_ENGINE_NAME@",
-	  "engine_version":"@PACKAGEVERSION@",
-	  "agent_family":"$SIMET2_AGENT_FAMILY" }
+	  $(simet_jo_pairs 0 \
+		engine_name "@SIMET_ENGINE_NAME@" \
+		engine_version "@PACKAGEVERSION@" \
+		agent_family "$SIMET2_AGENT_FAMILY")
+	}
 	EOFSCAG
 	:
 }
@@ -229,9 +230,11 @@ __simet_modify_agent_apicall() {
 	  $SC
 	  $(call __simet_agent_attributes)
 	  $(call __simet_agent_environment)
-	  "engine_name":"@SIMET_ENGINE_NAME@",
-	  "engine_version":"@PACKAGEVERSION@",
-	  "agent_family":"$SIMET2_AGENT_FAMILY",
+	  $(simet_jo_pairs 0 \
+		engine_name "@SIMET_ENGINE_NAME@" \
+		engine_version "@PACKAGEVERSION@" \
+		agent_family "$SIMET2_AGENT_FAMILY" \
+	    && printf ',')
 	  "waiting_for_pairing":$WP
 	}
 	EOFSRAP
