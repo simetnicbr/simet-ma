@@ -23,8 +23,10 @@ a2=$(simet_jo "@PACKAGEVERSION@")
 a3=$(simet_jo "$SIMET2_AGENT_FAMILY")
 a4=$(simet_jo "$SIMET2_AGENT_ENVNAME")
 a5=$(simet_jo "$SIMET2_AGENT_ENVVERSION")
+a6=$(simet_jo "$SIMET2_FIRMWARE_VENDOR")
+a7=$(simet_jo "$SIMET2_DEVICE_MODEL")
 printf '{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Passive_AgentInfo__Multiple_Singleton"}],
-"column":["engine_name","engine_version","agent_family","agent_environment_name","agent_environment_version"],
-"row":[{"value":["%s","%s","%s","%s","%s"]}] }' \
-	"$a1" "$a2" "$a3" "$a4" "$a5"
+"column":["engine_name","engine_version","agent_family","agent_environment_name","agent_environment_version","firmware_vendor","device_model"],
+"row":[{"value":["%s","%s","%s","%s","%s","%s","%s"]}] }' \
+	"$a1" "$a2" "$a3" "$a4" "$a5" "$a6" "$a7"
 :
