@@ -70,6 +70,66 @@ simet2_agentinfo() {
 	:
 }
 
+#
+# JSON output helpers
+#
+
+# apply JSON quoting using sed, BRE/ERE friendly
+simet_jo_sed() {
+	sed -e 's#\\#\\\\#g' -e 's#"#\\"#g' "$@"
+}
+simet_jo() {
+	printf '%s' "$*" | simet_jo_sed
+}
+# json-quote \"$*\" and return in stdout
+simet_jo_quoted() {
+	printf '%s' "$*" | simet_jo_sed -e 's#^#"#' -e 's#$#"#'
+}
+# Output JSON string fields if non-empty
+# $1 should be 0 or 1 to prepend a comma
+# ($2,$3) ... should be pairs of (field, *string* content)
+# WARNING: returns 1 if all fields were empty
+simet_jo_pairs() {
+	local vf1 cf1 jo
+	vf1=
+	cf1=1
+	[ "$1" -eq 1 ] && vf1=", "
+	shift
+	while [ $# -ge 2 ] ; do
+		[ -n "$1" ] && [ -n "$2" ] && {
+			jo=$(simet_jo "$2")
+			printf "$vf1\"%s\":\"%s\"" "$1" "$jo"
+			vf1=", "
+			cf1=0
+		}
+		shift 2
+	done
+	return $cf1
+}
+# Output an anonymous JSON object with non-empty string fields
+# ($1, $2) ... should be pairs of (field, string content)
+simet_jo_obj() {
+	printf '{ '
+	simet_jo_pairs 0 "$@" || :
+	printf ' }'
+}
+# Output named JSON object of non-empty string fields, if non-empty
+# $1 should be 0 or 1 to prepend a comma
+# $2 is the object name
+# ($3,$4) ... should be pairs of (field, *string* content)
+# WARNING: returns 1 if nothing printed.
+simet_jo_obj_named() {
+	local cf1 vf1 jo objn
+	vf1=
+	cf1=1
+	[ "$1" -eq 1 ] && { vf1=", " ; cf1=0 ; }
+	objn="$2"
+	shift 2
+	jo=$(simet_jo_pairs 0 "$@") && \
+		printf "%s\"%s\":{ %s }" "$vf1" "$objn" "$jo" && cf1=0
+	return $cf1
+}
+
 # HOOK API
 is_call_implemented() {
 	command -V "$1" > /dev/null 2>&1
