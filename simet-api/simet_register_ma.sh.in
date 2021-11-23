@@ -154,15 +154,39 @@ __simet_consume_api_output() {
 	:
 }
 
+__simet_quoteornull() {
+	if [ -z "$1" ] ; then
+		printf "null"
+	else
+		simet_jo_quoted "$*"
+	fi
+	:
+}
+#override to add extra attributes
+__simet_agent_extra_attributes() {
+	return 1
+}
 __simet_agent_attributes() {
-	[ -z "$SIMET_MAC_LABEL" ] && return 0
-	echo "\"attributes\":{\"mac_address\":\"$SIMET_MAC_LABEL\"},"
+	local AMAC ADESC AHN AVEND
+	simet2_agentinfo && {
+		AVEND=$(simet_jo_pairs 0 \
+			firmware_vendor "$SIMET2_FIRMWARE_VENDOR" \
+			device_model "$SIMET2_DEVICE_MODEL" \
+		  && printf ',')
+		AMAC=$(__simet_quoteornull "$SIMET_MAC_LABEL")
+		ADESC=$(__simet_quoteornull "$SIMET2_MADESCRIPTION")
+		AHN=$(__simet_quoteornull "$SIMET2_MAHOSTNAME")
+		AEXTRA=",$(call __simet_agent_extra_attributes)" || AEXTRA=
+		printf "\"attributes\":{%s\"mac_address\":%s,\"description\":%s,\"hostname\":%s%s}," \
+			"$AVEND" "$AMAC" "$ADESC" "$AHN" "$AEXTRA"
+	}
+	:
 }
 __simet_agent_environment() {
-	simet2_agentinfo && {
-		echo "\"agent_environment_name\":\"$SIMET2_AGENT_ENVNAME\","
-		echo "\"agent_environment_version\":\"$SIMET2_AGENT_ENVVERSION\","
-	}
+	simet2_agentinfo && \
+		simet_jo_pairs 0 agent_environment_name "$SIMET2_AGENT_ENVNAME" agent_environment_version "$SIMET2_AGENT_ENVVERSION" && \
+		printf ','
+	:
 }
 
 __simet_create_agent_apicall() {
@@ -176,9 +200,11 @@ __simet_create_agent_apicall() {
 	{ $*
 	  $(call __simet_agent_attributes)
 	  $(call __simet_agent_environment)
-	  "engine_name":"@SIMET_ENGINE_NAME@",
-	  "engine_version":"@PACKAGEVERSION@",
-	  "agent_family":"$SIMET2_AGENT_FAMILY" }
+	  $(simet_jo_pairs 0 \
+		engine_name "@SIMET_ENGINE_NAME@" \
+		engine_version "@PACKAGEVERSION@" \
+		agent_family "$SIMET2_AGENT_FAMILY")
+	}
 	EOFSCAG
 	:
 }
@@ -208,9 +234,11 @@ __simet_modify_agent_apicall() {
 	  $SC
 	  $(call __simet_agent_attributes)
 	  $(call __simet_agent_environment)
-	  "engine_name":"@SIMET_ENGINE_NAME@",
-	  "engine_version":"@PACKAGEVERSION@",
-	  "agent_family":"$SIMET2_AGENT_FAMILY",
+	  $(simet_jo_pairs 0 \
+		engine_name "@SIMET_ENGINE_NAME@" \
+		engine_version "@PACKAGEVERSION@" \
+		agent_family "$SIMET2_AGENT_FAMILY" \
+	    && printf ',')
 	  "waiting_for_pairing":$WP
 	}
 	EOFSRAP
