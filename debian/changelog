@@ -1,3 +1,15 @@
+simet-ma (0.17.8) unstable; urgency=medium
+
+  * simet-ma version 0.17.8
+  * simet-api: guard against SIGTERM on lmapd reload
+  * simet-api: send MA description, hostname when registering
+  * simet-api: send firmware_version and device_model when registering
+  * simet-api: fix JSON quoting on simet2-agent-info, simet_register_ma
+  * lmap-tasks: add firmware_vendor and device_model to agent-info
+  * simet-api: simetbox: rework agent environment information and agent-info
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 23 Nov 2021 12:36:00 -0300
+
 simet-ma (0.17.7.1) unstable; urgency=medium
 
   * simet-ma version 0.17.7.1
