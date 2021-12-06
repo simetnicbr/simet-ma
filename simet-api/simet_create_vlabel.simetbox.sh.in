@@ -34,33 +34,54 @@ abend() {
 
 SIMETBOX_VERSION=$(get_simet_box_version.sh 2>/dev/null) || SIMETBOX_VERSION="unknown"
 
+#FIXME: use a real KDF
 openwrt_read_invariant_seed() {
-  # This is a hack, it is not perfect, and not that secure.
-  # Use unknown sources of variance (if we're lucky, the
-  # serial number and the -- unused by openwrt/simetbox --
-  # default vendor firmware wifi password) to have a
-  # per-device secret seed.
+  # See if we can get something stable from the platform vendor
+  [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_secret" ] && \
+    SBXSEED=$(@SIMETLIBDIR@/vendor/get_platform_simet_secret vlabel) || SBXSEED=
+  if [ -n "$SBXSEED" ] && [ "$SBXSEED" != "DISABLED" ] && [ "$SBXSEED" != "disabled" ] ; then
+    SBXSEED=$( set -o pipefail ; printf "NIC VLABEL IV 0132457869\n%s\nNIC VLABEL IV TRAILER 9123432100" "$SBXSEED" | sha256sum - ) \
+      || RC=3 abend "failed to derive stable secret from platform simet secret"
+    printf 'NIC3%s' "$SBXSEED" | tr -dc 0-9a-zA-Z
+  else
+    # This is a hack, it is not perfect, and not that secure.
+    # Use unknown sources of variance (if we're lucky, the
+    # serial number and the -- unused by openwrt/simetbox --
+    # default vendor firmware wifi password) to have a
+    # per-device secret seed.
 
-  # note: this can be quite expensive in CPU and wall time
+    # note: this can be quite expensive in CPU and wall time
 
-  P=$( sed -En -e '/^mtd[0-9]/! d' -e '/rootfs|firmware|kernel/ d' -e 's#(mtd[^:]+).*#/dev/\1ro# ; p' < /proc/mtd ) \
-    || RC=3 abend "failed to parse /proc/mtd"
-  [ -z "$P" ] \
-    && RC=3 abend "no useful partitions in /proc/mtd to generate a stable secret"
-  SBXSEED=$( set -o pipefail ; { echo "NIC VLABEL IV 0132457869" ; cat -- $P ; } | md5sum - ) \
-    || RC=3 abend "failed to generate stable secret from /dev/mtd"
-  [ -z "$SBXSEED" ] \
-    && RC=3 abend "md5sum empty?!"
-  # FIXME: compress to base64, an md5sum becomes 8 characters
-  printf '%s' "$SBXSEED" | tr -dc 0-9a-zA-Z
+    P=$( sed -En -e '/^mtd[0-9]/! d' -e '/rootfs|firmware|kernel/ d' -e 's#(mtd[^:]+).*#/dev/\1ro# ; p' < /proc/mtd ) \
+      || RC=3 abend "failed to parse /proc/mtd"
+    [ -z "$P" ] \
+      && RC=3 abend "no useful partitions in /proc/mtd to generate a stable secret"
+    SBXSEED=$( set -o pipefail ; { echo "NIC VLABEL IV 0132457869" ; cat -- $P ; } | md5sum - ) \
+      || RC=3 abend "failed to generate stable secret from /dev/mtd"
+    [ -z "$SBXSEED" ] \
+      && RC=3 abend "md5sum empty?!"
+    # FIXME: compress to base64, an md5sum becomes 8 characters. needs migration
+    printf 'NIC1%s' "$SBXSEED" | tr -dc 0-9a-zA-Z
+  fi
   :
 }
 
 openwrt_generate_vlabel() {
-  # Replace with retrieval from flash of the vlabel secret when possible
-  IVS=$(openwrt_read_invariant_seed) || return $?
-  echo "NIC1$IVS"
-  :
+  RC=1
+  [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_label" ] && {
+    # attempt to retreive a real, printed label from FLASH
+    RC=0
+    IVS=$(@SIMETLIBDIR@/vendor/get_platform_simet_label vlabel) || RC=$?
+    # temporary error, *MUST* retry later and not generate own label
+    [ $RC -ge 2 ] && return 20
+  }
+  [ $RC -ne 0 ] && {
+    # not possible to retrieve a printed label from flash, generate a virtual one
+    RC=0
+    IVS=$(openwrt_read_invariant_seed) || RC=$?
+  }
+  [ $RC -eq 0 ] && printf '%s' "$IVS"
+  return $RC
 }
 
 simetbox_output_vlabel_file() {
@@ -71,7 +92,7 @@ simetbox_output_vlabel_file() {
   done
 }
 
-SIMET2_VLABEL=$(openwrt_generate_vlabel)
+SIMET2_VLABEL=$(openwrt_generate_vlabel) || SIMET2_VLABEL=
 [ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA could not create its virtual label"
 
 [ -r "$AGENT_VLABEL_FILE" ] && {
