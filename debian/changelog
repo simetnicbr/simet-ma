@@ -1,3 +1,10 @@
+simet-ma (0.17.8.1) unstable; urgency=medium
+
+  * simet-ma version 0.17.8.1
+  * simet-api: add vlabel platform-vendor API (SIMETBOX)
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 08 Dec 2021 16:27:13 -0300
+
 simet-ma (0.17.8) unstable; urgency=medium
 
   * simet-ma version 0.17.8
