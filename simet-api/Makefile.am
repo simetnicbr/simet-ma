@@ -219,6 +219,7 @@ endif
 
 # Other non-source files we want in the source tarball
 EXTRA_DIST += API.md
+EXTRA_DIST += examples/vendor.get_platform_simet_label examples/vendor.get_platform_simet_secret
 
 agent-version.txt:
 	echo $(PACKAGE)/$(PACKAGE_VERSION) > "$@" && chmod 0644 "$@"
