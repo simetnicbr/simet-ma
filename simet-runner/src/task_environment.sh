@@ -19,14 +19,19 @@
 # We could instead report them once per task, but that wastes space since they
 # are invariant during a measurement run.
 ma_environment() {
-  # AgentInfo metric
-  agentinfo && cat << EOF1AGITEMPLATE
+  [ -n "$AGENTINFO_HELPER" ] && [ -x "$AGENTINFO_HELPER" ] && {
+    "$AGENTINFO_HELPER" || return "$?"
+    return 0
+  }
+
+  # fallback
+  agentinfo || return "$?"
+  cat << EOF1AGITEMPLATE
 {
   "function": [ { "uri": "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_AgentInfo__Multiple_Singleton" } ],
   "column": [ "engine_name", "engine_version", "agent_family", "agent_environment_name", "agent_environment_version" ],
   "row": [ { "value": [ "$SIMET_ENGINE_NAME", "$_task_version", "$_agent_family", "$_agent_envname", "$_agent_envversion" ] } ]
 }
 EOF1AGITEMPLATE
-  :
 }
 # keep line
