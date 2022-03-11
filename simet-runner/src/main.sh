@@ -291,6 +291,9 @@ _task_environment(){
   export _task_status="$?"
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   if [ "$_task_status" -ne 0 ]; then
+    log_info "agent-info metric failed."
+    # we only fail if wriring the metric to $_task_dir failed,
+    # do not even bother trying to recover from *that*...
     rm -rf "$_task_dir"
   else
     task_template > "$_task_dir/result.json"
