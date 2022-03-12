@@ -73,3 +73,6 @@ override_dh_installinit:
 	dh_installinit --name=simet-lmapd --no-restart-after-upgrade --error-handler=true \
 		|| dh_installinit --name=simet-lmapd --error-handler=true
 
+# Until we get better support on some tools, avoid zstd on debs
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
