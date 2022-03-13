@@ -1,4 +1,4 @@
 # Allow unattended upgrades of any already-installed NIC.br software
 Unattended-Upgrade::Allowed-Origins {
-        "NIC.br:${distro_codename}";
+        "NIC.br:*";
 };
