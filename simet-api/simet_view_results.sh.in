@@ -117,7 +117,7 @@ URL=$(call simet_generate_view_url "$AID" "$VTK" "$(__get_lang)") || URL=
 	exit 0
 }
 
-if command -v xgd-open >/dev/null 2>&1 ; then
+if command -v xdg-open >/dev/null 2>&1 ; then
 	xdg-open "$URL" &
 elif command -v sensible-browser >/dev/null 2>&1 ; then
 	sensible-browser "$URL" &
