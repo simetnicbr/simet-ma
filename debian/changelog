@@ -1,3 +1,13 @@
+simet-ma (0.17.8.2) unstable; urgency=medium
+
+  * simet-ma version 0.17.8.2
+  * simet-runner: rework agent-info metric to match the LMAP one
+  * deb: force xz compression for binary packages (avoid zstd for now)
+  * deb: unattended-upgrades: fix for distro derivatives
+  * simet-api: fix xdg-open call on simet_view_results.sh
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sun, 13 Mar 2022 19:43:16 -0300
+
 simet-ma (0.17.8.1) unstable; urgency=medium
 
   * simet-ma version 0.17.8.1
