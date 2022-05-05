@@ -19,6 +19,7 @@
 # OpenWRT + openwrt-simetbox-*, tr, uname, sed
 
 # preseed some variables
+# shellcheck disable=SC2034
 SIMET2_AGENT_FAMILY="embedded"
 
 # logs to stderr and syslog, deals with eventual "logger" oddities
@@ -60,6 +61,7 @@ get_http_useragent()
 )
 
 # sets environment variables that match the environment
+# shellcheck disable=SC2034
 simet2_agentinfo() {
 	SIMET2_AGENT_ENVNAME=$(. /etc/openwrt_release && printf '%s' "$DISTRIB_ID") || return 1
 	SIMET2_AGENT_ENVVERSION=$(. /etc/openwrt_release && printf '%s %s' "$DISTRIB_DESCRIPTION" "$DISTRIB_REVISION") || return 1
@@ -74,7 +76,8 @@ simet2_agentinfo() {
 # JSON output helpers
 #
 
-# apply JSON quoting using sed, BRE/ERE friendly
+# apply JSON quoting using sed, BRE/ERE friendly, note #@
+# shellcheck disable=SC2120
 simet_jo_sed() {
 	sed -e 's#\\#\\\\#g' -e 's#"#\\"#g' "$@"
 }
@@ -153,7 +156,7 @@ call_hook() {
 simet_load_hooks() {
 	[ -r "@SIMETLIBDIR@/simet_$1-hooks.sh" ]  && . "@SIMETLIBDIR@/simet_$1-hooks.sh"
 	[ -d @SIMETLIBDIR@/conf.d ] && {
-		for i in @SIMETLIBDIR@/conf.d/*.common.hook @SIMETLIBDIR@/conf.d/*.$1.hook ; do
+		for i in @SIMETLIBDIR@/conf.d/*.common.hook @SIMETLIBDIR@/conf.d/*."$1".hook ; do
 			[ -r "$i" ] && . "$i"
 		done
 	}

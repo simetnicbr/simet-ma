@@ -19,6 +19,7 @@
 # tr, uname, lsb_release
 
 # preseed some variables
+# shellcheck disable=SC2034
 SIMET2_AGENT_FAMILY="system_service"
 
 # logs to stderr and syslog, deals with eventual "logger" oddities
@@ -52,6 +53,7 @@ get_http_useragent()
 )
 
 # sets environment variables that match the environment
+# shellcheck disable=SC2034
 simet2_agentinfo() {
 	SIMET2_AGENT_ENVNAME=$(lsb_release -s -i) || SIMET2_AGENT_ENVNAME="(generic)"
 	SIMET2_AGENT_ENVVERSION=$(lsb_release -s -d) || SIMET2_AGENT_ENVVERSION="unknown"
@@ -69,7 +71,8 @@ simet2_agentinfo() {
 # JSON output helpers
 #
 
-# apply JSON quoting using sed, BRE/ERE friendly
+# apply JSON quoting using sed, BRE/ERE friendly, note #@
+# shellcheck disable=SC2120
 simet_jo_sed() {
 	sed -e 's#\\#\\\\#g' -e 's#"#\\"#g' "$@"
 }
@@ -148,7 +151,7 @@ call_hook() {
 simet_load_hooks() {
 	[ -r "@SIMETLIBDIR@/simet_$1-hooks.sh" ]  && . "@SIMETLIBDIR@/simet_$1-hooks.sh"
 	[ -d @SIMETLIBDIR@/conf.d ] && {
-		for i in @SIMETLIBDIR@/conf.d/*.common.hook @SIMETLIBDIR@/conf.d/*.$1.hook ; do
+		for i in @SIMETLIBDIR@/conf.d/*.common.hook @SIMETLIBDIR@/conf.d/*."$1".hook ; do
 			[ -r "$i" ] && . "$i"
 		done
 	}
