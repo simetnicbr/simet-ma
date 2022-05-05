@@ -78,7 +78,7 @@ simet_jo() {
 }
 # json-quote \"$*\" and return in stdout
 simet_jo_quoted() {
-	printf '%s' "$*" | simet_jo_sed -e 's#^#"#' -e 's#$#"#'
+	printf '"%s"' "$(printf '%s' "$*" | simet_jo_sed)"
 }
 # Output JSON string fields if non-empty
 # $1 should be 0 or 1 to prepend a comma
