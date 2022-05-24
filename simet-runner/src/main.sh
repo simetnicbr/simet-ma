@@ -133,7 +133,7 @@ main(){
     done
     log_error "Measurement lock is already taken, exiting..."
     exit 1
-  ) <&- 9< "$AGENT_LOCK" || return $?
+  ) </dev/null 9< "$AGENT_LOCK" || return $?
   :
 }
 
