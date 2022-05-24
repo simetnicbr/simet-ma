@@ -50,7 +50,6 @@ urlmatype=simet-ma
 endif
 
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
-EXTRA_DIST += simetbox_fping-to-gateway.sh.in
 
 dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh simet_view_results.sh
 EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in simet_view_results.sh.in
@@ -213,9 +212,9 @@ CLEANFILES += config.d/simet-ma_base-config.json config.d/simet-ma_tasklet-confi
 if SIMETBOX_BUILD
 dist_simetlmapregistry_DATA += registry.d/simetbox_base-registry.json
 dist_simetlmapconfig_DATA += config.d/simetbox_base-config.json
-EXTRA_DIST += registry.d/simetbox_base-registry.json.in config.d/simetbox_base-registry.json.in
-CLEANFILES += registry.d/simetbox_base-registry.json config.d/simetbox_base-registry.json
 endif
+EXTRA_DIST += registry.d/simetbox_base-registry.json.in config.d/simetbox_base-config.json.in
+CLEANFILES += registry.d/simetbox_base-registry.json config.d/simetbox_base-config.json
 
 # Other non-source files we want in the source tarball
 EXTRA_DIST += API.md
