@@ -548,4 +548,4 @@ gettoken() {
 }
 
 [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || abend "cannot create $AGENT_LOCK"
-( flock -n -s 9 && gettoken ) <&- 9< "$AGENT_LOCK"
+( flock -n -s 9 && gettoken ) </dev/null 9< "$AGENT_LOCK"

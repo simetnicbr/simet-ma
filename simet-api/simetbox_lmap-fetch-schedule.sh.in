@@ -343,4 +343,4 @@ getschedule() {
 }
 
 [ -r "$AGENT_TOKEN_LOCK" ] || touch "$AGENT_TOKEN_LOCK" || abend "cannot create $AGENT_TOKEN_LOCK"
-( flock -n -x 9 && getschedule ) <&- 9< "$AGENT_TOKEN_LOCK"
+( flock -n -x 9 && getschedule ) </dev/null 9< "$AGENT_TOKEN_LOCK"

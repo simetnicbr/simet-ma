@@ -229,5 +229,5 @@ simet_reportqueue_runqueue() {
 }
 
 cd "$LMAP_REPORT_QUEUE_DIR" || abend "cannot change to LMAP_REPORT_QUEUE_DIR"
-{ flock -n -x 9 && simet_reportqueue_runqueue ; } <&- 9>"$LMAP_REPORT_QUEUE_DIR/.report-flush.lock" || :
+{ flock -n -x 9 && simet_reportqueue_runqueue ; } </dev/null 9>"$LMAP_REPORT_QUEUE_DIR/.report-flush.lock" || :
 :
