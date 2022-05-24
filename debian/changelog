@@ -1,3 +1,17 @@
+simet-ma (0.17.8.3) unstable; urgency=medium
+
+  * simet-ma version 0.17.8.3
+  * simet-api: some make dist and make clean fixes
+  * simet-api: silence a few shellcheck warnings
+  * simet-api: fix simet_lib::simet_jo_quoted for empty input
+    Note: this bug would not be triggered in production before 0.17.9.
+  * simet-api: simet_lib{_config}: protect stdin, stdout
+  * simet-api: do not close stdin, causes breakage with recent libuv
+  * simet-runner: do not close stdin
+  * debian: postinst: do not call into simet-api with stdin closed
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 24 May 2022 15:27:39 -0300
+
 simet-ma (0.17.8.2) unstable; urgency=medium
 
   * simet-ma version 0.17.8.2
