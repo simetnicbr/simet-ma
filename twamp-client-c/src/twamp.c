@@ -50,6 +50,35 @@ static void *twamp_callback_thread(void *param);
 
 static int twamp_test(TestParameters);
 
+/* generates an "id cookie" from server data; returns 0 for cookie disabled */
+static int simet_generate_cookie(struct simet_cookie *cookie, const void * const src, size_t src_sz)
+{
+    if (!cookie || !src || !src_sz)
+        return 0;
+
+    uint8_t * sbuf = (uint8_t *)src;
+    size_t i;
+    for (i = 0; sbuf[i] == 0 && i < src_sz; i++);
+    if (i >= src_sz)
+        return 0; /* all zeroes */
+
+    cookie->sig = htonl(SIMET_TWAMP_IDCOOKIE_V1SIG);
+    size_t s = sizeof(cookie->data);
+    if (s > src_sz) {
+        memset(cookie->data, 0, sizeof(cookie->data));
+        s = src_sz;
+    }
+    memcpy(cookie->data, src, s);
+    return 1;
+}
+
+/* embedds cookie into padding, if there's enough space */
+static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struct simet_cookie * const cookie)
+{
+    if (dst && dst_sz && cookie)
+        memcpy(dst, cookie, sizeof(struct simet_cookie) <= dst_sz ? sizeof(struct simet_cookie) : dst_sz);
+}
+
 int twamp_run_client(TWAMPParameters param) {
     int ret_socket, fd_control, fd_test;
     int fd_ready;
@@ -310,6 +339,8 @@ int twamp_run_client(TWAMPParameters param) {
         rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
     }
+
+    t_param.cookie_enabled = simet_generate_cookie(&t_param.cookie, actSession->SID, sizeof(actSession->SID));
 
     /* FIXME: log this better */
     uint16_t receiver_port = actSession->Port;
@@ -597,6 +628,11 @@ static int twamp_test(TestParameters test_param) {
        return SEXIT_OUTOFRESOURCE;
     }
     memset(packet, 0 , sizeof(UnauthPacket));
+
+    if (test_param.cookie_enabled) {
+        print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
+        simet_cookie_as_padding(packet->Padding, sizeof(packet->Padding), &test_param.cookie);
+    }
 
     if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
         rc = SEXIT_INTERNALERR;
