@@ -20,6 +20,7 @@
 #include "logger.h"
 
 #include <stdint.h>
+#include <limits.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -34,269 +35,114 @@
 /* MESSAGES READERS */
 /********************/
 
-int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetings) {
-    int recv_size = 0, recv_total = 0;
-    uint8_t message[MAX_SIZE_MESSAGE];
-    int fd_ready = 0;
+/* Returns -1 on error (errno set), amount of data received otherwise */
+/* may have partially filled the buffer on some error conditions */
+static ssize_t xrecv(const int socket, const int timeout, uint8_t *buf, const size_t buf_size)
+{
     fd_set rset, rset_master;
     struct timeval tv_timeo;
 
-    print_msg(MSG_DEBUG, "Sending server gretings message");
+    if (socket < 0 || timeout < 0 || !buf || !buf_size || buf_size >= SSIZE_MAX) {
+	errno = EINVAL;
+	return -1;
+    }
+
+    memset(buf, 0, buf_size);
     FD_ZERO(&rset_master);
-    FD_SET((unsigned long)socket, &rset_master);
+    FD_SET(socket, &rset_master);
 
     tv_timeo.tv_sec = timeout;
     tv_timeo.tv_usec = 0;
 
-    do {
-        memset(&message, 0, MAX_SIZE_MESSAGE);
+    size_t recv_total = 0;
+    size_t buf_free = buf_size;
+    while (buf_free > 0) {
         memcpy(&rset, &rset_master, sizeof(rset_master));
 
-        fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
+	/* we depend on linux select() behavior that updates the timeout */
+        int fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
+	if (fd_ready < 0 && errno != EINTR) {
+	    goto err_exit;
+	} else if (fd_ready == 0) {
+	    errno = ETIMEDOUT;
+	    goto err_exit;
+	} else if (fd_ready > 0 && FD_ISSET(socket, &rset)) {
+	    ssize_t recv_size = recv(socket, buf, buf_free, MSG_DONTWAIT);
+	    if (recv_size < 0) {
+		if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+		    continue;
+		goto err_exit;
+	    } else {
+		if (recv_size == 0)
+		    break; /* socket closed / shutdown */
+		buf += recv_size;
+		recv_total += (size_t) recv_size; /* verified, recv_size > 0 */
+		buf_free -= (size_t) recv_size; /* verified, recv_size > 0 */
+	    }
+	}
+    }
 
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                print_msg(MSG_DEBUG, "message_server_greetings select timeout!");
-            } else {
-                print_err("message_server_greetings select problem!");
-            }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, message, MAX_SIZE_MESSAGE, 0);
+    return (ssize_t) recv_total; /* verified, buf_size fits ssize_t, recv_total <= bufsize */
 
-                // Caso recv apresente algum erro
-                if (recv_size <= 0) {
-                    if (recv_size == 0) {
-                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
-                        break;
-                    }
-
-                    // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;
-                    } else {
-                        print_err("recv message problem: %s", strerror(errno));
-                        break;
-                    }
-                }
-
-                memcpy(srvGreetings + recv_total, &message, (unsigned int)recv_size);
-                recv_total += recv_size;
-
-                if (recv_total == SERVER_GREETINGS_SIZE) {
-
-                    srvGreetings->Modes = ntohl(srvGreetings->Modes);
-                    srvGreetings->Count = ntohl(srvGreetings->Count);
-
-                    return recv_total;
-                }
-
-                print_msg(MSG_DEBUG, "recv_total different then expected!");
-            } else {
-                print_msg(MSG_DEBUG, "socket not in rset!");
-            }
-        }
-
-    } while (tv_timeo.tv_sec > 0);
-
+err_exit:
+    print_err("error receiving data from server: %s", strerror(errno));
     return -1;
 }
 
-int message_server_start(int socket, int timeout, ServerStart *srvStart) {
-    int recv_size = 0, recv_total = 0;
-    uint8_t message[MAX_SIZE_MESSAGE];
-    int fd_ready = 0;
-    fd_set rset, rset_master;
-    struct timeval tv_timeo;
-
-    print_msg(MSG_DEBUG, "Sending server start message");
-    FD_ZERO(&rset_master);
-    FD_SET((unsigned long)socket, &rset_master);
-
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
-
-    do {
-        memset(&message, 0, MAX_SIZE_MESSAGE);
-        memcpy(&rset, &rset_master, sizeof(rset_master));
-
-        fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
-
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                print_msg(MSG_DEBUG, "message_server_greetings select timeout!");
-            } else {
-                print_err("message_server_greetings select problem!");
-            }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, message, MAX_SIZE_MESSAGE, 0);
-
-                // Caso recv apresente algum erro
-                if (recv_size <= 0) {
-                    if (recv_size == 0) {
-                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
-                        break;
-                    }
-
-                    // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;
-                    } else {
-                        print_err("recv message problem: %s", strerror(errno));
-                        break;
-                    }
-                }
-
-                memcpy(srvStart + recv_total, &message, (unsigned int)recv_size);
-                recv_total += recv_size;
-
-                if (recv_total == SERVER_START_SIZE) {
-                    srvStart->StartTime.integer = ntohl(srvStart->StartTime.integer);
-                    srvStart->StartTime.fractional = ntohl(srvStart->StartTime.fractional);
-
-                    return recv_total;
-                }
-
-                print_msg(MSG_DEBUG, "recv_total different then expected!");
-            } else {
-                print_msg(MSG_DEBUG, "socket not in rset!");
-            }
-        }
-
-    } while (tv_timeo.tv_sec > 0);
-
-    return -1;
+/* Returns -1 on error (errno set), ETIMEDOUT/EBADMSG if not enough data received, msg_size otherwise */
+static ssize_t xrecv_msg(const int socket, const int timeout, void * const msg, const size_t msg_size)
+{
+    ssize_t r = xrecv(socket, timeout, (uint8_t *)msg, msg_size);
+    if (r < 0)
+	return -1;
+    if (r != (ssize_t)msg_size) {
+	errno = EBADMSG;
+	return -1;
+    }
+    return r;
 }
 
-int message_accept_session(int socket, int timeout, AcceptSession *actSession) {
-    int recv_size = 0, recv_total = 0;
-    uint8_t message[MAX_SIZE_MESSAGE];
-    int fd_ready = 0;
-    fd_set rset, rset_master;
-    struct timeval tv_timeo;
+ssize_t message_server_greetings(const int socket, const int timeout, ServerGreeting * const srvGreetings) {
+    print_msg(MSG_DEBUG, "Waiting server gretings message");
+    ssize_t r = xrecv_msg(socket, timeout, srvGreetings, sizeof(ServerGreeting));
+    if (r < 0)
+	return -1;
 
-    print_msg(MSG_DEBUG, "Sending acept session message");
-    FD_ZERO(&rset_master);
-    FD_SET((unsigned long)socket, &rset_master);
+    srvGreetings->Modes = ntohl(srvGreetings->Modes);
+    srvGreetings->Count = ntohl(srvGreetings->Count);
 
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
-
-    do {
-        memset(&message, 0, MAX_SIZE_MESSAGE);
-        memcpy(&rset, &rset_master, sizeof(rset_master));
-
-        fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
-
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                print_msg(MSG_DEBUG, "message_accept_session select timeout!");
-            } else {
-                print_err("message_accept_session select problem!");
-            }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, message, MAX_SIZE_MESSAGE, 0);
-
-                // Caso recv apresente algum erro
-                if (recv_size <= 0) {
-                    if (recv_size == 0) {
-                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
-                        break;
-                    }
-
-                    // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;
-                    } else {
-                        print_err("recv message problem: %s", strerror(errno));
-                        break;
-                    }
-                }
-
-                memcpy(actSession + recv_total, &message, (unsigned int)recv_size);
-                recv_total += recv_size;
-
-                if (recv_total == ACCEPT_SESSION_SIZE) {
-                    actSession->Port = ntohs(actSession->Port);
-
-                    return recv_total;
-                }
-
-                print_msg(MSG_DEBUG, "recv_total different then expected!");
-            } else {
-                print_msg(MSG_DEBUG, "socket not in rset!");
-            }
-        }
-
-    } while (tv_timeo.tv_sec > 0);
-
-    return -1;
+    return r;
 }
 
-int message_start_ack(int socket, int timeout, StartAck *strAck) {
-    int recv_size = 0, recv_total = 0;
-    uint8_t message[MAX_SIZE_MESSAGE];
-    int fd_ready = 0;
-    fd_set rset, rset_master;
-    struct timeval tv_timeo;
+ssize_t message_server_start(const int socket, const int timeout, ServerStart * const srvStart) {
+    print_msg(MSG_DEBUG, "Waiting server start message");
 
-    print_msg(MSG_DEBUG, "Sending start ack message");
-    FD_ZERO(&rset_master);
-    FD_SET((unsigned long)socket, &rset_master);
+    ssize_t r = xrecv_msg(socket, timeout, srvStart, sizeof(ServerStart));
+    if (r < 0)
+	return -1;
 
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
+    srvStart->StartTime.integer = ntohl(srvStart->StartTime.integer);
+    srvStart->StartTime.fractional = ntohl(srvStart->StartTime.fractional);
 
-    do {
-        memset(&message, 0, MAX_SIZE_MESSAGE);
-        memcpy(&rset, &rset_master, sizeof(rset_master));
+    return r;
+}
 
-        fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
+ssize_t message_accept_session(const int socket, const int timeout, AcceptSession * const actSession) {
+    print_msg(MSG_DEBUG, "Waiting acept session message");
 
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                print_msg(MSG_DEBUG, "message_accept_session select timeout!");
-            } else {
-                print_err("message_accept_session select problem!");
-            }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, message, MAX_SIZE_MESSAGE, 0);
+    ssize_t r = xrecv_msg(socket, timeout, actSession, sizeof(AcceptSession));
+    if (r < 0)
+	return -1;
 
-                // Caso recv apresente algum erro
-                if (recv_size <= 0) {
-                    if (recv_size == 0) {
-                        print_msg(MSG_DEBUG, "recv problem: recv_size == 0");
-                        break;
-                    }
+    actSession->Port = ntohs(actSession->Port);
 
-                    // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;
-                    } else {
-                        print_err("recv message problem: %s", strerror(errno));
-                        break;
-                    }
-                }
+    return r;
+}
 
-                memcpy(strAck + recv_total, &message, (unsigned int)recv_size);
-                recv_total += recv_size;
+ssize_t message_start_ack(const int socket, const int timeout, StartAck * const strAck) {
+    print_msg(MSG_DEBUG, "Waiting start ack message");
 
-                if (recv_total == START_ACK_SIZE) {
-                    return recv_total;
-                }
-
-                print_msg(MSG_DEBUG, "recv_total different then expected!");
-            } else {
-                print_msg(MSG_DEBUG, "socket not in rset!");
-            }
-        }
-
-    } while (tv_timeo.tv_sec > 0);
-
-    return -1;
+    return xrecv_msg(socket, timeout, strAck, sizeof(StartAck));
 }
 
 /********************/

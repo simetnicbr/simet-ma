@@ -207,8 +207,7 @@ int twamp_run_client(TWAMPParameters param) {
     rc = SEXIT_CTRLPROT_ERR;
 
     // SERVER GREETINGS
-    ret_socket = message_server_greetings(fd_control, 10, srvGreetings);
-    if (ret_socket != SERVER_GREETINGS_SIZE) {
+    if (message_server_greetings(fd_control, 10, srvGreetings) < 0) {
         print_err("message_server_greetings problem");
         goto CONTROL_CLOSE;
     }
@@ -237,8 +236,7 @@ int twamp_run_client(TWAMPParameters param) {
     print_msg(MSG_DEBUG, "Setup Response message sent");
 
     // SERVER START
-    ret_socket = message_server_start(fd_control, 10, srvStart);
-    if (ret_socket <= 0) {
+    if (message_server_start(fd_control, 10, srvStart) < 0) {
         print_err("message_server_start problem");
         goto CONTROL_CLOSE;
     }
@@ -327,8 +325,7 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     // ACCEPT SESSION
-    ret_socket = message_accept_session(fd_control, 10, actSession);
-    if (ret_socket <= 0) {
+    if (message_accept_session(fd_control, 10, actSession) < 0) {
         print_err("message_accept_session problem");
         rc = SEXIT_CTRLPROT_ERR;
         goto TEST_CLOSE;
@@ -386,8 +383,7 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     // START ACK
-    ret_socket = message_start_ack(fd_control, 10, strAck);
-    if (ret_socket <= 0) {
+    if (message_start_ack(fd_control, 10, strAck) < 0) {
         print_err("message_start_ack problem on start session on control socket");
         goto TEST_CLOSE;
     }

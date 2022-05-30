@@ -169,13 +169,11 @@ typedef struct reflected_packet {
 /* MESSAGES READERS */
 /********************/
 
-int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetings);
-
-int message_server_start(int socket, int timeout, ServerStart *srvStart);
-
-int message_accept_session(int socket, int timeout, AcceptSession *actSession);
-
-int message_start_ack(int socket, int timeout, StartAck *strAck);
+/* all of these return -1 on error, errno set.  Returns size of message otherwise */
+ssize_t message_server_greetings(const int socket, const int timeout, ServerGreeting * const srvGreetings);
+ssize_t message_server_start(const int socket, const int timeout, ServerStart * const srvStart);
+ssize_t message_accept_session(const int socket, const int timeout, AcceptSession * const actSession);
+ssize_t message_start_ack(const int socket, const int timeout, StartAck * const strAck);
 
 /********************/
 /* MESSAGES SENDERS */
