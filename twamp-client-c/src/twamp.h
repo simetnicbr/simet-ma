@@ -30,7 +30,7 @@
 #endif
 
 #define SIMET_TWAMP_IDCOOKIE_V1LEN 16
-#define SIMET_TWAMP_IDCOOKIE_V1SIG 0x83b8c490
+#define SIMET_TWAMP_IDCOOKIE_V1SIG 0x83b8c493
 struct simet_cookie { /* max 24 bytes, refer to messages.h */
     /* SIMET cookie v1 */
     uint32_t sig; /* SIMET_TWAMP_IDCOOKIE_V1SIG, network byte order */

@@ -631,7 +631,7 @@ static int twamp_test(TestParameters test_param) {
 
     if (test_param.cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
-        simet_cookie_as_padding(packet->Padding, sizeof(packet->Padding), &test_param.cookie);
+        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &test_param.cookie);
     }
 
     if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {

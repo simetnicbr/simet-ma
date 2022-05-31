@@ -122,11 +122,20 @@ typedef struct twamp_stop {
 
 #define TST_PKT_SIZE 128U
 
+/* RFC-6038, RFC-7750, symmetric-mode, reflect-octets-compatible packet */
 typedef struct test_packet {
     uint32_t SeqNumber;
     Timestamp Time;
     uint16_t ErrorEstimate;
-    uint8_t Padding[TST_PKT_SIZE-14];
+    uint8_t MBZ1[27]; /* RFC-6038 symmetric mode. RFC-7750 has data in offset 2 */
+    union {
+        uint8_t Padding[TST_PKT_SIZE-14-27-3]; /* start of padding */
+        struct {
+            /* SIMET Extension to match TWAMP_CONTROL and TWAMP_TEST server-side */
+            uint8_t Padding_align[3]; /* padding alignment */
+            uint8_t Cookie[24];       /* SIMET cookie, refer to twamp.h */
+        };
+    };
 } UnauthPacket;
 
 typedef struct reflected_packet {
