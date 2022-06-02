@@ -81,7 +81,6 @@ static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struc
 
 int twamp_run_client(TWAMPParameters param) {
     int fd_control, fd_test;
-    int fd_ready;
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
     int do_report = 0;
@@ -179,8 +178,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto MEM_FREE;
     }
 
-    fd_ready = usock_wait_ready(fd_control, 5000);
-    if (fd_ready != 0) {
+    if (usock_wait_ready(fd_control, 5000) != 0) {
         print_err("connection to server failed");
         rc = SEXIT_MP_REFUSED;
         goto MEM_FREE;
@@ -275,8 +273,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto CONTROL_CLOSE;
     }
 
-    fd_ready = usock_wait_ready(fd_test, 5000);
-    if (fd_ready != 0) {
+    if (usock_wait_ready(fd_test, 5000) != 0) {
         print_err("usock_wait_ready problem on test socket");
         rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
