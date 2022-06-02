@@ -45,7 +45,7 @@ static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t ma
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
-static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, int *bytes_recv);
+static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
 
 static int twamp_test(TestParameters);
@@ -521,7 +521,7 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
 static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
     UnauthReflectedPacket *reflectedPacket = NULL;
-    int bytes_recv = 0;
+    size_t bytes_recv = 0;
     int ret;
     unsigned int pkg_count = 0;
     unsigned int pkg_corrupt = 0;
@@ -685,7 +685,7 @@ err_out:
 }
 
 static int receive_reflected_packet(int socket, struct timeval *timeout,
-                                    UnauthReflectedPacket *reflectedPacket, int *recv_total) {
+                                    UnauthReflectedPacket *reflectedPacket, size_t *recv_total) {
     ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
@@ -700,48 +700,41 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
 
         /* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
         fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
+        if (fd_ready > 0 && FD_ISSET(socket, &rset)) {
+            recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC || MSG_DONTWAIT);
 
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                return SEXIT_MP_TIMEOUT;
-            } else {
-                print_err("receive_reflected_packet select problem");
-                return SEXIT_FAILURE;
+            // Caso recv apresente algum erro
+            if (recv_size < 0) {
+                // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    continue;
+                } else {
+                    print_err("recv message problem receiving reflected packet: %s", strerror(errno));
+                    return SEXIT_FAILURE;
+                }
             }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC);
 
-                // Caso recv apresente algum erro
-                if (recv_size < 0) {
-                    // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;
-                    } else {
-                        print_err("recv message problem receiving reflected packet: %s", strerror(errno));
-                        return SEXIT_FAILURE;
-                    }
-                }
+            if (recv_size == sizeof(UnauthReflectedPacket)) {
+                // Sender info
+                reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
+                decode_be_timestamp(&reflectedPacket->SenderTime);
 
-                if (recv_size == sizeof(UnauthReflectedPacket)) {
-                    // Sender info
-                    reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
-                    decode_be_timestamp(&reflectedPacket->SenderTime);
+                // Reflector info
+                reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
+                decode_be_timestamp(&reflectedPacket->RecvTime);
+                decode_be_timestamp(&reflectedPacket->Time);
 
-                    // Reflector info
-                    reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
-                    decode_be_timestamp(&reflectedPacket->RecvTime);
-                    decode_be_timestamp(&reflectedPacket->Time);
-
-                    *recv_total = recv_size;
-                    return 0;
-                }
-
-                print_warn("unexpected reflected packet size: %zd, ignoring packet", recv_size);
+                *recv_total = (size_t) recv_size; /* verified, recv_size can never be negative */
                 return 0;
-            } else {
-                print_warn("socket not in rset receiving reflected packet");
             }
+
+            print_warn("unexpected reflected packet size: %zd, ignoring packet", recv_size);
+            return 0;
+        } else if (fd_ready < 0 && errno != EINTR) {
+            print_err("receive_reflected_packet select problem");
+            return SEXIT_FAILURE;
+        } else if (fd_ready == 0) {
+            return SEXIT_MP_TIMEOUT;
         }
     } while ((timeout->tv_sec > 0) && (timeout->tv_usec > 0));
 
