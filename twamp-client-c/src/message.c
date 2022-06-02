@@ -149,11 +149,16 @@ ssize_t message_start_ack(const int socket, const int timeout, StartAck * const 
 /* MESSAGES SENDERS */
 /********************/
 
-int message_send(int socket, int timeout, void *message, size_t len) {
-    int send_size = 0, send_total = 0;
-    int fd_ready = 0;
+/* Returns -1 on error, errno set. amount of data sent otherwise */
+/* note: used both for TCP (TWAMP_CONTROL) and UDP (TWAMP_TEST) */
+ssize_t message_send(const int socket, const int timeout, void * const message, const size_t len) {
     fd_set wset, wset_master;
     struct timeval tv_timeo;
+
+    if (!message || socket < 0 || len >= SSIZE_MAX) {
+	errno = EINVAL;
+	return -1;
+    }
 
     FD_ZERO(&wset_master);
     FD_SET((unsigned long)socket, &wset_master);
@@ -161,33 +166,43 @@ int message_send(int socket, int timeout, void *message, size_t len) {
     tv_timeo.tv_sec = timeout;
     tv_timeo.tv_usec = 0;
 
-    do {
+    uint8_t *buf = message;
+    size_t buf_remain = len;
+    size_t total_sent = 0;
+    while (buf_remain > 0) {
         memcpy(&wset, &wset_master, sizeof(wset_master));
 
-        fd_ready = select(socket+1, NULL, &wset, NULL, &tv_timeo);
+	/* we depend on linux select() behavior that updates the timeout */
+        int fd_ready = select(socket+1, NULL, &wset, NULL, &tv_timeo);
+	if (fd_ready < 0 && errno != EINTR) {
+	    goto err_exit;
+	} else if (fd_ready == 0) {
+	    errno = ETIMEDOUT;
+	    goto err_exit;
+	} else if (fd_ready > 0 && FD_ISSET(socket, &wset)) {
+            ssize_t sent_size = send(socket, buf, buf_remain, MSG_DONTWAIT);
+	    if (sent_size < 0) {
+		if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+		    continue;
+		goto err_exit;
+	    } else {
+		buf += sent_size;
+		total_sent += (size_t) sent_size; /* verified, sent_size >= 0 */
+		buf_remain -= (size_t) sent_size; /* verified, sent_size >= 0 */
+	    }
+	}
+    }
 
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                print_msg(MSG_DEBUG, "message_send select timeout!");
-            } else {
-                print_err("message_send select problem!");
-            }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &wset)) {
-                send_size = send(socket, message + send_total, len - (unsigned long)send_total, 0);
-                send_total += send_size;
+    /* should never happen, but callers would break if we don't flag it as an error */
+    if (total_sent != len) {
+	errno = EBADMSG; /* for symmetry with xrecv() */
+	goto err_exit;
+    }
 
-                if ((unsigned long)send_total == len) {
-                    return send_size;
-                }
+    return (ssize_t) total_sent; /* verified, len < SSIZE_MAX, total_sent <= len */
 
-                print_msg(MSG_DEBUG, "send_total different then expected!");
-            } else {
-                print_msg(MSG_DEBUG, "socket not in wset!");
-            }
-        }
-    } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
-
+err_exit:
+    print_err("error sending data to server: %s", strerror(errno));
     return -1;
 }
 

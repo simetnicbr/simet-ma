@@ -80,7 +80,7 @@ static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struc
 }
 
 int twamp_run_client(TWAMPParameters param) {
-    int ret_socket, fd_control, fd_test;
+    int fd_control, fd_test;
     int fd_ready;
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
@@ -227,8 +227,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto CONTROL_CLOSE;
     }
 
-    ret_socket = message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE);
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE) < 0) {
         print_err("message_send problem sending stpResponse");
         goto CONTROL_CLOSE;
     }
@@ -317,8 +316,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    ret_socket = message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE);
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE) < 0) {
         print_err("message_send problem sending rqtSession");
         rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
@@ -376,8 +374,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     // START SESSION
     strSession->Type = 2;
-    ret_socket = message_send(fd_control, 10, strSession, START_SESSIONS_SIZE);
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, strSession, START_SESSIONS_SIZE) < 0) {
         print_err("message_send problem on start session on control socket");
         goto TEST_CLOSE;
     }
@@ -412,8 +409,7 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     message_format_stop_sessions(stpSessions);
-    ret_socket = message_send(fd_control, 10, stpSessions, sizeof(StopSessions));
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, stpSessions, sizeof(StopSessions)) < 0) {
        print_err("message_send problem on stop session on control socket");
        if (rc == SEXIT_SUCCESS)
            rc = SEXIT_CTRLPROT_ERR;
@@ -613,7 +609,6 @@ error_out:
 static int twamp_test(TestParameters test_param) {
     struct timespec ts_offset, ts_cur;
     uint counter = 0;
-    int send_resp = 0;
     void *thread_retval = NULL;
     int rc = SEXIT_SUCCESS;
     int ret;
@@ -668,8 +663,7 @@ static int twamp_test(TestParameters test_param) {
         packet->Time = ts;
 
         /* TODO: send directly */
-        send_resp = message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket));
-        if (send_resp == -1) {
+        if (message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket)) < 0) {
             print_warn("message_send returned -1 for test packet %u", counter-1);
             counter--;
         }

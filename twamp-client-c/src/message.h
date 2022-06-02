@@ -179,7 +179,7 @@ ssize_t message_start_ack(const int socket, const int timeout, StartAck * const 
 /* MESSAGES SENDERS */
 /********************/
 
-int message_send(int socket, int timeout, void *message, size_t len);
+ssize_t message_send(const int socket, const int timeout, void * const message, const size_t len);
 
 /***********************/
 /* MESSAGES VALIDATORS */
