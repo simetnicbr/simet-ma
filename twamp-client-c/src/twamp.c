@@ -45,14 +45,42 @@ static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t ma
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
-static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, int *bytes_recv);
+static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
 
 static int twamp_test(TestParameters);
 
+/* generates an "id cookie" from server data; returns 0 for cookie disabled */
+static int simet_generate_cookie(struct simet_cookie *cookie, const void * const src, size_t src_sz)
+{
+    if (!cookie || !src || !src_sz)
+        return 0;
+
+    uint8_t * sbuf = (uint8_t *)src;
+    size_t i;
+    for (i = 0; sbuf[i] == 0 && i < src_sz; i++);
+    if (i >= src_sz)
+        return 0; /* all zeroes */
+
+    cookie->sig = htonl(SIMET_TWAMP_IDCOOKIE_V1SIG);
+    size_t s = sizeof(cookie->data);
+    if (s > src_sz) {
+        memset(cookie->data, 0, sizeof(cookie->data));
+        s = src_sz;
+    }
+    memcpy(cookie->data, src, s);
+    return 1;
+}
+
+/* embedds cookie into padding, if there's enough space */
+static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struct simet_cookie * const cookie)
+{
+    if (dst && dst_sz && cookie)
+        memcpy(dst, cookie, sizeof(struct simet_cookie) <= dst_sz ? sizeof(struct simet_cookie) : dst_sz);
+}
+
 int twamp_run_client(TWAMPParameters param) {
-    int ret_socket, fd_control, fd_test;
-    int fd_ready;
+    int fd_control, fd_test;
     struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
     char * testPort = NULL;
     int do_report = 0;
@@ -150,8 +178,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto MEM_FREE;
     }
 
-    fd_ready = usock_wait_ready(fd_control, 5000);
-    if (fd_ready != 0) {
+    if (usock_wait_ready(fd_control, 5000) != 0) {
         print_err("connection to server failed");
         rc = SEXIT_MP_REFUSED;
         goto MEM_FREE;
@@ -178,8 +205,7 @@ int twamp_run_client(TWAMPParameters param) {
     rc = SEXIT_CTRLPROT_ERR;
 
     // SERVER GREETINGS
-    ret_socket = message_server_greetings(fd_control, 10, srvGreetings);
-    if (ret_socket != SERVER_GREETINGS_SIZE) {
+    if (message_server_greetings(fd_control, 10, srvGreetings) < 0) {
         print_err("message_server_greetings problem");
         goto CONTROL_CLOSE;
     }
@@ -199,8 +225,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto CONTROL_CLOSE;
     }
 
-    ret_socket = message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE);
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, stpResponse, SETUP_RESPONSE_SIZE) < 0) {
         print_err("message_send problem sending stpResponse");
         goto CONTROL_CLOSE;
     }
@@ -208,8 +233,7 @@ int twamp_run_client(TWAMPParameters param) {
     print_msg(MSG_DEBUG, "Setup Response message sent");
 
     // SERVER START
-    ret_socket = message_server_start(fd_control, 10, srvStart);
-    if (ret_socket <= 0) {
+    if (message_server_start(fd_control, 10, srvStart) < 0) {
         print_err("message_server_start problem");
         goto CONTROL_CLOSE;
     }
@@ -249,8 +273,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto CONTROL_CLOSE;
     }
 
-    fd_ready = usock_wait_ready(fd_test, 5000);
-    if (fd_ready != 0) {
+    if (usock_wait_ready(fd_test, 5000) != 0) {
         print_err("usock_wait_ready problem on test socket");
         rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
@@ -290,16 +313,14 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    ret_socket = message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE);
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, rqtSession, REQUEST_SESSION_SIZE) < 0) {
         print_err("message_send problem sending rqtSession");
         rc = SEXIT_MP_TIMEOUT;
         goto TEST_CLOSE;
     }
 
     // ACCEPT SESSION
-    ret_socket = message_accept_session(fd_control, 10, actSession);
-    if (ret_socket <= 0) {
+    if (message_accept_session(fd_control, 10, actSession) < 0) {
         print_err("message_accept_session problem");
         rc = SEXIT_CTRLPROT_ERR;
         goto TEST_CLOSE;
@@ -310,6 +331,8 @@ int twamp_run_client(TWAMPParameters param) {
         rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
     }
+
+    t_param.cookie_enabled = simet_generate_cookie(&t_param.cookie, actSession->SID, sizeof(actSession->SID));
 
     /* FIXME: log this better */
     uint16_t receiver_port = actSession->Port;
@@ -348,15 +371,13 @@ int twamp_run_client(TWAMPParameters param) {
 
     // START SESSION
     strSession->Type = 2;
-    ret_socket = message_send(fd_control, 10, strSession, START_SESSIONS_SIZE);
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, strSession, START_SESSIONS_SIZE) < 0) {
         print_err("message_send problem on start session on control socket");
         goto TEST_CLOSE;
     }
 
     // START ACK
-    ret_socket = message_start_ack(fd_control, 10, strAck);
-    if (ret_socket <= 0) {
+    if (message_start_ack(fd_control, 10, strAck) < 0) {
         print_err("message_start_ack problem on start session on control socket");
         goto TEST_CLOSE;
     }
@@ -385,8 +406,7 @@ int twamp_run_client(TWAMPParameters param) {
     }
 
     message_format_stop_sessions(stpSessions);
-    ret_socket = message_send(fd_control, 10, stpSessions, sizeof(StopSessions));
-    if (ret_socket <= 0) {
+    if (message_send(fd_control, 10, stpSessions, sizeof(StopSessions)) < 0) {
        print_err("message_send problem on stop session on control socket");
        if (rc == SEXIT_SUCCESS)
            rc = SEXIT_CTRLPROT_ERR;
@@ -501,7 +521,7 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
 static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
     UnauthReflectedPacket *reflectedPacket = NULL;
-    int bytes_recv = 0;
+    size_t bytes_recv = 0;
     int ret;
     unsigned int pkg_count = 0;
     unsigned int pkg_corrupt = 0;
@@ -586,7 +606,6 @@ error_out:
 static int twamp_test(TestParameters test_param) {
     struct timespec ts_offset, ts_cur;
     uint counter = 0;
-    int send_resp = 0;
     void *thread_retval = NULL;
     int rc = SEXIT_SUCCESS;
     int ret;
@@ -597,6 +616,11 @@ static int twamp_test(TestParameters test_param) {
        return SEXIT_OUTOFRESOURCE;
     }
     memset(packet, 0 , sizeof(UnauthPacket));
+
+    if (test_param.cookie_enabled) {
+        print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
+        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &test_param.cookie);
+    }
 
     if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
         rc = SEXIT_INTERNALERR;
@@ -636,8 +660,7 @@ static int twamp_test(TestParameters test_param) {
         packet->Time = ts;
 
         /* TODO: send directly */
-        send_resp = message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket));
-        if (send_resp == -1) {
+        if (message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket)) < 0) {
             print_warn("message_send returned -1 for test packet %u", counter-1);
             counter--;
         }
@@ -662,7 +685,7 @@ err_out:
 }
 
 static int receive_reflected_packet(int socket, struct timeval *timeout,
-                                    UnauthReflectedPacket *reflectedPacket, int *recv_total) {
+                                    UnauthReflectedPacket *reflectedPacket, size_t *recv_total) {
     ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
@@ -677,48 +700,41 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
 
         /* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
         fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
+        if (fd_ready > 0 && FD_ISSET(socket, &rset)) {
+            recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC || MSG_DONTWAIT);
 
-        if (fd_ready <= 0) {
-            if (fd_ready == 0) {
-                return SEXIT_MP_TIMEOUT;
-            } else {
-                print_err("receive_reflected_packet select problem");
-                return SEXIT_FAILURE;
+            // Caso recv apresente algum erro
+            if (recv_size < 0) {
+                // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    continue;
+                } else {
+                    print_err("recv message problem receiving reflected packet: %s", strerror(errno));
+                    return SEXIT_FAILURE;
+                }
             }
-        } else {
-            if (FD_ISSET((unsigned long)socket, &rset)) {
-                recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC);
 
-                // Caso recv apresente algum erro
-                if (recv_size < 0) {
-                    // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;
-                    } else {
-                        print_err("recv message problem receiving reflected packet: %s", strerror(errno));
-                        return SEXIT_FAILURE;
-                    }
-                }
+            if (recv_size == sizeof(UnauthReflectedPacket)) {
+                // Sender info
+                reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
+                decode_be_timestamp(&reflectedPacket->SenderTime);
 
-                if (recv_size == sizeof(UnauthReflectedPacket)) {
-                    // Sender info
-                    reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
-                    decode_be_timestamp(&reflectedPacket->SenderTime);
+                // Reflector info
+                reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
+                decode_be_timestamp(&reflectedPacket->RecvTime);
+                decode_be_timestamp(&reflectedPacket->Time);
 
-                    // Reflector info
-                    reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
-                    decode_be_timestamp(&reflectedPacket->RecvTime);
-                    decode_be_timestamp(&reflectedPacket->Time);
-
-                    *recv_total = recv_size;
-                    return 0;
-                }
-
-                print_warn("unexpected reflected packet size: %zd, ignoring packet", recv_size);
+                *recv_total = (size_t) recv_size; /* verified, recv_size can never be negative */
                 return 0;
-            } else {
-                print_warn("socket not in rset receiving reflected packet");
             }
+
+            print_warn("unexpected reflected packet size: %zd, ignoring packet", recv_size);
+            return 0;
+        } else if (fd_ready < 0 && errno != EINTR) {
+            print_err("receive_reflected_packet select problem");
+            return SEXIT_FAILURE;
+        } else if (fd_ready == 0) {
+            return SEXIT_MP_TIMEOUT;
         }
     } while ((timeout->tv_sec > 0) && (timeout->tv_usec > 0));
 

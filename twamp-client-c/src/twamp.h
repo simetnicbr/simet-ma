@@ -29,6 +29,14 @@
 #include <json.h>
 #endif
 
+#define SIMET_TWAMP_IDCOOKIE_V1LEN 16
+#define SIMET_TWAMP_IDCOOKIE_V1SIG 0x83b8c493
+struct simet_cookie { /* max 24 bytes, refer to messages.h */
+    /* SIMET cookie v1 */
+    uint32_t sig; /* SIMET_TWAMP_IDCOOKIE_V1SIG, network byte order */
+    uint8_t data[SIMET_TWAMP_IDCOOKIE_V1LEN]; /* SID from Accept-TW-Session */
+};
+
 /* TWAMP parameters struct */
 typedef struct twamp_parameters {
     const char *host;
@@ -45,6 +53,8 @@ typedef struct twamp_parameters {
 typedef struct twamp_test_parameters {
     int test_socket;
     struct timespec clock_offset;
+    int cookie_enabled;
+    struct simet_cookie cookie;
     TWAMPParameters param;
     TWAMPReport * report;
 } TestParameters;

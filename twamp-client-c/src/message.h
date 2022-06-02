@@ -122,11 +122,20 @@ typedef struct twamp_stop {
 
 #define TST_PKT_SIZE 128U
 
+/* RFC-6038, RFC-7750, symmetric-mode, reflect-octets-compatible packet */
 typedef struct test_packet {
     uint32_t SeqNumber;
     Timestamp Time;
     uint16_t ErrorEstimate;
-    uint8_t Padding[TST_PKT_SIZE-14];
+    uint8_t MBZ1[27]; /* RFC-6038 symmetric mode. RFC-7750 has data in offset 2 */
+    union {
+        uint8_t Padding[TST_PKT_SIZE-14-27-3]; /* start of padding */
+        struct {
+            /* SIMET Extension to match TWAMP_CONTROL and TWAMP_TEST server-side */
+            uint8_t Padding_align[3]; /* padding alignment */
+            uint8_t Cookie[24];       /* SIMET cookie, refer to twamp.h */
+        };
+    };
 } UnauthPacket;
 
 typedef struct reflected_packet {
@@ -160,19 +169,17 @@ typedef struct reflected_packet {
 /* MESSAGES READERS */
 /********************/
 
-int message_server_greetings(int socket, int timeout, ServerGreeting *srvGreetings);
-
-int message_server_start(int socket, int timeout, ServerStart *srvStart);
-
-int message_accept_session(int socket, int timeout, AcceptSession *actSession);
-
-int message_start_ack(int socket, int timeout, StartAck *strAck);
+/* all of these return -1 on error, errno set.  Returns size of message otherwise */
+ssize_t message_server_greetings(const int socket, const int timeout, ServerGreeting * const srvGreetings);
+ssize_t message_server_start(const int socket, const int timeout, ServerStart * const srvStart);
+ssize_t message_accept_session(const int socket, const int timeout, AcceptSession * const actSession);
+ssize_t message_start_ack(const int socket, const int timeout, StartAck * const strAck);
 
 /********************/
 /* MESSAGES SENDERS */
 /********************/
 
-int message_send(int socket, int timeout, void *message, size_t len);
+ssize_t message_send(const int socket, const int timeout, void * const message, const size_t len);
 
 /***********************/
 /* MESSAGES VALIDATORS */
