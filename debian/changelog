@@ -1,3 +1,15 @@
+simet-ma (0.17.9) unstable; urgency=medium
+
+  * simet-ma version 0.17.9
+  * twamp: send a SID cookie inside TWAMP_TEST packets, in order to be able to
+    preserve one-way packet loss measurement even through NAT that maps UDP
+    and TCP flows with the same origin and destination to different public IP
+    addresses.  This is a non-standard SIMET2 extension to TWAMP.
+  * twamp: refactor send and receive processing, to better cope with
+    malformed messages.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 03 Jun 2022 09:11:42 -0300
+
 simet-ma (0.17.8.3) unstable; urgency=medium
 
   * simet-ma version 0.17.8.3
