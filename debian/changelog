@@ -1,3 +1,12 @@
+simet-ma (0.17.9.1) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.1
+  * simet-api: retrieve, cache and log participant info.
+  * simet-api: fix typo in comments, overidable to overridable
+  * simet-api: simet_register_ma: update metadata explicitly
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 06 Jun 2022 13:27:45 -0300
+
 simet-ma (0.17.9) unstable; urgency=medium
 
   * simet-ma version 0.17.9
