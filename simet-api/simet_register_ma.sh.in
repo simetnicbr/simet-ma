@@ -215,13 +215,7 @@ __simet_create_agent_common() {
 }
 
 __simet_modify_agent_apicall() {
-	if [ -z "$1" ] || [ "$1" = "DISABLED" ] ; then
-		WP=false
-		SC=
-	else
-		WP=true
-		SC="\"secret\":\"$1\","
-	fi
+	SC="$1"
 	cat <<- EOFSRAP | \
 	  curl $CURLOPT --retry 3 --retry-max-time 30 \
 	     -A "$USERAGENT" \
@@ -237,16 +231,27 @@ __simet_modify_agent_apicall() {
 	  $(simet_jo_pairs 0 \
 		engine_name "@SIMET_ENGINE_NAME@" \
 		engine_version "@PACKAGEVERSION@" \
-		agent_family "$SIMET2_AGENT_FAMILY" \
-	    && printf ',')
-	  "waiting_for_pairing":$WP
+		agent_family "$SIMET2_AGENT_FAMILY")
 	}
 	EOFSRAP
 	:
 }
+__simet_modify_agent_pairing() {
+	if [ -z "$1" ] || [ "$1" = "DISABLED" ] || [ "$PAIRED" = "true" ] || [ "$PAIRED" = 1 ] ; then
+		SC="\"waiting_for_pairing\":false,"
+	else
+		SC="\"waiting_for_pairing\":true,\"secret\":\"$1\","
+	fi
+	__simet_modify_agent_apicall "$SC" || return $?
+	:
+}
+
+# avoid updating the metadata twice for no good reason
+DIDMETADATAUPDATE=0
+
 #overridable
 simet_register_vlabel() {
-	APIRES=$(__simet_modify_agent_apicall "$SIMET2_VLABEL") || {
+	APIRES=$(__simet_modify_agent_pairing "$SIMET2_VLABEL") || {
 		simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
 		return 1
 	}
@@ -256,6 +261,24 @@ simet_register_vlabel() {
 	}
 
 	__simet_consume_api_output
+	DIDMETADATAUPDATE=1
+	:
+}
+#overridable
+simet_update_agent_metadata() {
+	if [ "$DIDMETADATAUPDATE" != "1" ] ; then
+		APIRES=$(__simet_modify_agent_apicall "") || {
+			simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
+			return 1
+		}
+		[ "$APIRES" -eq 200 ] || {
+			simet_log simet-ma daemon.err "SIMET2 Agent Register API reported error $APIRES"
+			return 1
+		}
+
+		__simet_consume_api_output
+		DIDMETADATAUPDATE=1
+	fi
 	:
 }
 
@@ -589,6 +612,8 @@ gettoken() {
 	fi
 
 	call simet_pairing_flow
+
+	call simet_update_agent_metadata
 
 	if call simet_update_tokens "$AID" "$AT" ; then
 		call_hook access_tokens_updated || true
