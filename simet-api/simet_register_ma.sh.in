@@ -67,7 +67,7 @@ case "$1" in
 esac
 CURLOPT="$CURLOPT $CURLOPT2"
 
-#overidable
+#overridable
 simet_restart_services() {
 	if [ -n "$SIMETMA_RECONFIG" ] ; then
 		$SIMETMA_RECONFIG || true
@@ -84,7 +84,7 @@ __gethash() {
 	sha256sum "$1" | sed -n '1 { s/[[:blank:]].*// ; p }'
 	return 0
 }
-#overidable
+#overridable
 #clobbers $OUTFILE contents!
 write_lmap_agent() {
 	if [ -z "$1" ] ; then
@@ -244,7 +244,7 @@ __simet_modify_agent_apicall() {
 	EOFSRAP
 	:
 }
-#overidable
+#overridable
 simet_register_vlabel() {
 	APIRES=$(__simet_modify_agent_apicall "$SIMET2_VLABEL") || {
 		simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
@@ -260,7 +260,7 @@ simet_register_vlabel() {
 }
 
 # used only for *first* register, not for recovery
-#overidable
+#overridable
 simet_create_agent() {
 	V1AID=
 	V1AT=
@@ -277,7 +277,7 @@ simet_create_agent() {
 	__simet_consume_api_output
 }
 # used only for recovery into an anonymous MA
-#overidable
+#overridable
 simet_create_agent_for_recovery() {
 	simet_log simet-ma daemon.crit "self-healing required, registering as a new measurement agent"
 	__simet_create_agent_common || return $?
@@ -285,7 +285,7 @@ simet_create_agent_for_recovery() {
 	:
 }
 
-#overidable
+#overridable
 simet_save_pairing_recovery() {
 	[ -n "$AGENT_PAIRBKP_FILE" ] && {
 		if [ ! -r "$AGENT_PAIRBKP_FILE" ] ; then
@@ -326,7 +326,7 @@ __simet_invalidate_all() {
 	[ -d "$SIMET_RUNSTATE_DIR" ] && rm -f "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
 }
 
-#overidable
+#overridable
 simet_refresh_agent_status() {
 	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
 		-H "Authorization: Bearer $AT" \
@@ -444,7 +444,7 @@ __simet_attempt_pairing_recovery() {
 	[ "$APIRES" -eq 200 ] || return 1
 	:
 }
-#overidable
+#overridable
 simet_attempt_pairing_recovery() {
 	OLDPAIR=$(cat "$AGENT_PAIRBKP_FILE" 2>/dev/null) || return 1
 
@@ -464,7 +464,7 @@ simet_attempt_pairing_recovery() {
 	:
 }
 
-#overidable
+#overridable
 simet_pairing_flow() {
 	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL=
 	[ "$SIMET2_VLABEL" = "DISABLED" ] && SIMET2_VLABEL=
