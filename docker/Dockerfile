@@ -21,8 +21,8 @@
 
 ## Docker build arguments
 ##    DISTRO: base image (default)
-##       (debian:buster), debian:stretch, debian:jessie,
-##        ubuntu:disco, ubuntu:bionic, ubuntu:xenial
+##       (debian:bullseye) debian:buster, debian:stretch, debian:jessie,
+##       ubuntu:jammy, ubuntu:focal, ubuntu:bionic, ubuntu:xenial
 ##    BUILD_DIR:
 ##       /usr/src/simet
 ##    SIMET_LMAPD: where to get simet-lmapd from
@@ -31,7 +31,7 @@
 ##       "noautodbgsym nodoc terse hardening=+all"
 
 # Base distro
-ARG DISTRO=debian:buster
+ARG DISTRO=debian:bullseye
 FROM $DISTRO
 
 LABEL description="SIMET2 Measurement Agent builder environment"

@@ -43,7 +43,7 @@
 ##  container every new simet-ma release (via docker pull from
 ##  docker-downloads.simet.nic.br).  YOU HAVE BEEN WARNED.
 
-ARG  DISTRO=debian:buster
+ARG  DISTRO=debian:bullseye
 FROM $DISTRO
 LABEL description="SIMET2 Measurement Agent (measurement node)"
 LABEL maintainer="Henrique de Moraes Holschuh <henrique@nic.br>"
