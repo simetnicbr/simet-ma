@@ -88,7 +88,9 @@ SRV_URL_XHR_URLS="%TESTID%.aaaa.conn.test-ns-signed.%SRV_CONN_DNSSUFFIX%
 
 CURL_OPT="--location --proto =https,http -s -S -f"
 PROGRAM_NAME="internetnl_connection_test"
-PROGRAM_VERSION="v0.1"
+PROGRAM_VERSION="v1.0"
+
+USERAGENT="$(get_http_useragent) $PROGRAM_NAME/$PROGRAM_VERSION"
 
 ####### END OF CONFIGURATION ########
 
@@ -186,7 +188,7 @@ url_resolv() {
 api_curl() {
 	C_RC=0
 	# shellcheck disable=SC2086
-	curl $CURL_OPT "$@" || C_RC=$?
+	curl -A "$USERAGENT" $CURL_OPT "$@" || C_RC=$?
 	return $C_RC
 }
 api_call() {
