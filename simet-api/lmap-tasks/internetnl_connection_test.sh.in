@@ -94,9 +94,10 @@ USERAGENT="$(get_http_useragent) $PROGRAM_NAME/$PROGRAM_VERSION"
 
 ####### END OF CONFIGURATION ########
 
+RC=1
 abend() {
 	printf "%s: ERROR: %s\n" "$0" "$*" >&2
-	exit 1
+	exit $RC
 }
 info () {
 	printf "%s: %s\n" "$0" "$*" >&2
@@ -143,16 +144,16 @@ while [ $# -gt 0 ] ; do
 		LMAP_MODE=1
 		;;
 	*)
-		printf "%s: unknown parameter %s\n" "$0" "$1" >&2
+		printf "%s: ERROR: unknown parameter %s\n" "$0" "$1" >&2
 		usage
-		exit 1
+		exit 2
 		;;
 	esac
 	shift
 done
 [ -z "$SRV_HOST" ] || [ -z "$SRV_IPV6_ADDR" ] && {
 	usage
-	exit 1
+	exit 2
 }
 
 # JSON processing
@@ -172,7 +173,7 @@ json_get_str() {
 		"$JSONPATH" -e "@.$1" || return $?
 		return 0
 	}
-	abend "internal error: neither JQ nor JSONPATH are executables"
+	RC=3 abend "internal error: neither JQ nor JSONPATH are executables"
 }
 
 
@@ -223,11 +224,11 @@ output_filter() {
  "column":["server","test_id","results"], \
  "row":[{"value":[
 EOFOFHDR
-	simet_jo_quoted "$SRV_HOST"
+	simet_jo_quoted "$SRV_HOST" || return 3
 	printf ","
-	simet_jo_quoted "$TST_TESTID"
+	simet_jo_quoted "$TST_TESTID" || return 3
 	printf ",\""
-	simet_jo_sed
+	simet_jo_sed || return 3
 	printf "\"]}]}\n"
 	:
 }
@@ -242,7 +243,7 @@ info "server: $SRV_HOST"
 
 info "Requesting test-id"
 TST_TESTID=$(srv_api_call "gettestid/" | json_get_str test_id) || TST_TESTID=
-[ -z "$TST_TESTID" ] && abend "failed to get a test id"
+[ -z "$TST_TESTID" ] && RC=26 abend "failed to get a test id"
 
 info "test_id: $TST_TESTID"
 
@@ -252,6 +253,7 @@ run_xhr_tests
 # Get results
 info "Results: $(url_resolv "$SRV_CONN_API/${TST_TESTID}/results")"
 
-srv_api_call "finished/%TESTID%" | output_filter || abend "failed to retrieve results from server"
+{ srv_api_call "finished/%TESTID%" || RC=23 abend "failed to retrieve results from server" ; } \
+	| output_filter || abend "failed to generate report"
 
 exit 0
