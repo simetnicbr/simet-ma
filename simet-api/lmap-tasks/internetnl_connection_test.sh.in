@@ -43,6 +43,11 @@
 
 set -e
 
+. @SIMETLIBDIR@/simet_lib.sh || {
+	printf "%s\n" "failed to load simet_lib.sh, cannot proceed" >&2
+	exit 3
+}
+
 ##
 ## Server-related configuration we cannot auto-detect yet
 ## Change when the target server deployment changes.
@@ -50,6 +55,7 @@ set -e
 
 SRV_HOST=
 SRV_IPV6_ADDR=
+LMAP_MODE=
 
 # For https://top.nic.br
 TOPNICBR_SRV_HOST=top.nic.br
@@ -97,7 +103,7 @@ info () {
 # command line and required setup
 
 usage() {
-	printf "%s: %s\n" "$0" "--server <server_name> [--server-ipv6 <server IPv6 address>]" >&2
+	printf "%s: %s\n" "$0" "--server <server_name> [--server-ipv6 <server IPv6 address>] [--lmap]" >&2
 }
 print_version() {
 	printf "%s %s\n" "$PROGRAM_NAME" "$PROGRAM_VERSION"
@@ -130,6 +136,9 @@ while [ $# -gt 0 ] ; do
 	--server-ipv6)
 		SRV_IPV6_ADDR="$2"
 		shift
+		;;
+	--lmap)
+		LMAP_MODE=1
 		;;
 	*)
 		printf "%s: unknown parameter %s\n" "$0" "$1" >&2
@@ -198,6 +207,29 @@ run_xhr_tests() {
 	wait
 }
 
+# Format output from stdin to stdout
+output_filter() {
+	[ -z "$LMAP_MODE" ] && {
+		cat
+		printf '\n'
+		return 0
+	}
+	info "output LMAP-style result"
+	# LMAP output wrapping
+	cat <<- EOFOFHDR
+{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Active_InternetNL__Multiple_Singleton"}], \
+ "column":["server","test_id","results"], \
+ "row":[{"value":[
+EOFOFHDR
+	simet_jo_quoted "$SRV_HOST"
+	printf ","
+	simet_jo_quoted "$TST_TESTID"
+	printf ",\""
+	simet_jo_sed
+	printf "\"]}]}\n"
+	:
+}
+
 #
 # main
 #
@@ -210,14 +242,14 @@ info "Requesting test-id"
 TST_TESTID=$(srv_api_call "gettestid/" | json_get_str test_id) || TST_TESTID=
 [ -z "$TST_TESTID" ] && abend "failed to get a test id"
 
+info "test_id: $TST_TESTID"
+
 info "Running connection tests and DNSSEC tests"
 run_xhr_tests
 
-# Send results to stdout
-info "Closing test session and Requesting test results from server"
-srv_api_call "finished/%TESTID%" || abend "failed to retrieve results from server"
-
-# final remarks
+# Get results
 info "Results: $(url_resolv "$SRV_CONN_API/${TST_TESTID}/results")"
+
+srv_api_call "finished/%TESTID%" | output_filter || abend "failed to retrieve results from server"
 
 exit 0
