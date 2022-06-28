@@ -1,0 +1,259 @@
+#!/bin/bash
+# Minimal client for the Internet.NL "connection" test
+#
+# Copyright (c) 2022 NIC.br <medicoes@simet.nic.br>
+# SPDX-License-Identifier: Apache-2.0
+
+
+# Requires: curl and either jq, or OpenWRT's jsonfilter
+# Requires: either bash, or BusyBox sh (as configured by OpenWRT)
+
+# Internet.NL-related documentation
+#
+# To sync with new upstream changes, keep an eye on:
+#   frontend/js/internetnl.connection.js :: startConnectionTest()
+#   internetnl/hosts.py
+#   interface/urls.py
+#   interface/views/connection.py :: gettestid()
+#   interface/views/connection.py :: results()
+#
+# Internet.nl "interface" API flow used by this client:
+#   * Restricts itself to the "connection" view
+#   * Client is not using a cookie jar because Internet.nl is not using cookies
+#
+#   1. call "connection.gettestid" endpoint to get the TEST-ID and start REDIS session
+#        upstream: interface/views/connection.py :: gettestid()
+#
+#   2. call the XHR URLs (in parallel)
+#        upstream: frontend/js/internetnl.connection.js :: startConnectionTest()
+#        upstream: interface/views/connection.py :: hostname_callback()
+#        upstream: interface/views/connection.py :: hostname_bogus_callback()
+#        upstream: interface/views/connection.py :: addr_ipv6()
+#
+#   3. wait until timeout/success/error of all XHR URLs, it doesn't matter their
+#      result. In fact, the "bogus" one should fail when everything is proper
+#
+#   4. call the "connection.finished" endpoint to close the REDIS session
+#      and get the machine-readable version of the results.
+#        upstream: interface/views/connection.py :: finished()
+#
+
+## TODO:
+## * RC para erro de linha de comando, e para serviço não disponível (o gettestid)
+
+set -e
+
+. @SIMETLIBDIR@/simet_lib.sh || {
+	printf "%s\n" "failed to load simet_lib.sh, cannot proceed" >&2
+	exit 3
+}
+
+##
+## Server-related configuration we cannot auto-detect yet
+## Change when the target server deployment changes.
+##
+
+SRV_HOST=
+SRV_IPV6_ADDR=
+LMAP_MODE=
+
+# For https://top.nic.br
+TOPNICBR_SRV_HOST=top.nic.br
+TOPNICBR_SRV_IPV6_ADDR="[2001:12ff:0:7:f816:3eff:fec2:4ab2]"
+
+# For the development testbed https://test.nic.br
+TSTNICBR_SRV_HOST=test.nic.br
+TSTNICBR_SRV_IPV6_ADDR="[2001:12ff:0:7:f816:3eff:fefe:bd96]"
+
+##
+## Server API-related configuration we cannot autodetect yet,
+## might change due to Internet.nl code changes, or deployment
+## configuration
+##
+
+SRV_METHOD="http"
+SRV_CONN_API="%SRV_METHOD%://conn.%SRV_HOST%/connection"
+SRV_CONN_DNSSUFFIX="%SRV_HOST%"
+
+# upstream: frontend/js/internetnl.connection.js :: startConnectionTest()
+SRV_URL_XHR_URLS="%TESTID%.aaaa.conn.test-ns-signed.%SRV_CONN_DNSSUFFIX%
+	%TESTID%.a.conn.test-ns-signed.%SRV_CONN_DNSSUFFIX%
+	%TESTID%.a-aaaa.conn.test-ns6-signed.%SRV_CONN_DNSSUFFIX%
+	%TESTID%.bogus.conn.test-ns-signed.%SRV_CONN_DNSSUFFIX%
+	%SRV_IPV6_ADDR%/connection/addr-test/%TESTID%/"
+
+##
+## Other configuration
+##
+
+CURL_OPT="--location --proto =https,http -s -S -f"
+PROGRAM_NAME="internetnl_connection_test"
+PROGRAM_VERSION="v1.0"
+
+USERAGENT="$(get_http_useragent) $PROGRAM_NAME/$PROGRAM_VERSION"
+
+####### END OF CONFIGURATION ########
+
+RC=1
+abend() {
+	printf "%s: ERROR: %s\n" "$0" "$*" >&2
+	exit $RC
+}
+info () {
+	printf "%s: %s\n" "$0" "$*" >&2
+}
+
+# command line and required setup
+
+usage() {
+	printf "%s: %s\n" "$0" "--server <server_name> [--server-ipv6 <server IPv6 address>] [--lmap]" >&2
+}
+print_version() {
+	printf "%s %s\n" "$PROGRAM_NAME" "$PROGRAM_VERSION"
+}
+
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	--help|-h)
+		usage
+		exit 0
+		;;
+	-V|--version)
+		print_version
+		exit 0
+		;;
+	--server)
+		SRV_HOST="$2"
+		shift
+		case "$SRV_HOST" in
+		topnicbr)
+			SRV_HOST="$TOPNICBR_SRV_HOST"
+			SRV_IPV6_ADDR="$TOPNICBR_SRV_IPV6_ADDR"
+			;;
+		testnicbr)
+			SRV_HOST="$TSTNICBR_SRV_HOST"
+			SRV_IPV6_ADDR="$TSTNICBR_SRV_IPV6_ADDR"
+			;;
+		esac
+		;;
+	--server-ipv6)
+		SRV_IPV6_ADDR="$2"
+		shift
+		;;
+	--lmap)
+		LMAP_MODE=1
+		;;
+	*)
+		printf "%s: ERROR: unknown parameter %s\n" "$0" "$1" >&2
+		usage
+		exit 2
+		;;
+	esac
+	shift
+done
+[ -z "$SRV_HOST" ] || [ -z "$SRV_IPV6_ADDR" ] && {
+	usage
+	exit 2
+}
+
+# JSON processing
+
+JQ=$(command -v jq) || JQ=
+JSONPATH=$(command -v jsonpath || command -v jsonfilter) || JSONPATH=
+
+[ -x "$JQ" ] || [ -x "$JSONPATH" ] || abend "could not find either jq or openwrt's jsonpath/jsonfilter"
+
+# $1: node
+json_get_str() {
+	[ -x "$JQ" ] && {
+		"$JQ" -r ".$1" || return $?
+		return 0
+	}
+	[ -x "$JSONPATH" ] && {
+		"$JSONPATH" -e "@.$1" || return $?
+		return 0
+	}
+	RC=3 abend "internal error: neither JQ nor JSONPATH are executables"
+}
+
+
+# API call helpers
+url_resolv() {
+	printf "%s" "$1" | sed -e "s/%TESTID%/${TST_TESTID}/g" \
+		-e "s/%SRV_METHOD%/${SRV_METHOD}/g" \
+		-e "s/%SRV_CONN_DNSSUFFIX%/${SRV_CONN_DNSSUFFIX}/g" \
+		-e "s/%SRV_HOST%/${SRV_HOST}/g" \
+		-e "s/%SRV_IPV6_ADDR%/${SRV_IPV6_ADDR}/g"
+	:
+}
+api_curl() {
+	C_RC=0
+	# shellcheck disable=SC2086
+	curl -A "$USERAGENT" $CURL_OPT "$@" || C_RC=$?
+	return $C_RC
+}
+api_call() {
+	URL=$(url_resolv "$1")
+	shift
+	api_curl "$@" "$URL" || return $?
+}
+srv_api_call() {
+	api_call "$SRV_CONN_API/$*" --retry 3 --retry-max-time 30 || return $?
+}
+
+
+# XHR-based tests
+run_xhr_tests() {
+	for i in $SRV_URL_XHR_URLS ; do
+		[ -n "$i" ] && ( api_call "%SRV_METHOD%://$i" --retry 3 --retry-max-time 6 >/dev/null 2>&1 || true ) &
+	done
+	wait
+}
+
+# Format output from stdin to stdout
+output_filter() {
+	[ -z "$LMAP_MODE" ] && {
+		cat
+		printf '\n'
+		return 0
+	}
+	info "output LMAP-style result"
+	# LMAP output wrapping
+	cat <<- EOFOFHDR
+{"function":[{"uri":"urn:ietf:metrics:perf:Priv_SPMonitor_Active_InternetNL__Multiple_Singleton"}], \
+ "column":["server","test_id","results"], \
+ "row":[{"value":[
+EOFOFHDR
+	simet_jo_quoted "$SRV_HOST" || return 3
+	printf ","
+	simet_jo_quoted "$TST_TESTID" || return 3
+	printf ",\""
+	simet_jo_sed || return 3
+	printf "\"]}]}\n"
+	:
+}
+
+#
+# main
+#
+
+info "$(print_version)"
+
+info "server: $SRV_HOST"
+
+info "Requesting test-id"
+TST_TESTID=$(srv_api_call "gettestid/" | json_get_str test_id) || TST_TESTID=
+[ -z "$TST_TESTID" ] && RC=26 abend "failed to get a test id"
+
+info "test_id: $TST_TESTID"
+
+info "Running connection tests and DNSSEC tests"
+run_xhr_tests
+
+# Get results
+info "Results: $(url_resolv "$SRV_CONN_API/${TST_TESTID}/results")"
+
+{ srv_api_call "finished/%TESTID%" || RC=23 abend "failed to retrieve results from server" ; } \
+	| output_filter || abend "failed to generate report"
+
+exit 0

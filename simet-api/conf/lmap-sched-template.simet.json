@@ -27,6 +27,19 @@
        "destination":["ma-local_periodic_report"]}
     ]
   },
+  { "name":"ma-local_periodic-internetnl-conn",
+    "tag":["simet.nic.br_ev-period:@PERIODIC_SPOOFER_PERIOD@"],
+    "start":"ma-local_ev-periodic-spoofer",
+    "execution-mode":"sequential",
+    "action":[
+      {"name":"simet.nic.br_agent-info","task":"simet.nic.br_agent-info",
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_geolocation","task":"simet.nic.br_geolocation",
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_internetnl-conn","task":"simet.nic.br_internetnl-conn",
+       "destination":["ma-local_periodic_report"]}
+    ]
+  },
   { "name":"ma-local_periodic-ixbr-ping",
     "tag":["simet.nic.br_ev-period:@PERIODIC_IXBRP_PERIOD@"],
     "start":"ma-local_ev-periodic-ixbr-ping",

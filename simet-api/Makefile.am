@@ -86,8 +86,8 @@ endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh lmap-tasks/lmap-traceroute-wrapper.sh
 EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in lmap-tasks/lmap-traceroute-wrapper.sh.in
-dist_simetlmapbin_SCRIPTS += lmap-tasks/simet_fping-to-ixbr.sh
-EXTRA_DIST += lmap-tasks/simet_fping-to-ixbr.sh.in
+dist_simetlmapbin_SCRIPTS += lmap-tasks/simet_fping-to-ixbr.sh lmap-tasks/internetnl_connection_test.sh
+EXTRA_DIST += lmap-tasks/simet_fping-to-ixbr.sh.in lmap-tasks/internetnl_connection_test.sh.in
 if SIMETBOX_BUILD
 dist_simetlmapbin_SCRIPTS += lmap-tasks/simetbox_fping-to-gateway.sh
 endif
