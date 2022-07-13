@@ -2622,7 +2622,7 @@ static int cmdln_parse_server(char *name, struct simet_inetup_server_cluster ***
         }
     }
 
-    if (r) {
+    if (r && *r == ':') {
         /* parse optional :<port> */
         r++;
         if (!*r)
