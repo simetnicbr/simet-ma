@@ -47,7 +47,7 @@ AM_COND_IF([SIMETBOX_BUILD],
 
 AC_ARG_ENABLE([simet-spoofer],
     [AC_HELP_STRING([--enable-simet-spoofer],
-        [disable simet_spoofer measurement])],
+        [enable simet_spoofer measurement])],
     [case "${enableval}" in
         yes) simetspoofer=true ;;
         no)  simetspoofer=false ;;
