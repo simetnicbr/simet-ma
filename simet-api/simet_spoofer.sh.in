@@ -273,7 +273,7 @@ spoof_targets() {
     (
       OUTFILE=$(start_subtest spoof_packets "$j_id" $N "send spoofed from $j to $i")
       R=0
-      snping -c5 -S "$j" "$i" >"$OUTFILE" || R=$?
+      snping -c25 -S "$j" "$i" >"$OUTFILE" || R=$?
       end_subtest spoof_packets "$j_id" $N "$j" "$i" "$OUTFILE" "$R"
     )& condwait
   done ; done
