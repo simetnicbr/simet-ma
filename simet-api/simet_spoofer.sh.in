@@ -111,6 +111,13 @@ OUTDIR=$(mktemp -q -t -d simet-spoofer.$$.XXXXXXXXXX) \
 # do not leave behind tmpfiles
 trap 'run_trap' INT TERM QUIT
 
+# adjust delay to be a bit random, breaks undesired group-sync
+DELAY=$(date +%s 2>/dev/null) || DELAY=$$
+DELAY=$(( (DELAY % 31) * 15 + ($$ % 31) + 1000))
+TRDELAY=$(( DELAY + 3500 ))
+DELAY="${DELAY}ms"
+TRDELAY="${TRDELAY}ms"
+
 # FIXME: fetch a key for each target?
 get_spoof_server_key() {
   LSK=$(curl $CURLOPT -A "$USERAGENT" \
@@ -256,7 +263,7 @@ probe_targets() {
     OUTFILE=$(start_subtest probe_targets "$kind" $N "send to $i")
     R=0
     S=$(findsrc "$i")
-    snping -c5 "$i" >"$OUTFILE" && ONESUCCESS=1 || R=$?
+    snping --delay "$DELAY" -c5 "$i" >"$OUTFILE" && ONESUCCESS=1 || R=$?
     end_subtest probe_targets "$kind" $N "$S" "$i" "$OUTFILE" "$R"
   done
   [ -z "$ONESUCCESS" ] && fail_all
@@ -273,9 +280,9 @@ spoof_targets() {
     (
       OUTFILE=$(start_subtest spoof_packets "$j_id" $N "send spoofed from $j to $i")
       R=0
-      snping -c25 -S "$j" "$i" >"$OUTFILE" || R=$?
+      snping --delay "$DELAY" -c25 -S "$j" "$i" >"$OUTFILE" || R=$?
       end_subtest spoof_packets "$j_id" $N "$j" "$i" "$OUTFILE" "$R"
-    )& condwait
+    )
   done ; done
   wait
   end_test
@@ -300,7 +307,7 @@ tracefilter_targets() {
       (
         OUTFILE=$(start_subtest tracefilter "$dist" $N "nping traceroute from $sip to $dip, dist=$dist")
         R=0
-        snping -c$dist -tr --delay 5s -S "$sip" "$dip" >"$OUTFILE" || R=$?
+        snping -c$dist -tr --delay "$TRDELAY" -S "$sip" "$dip" >"$OUTFILE" || R=$?
         end_subtest tracefilter "$dist" $N "$sip" "$dip" "$OUTFILE" "$R"
       )
       sleep 5
