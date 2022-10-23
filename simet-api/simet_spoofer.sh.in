@@ -206,12 +206,6 @@ straceroute() (
   exec "$TRACEROUTE" -I -w1 -q3 "-m$TRDIST" "$@"
 )
 
-snping() (
-  RS=$(date +%s 2>/dev/null) || RS=$$
-  RS=$((RS % 65536 + $$))
-  exec simet-nping --echo-client "$KEY" --data-len 32 --udp -g $((RS % 15000 + 40000)) --dest-port $((RS % 100 + 33434)) "$@"
-)
-
 xor_lsb() {
   # Invert the least significant bit of an IPv4 or IPv6 address
   # IPv6 regex can be quite loose because ':' is forbidden in hostnames
@@ -222,6 +216,54 @@ xor_lsb() {
              x;s/\n//
           }'
 }
+
+get_port_src()
+(
+    if [ -n "$SIMETAS_IP4" ] ; then
+	IP4=$(printf "%s" "$SIMETAS_IP4" | tr -cd '0-9.' | tr '.' ' ') || IP4=
+	#shellcheck disable=SC2086
+	RS=$(printf "%02X" $IP4 | cut -c 1-4) || RS=
+	RS=$(printf "%d" "0x$RS") || RS=
+    else
+        RS=$(date +%s 2>/dev/null) || RS=$$
+	RS=$(( RS % 65536 + $$ ))
+	RS=$(( RS % 15000 + 40000 ))
+    fi
+
+    #shellcheck disable=SC2015
+    [ -n "$RS" ] && [ "$RS" -ge 0 ] 2>/dev/null || RC=3 abend "failed to calculate a source port for tracefilter"
+
+    # port zero is illegal.
+    [ "$RS" -eq 0 ] && RS=65535
+
+    printf "%d" "$RS"
+)
+
+get_port_dst()
+(
+    if [ -n "$SIMETAS_IP4" ] ; then
+	IP4=$(printf "%s" "$SIMETAS_IP4" | tr -cd '0-9.' | tr '.' ' ') || IP4=
+	#shellcheck disable=SC2086
+	RS=$(printf "%02X" $IP4 | cut -c 5-8) || RS=
+	RS=$(printf "%d" "0x$RS") || RS=
+    else
+        RS=$(date +%s 2>/dev/null) || RS=$$
+	RS=$(( RS % 65536 + $$ ))
+	RS=$(( RS % 100 + 33434 ))
+    fi
+
+    #shellcheck disable=SC2015
+    [ -n "$RS" ] && [ "$RS" -ge 0 ] 2>/dev/null || RC=3 abend "failed to calculate a destination port for tracefilter"
+
+    # port zero is illegal.
+    [ "$RS" -eq 0 ] && RS=65535
+
+    printf "%d" "$RS"
+)
+
+snping() (
+    exec simet-nping --echo-client "$KEY" --data-len 32 --udp -g "$(get_port_src)" --dest-port "$(get_port_dst)" "$@"
+)
 
 findsrc() {
   [ -n "$1" ] && {
