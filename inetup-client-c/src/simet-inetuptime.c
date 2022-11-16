@@ -217,7 +217,7 @@ static void init_timekeeping(void)
         /* Keep in sync with timekeeping_needs_resync() or it will break
          * hideously!  Time won't go backwards in a resync because we never
          * trigger the resync in that case. */
-        client_boot_offset = (abs(now_boot - now_rel) > 2)? now_boot - now_rel : 0;
+        client_boot_offset = (llabs(now_boot - now_rel) > 2)? now_boot - now_rel : 0;
 
         clockid = CLOCK_MONOTONIC;
         client_boot_sync = 1;
@@ -277,7 +277,7 @@ static int timekeeping_needs_resync(void)
     return 0;
 }
 
-static void log_timekeeping_state()
+static void log_timekeeping_state(void)
 {
     if (client_boot_sync) {
         print_msg(MSG_DEBUG, "timestamps are seconds since system boot");
@@ -1144,13 +1144,14 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
         goto err_exit;
 
     if (json_object_object_get_ex(jconf, "capabilities-enabled", &jo)) {
-        int al;
+        size_t al;
 
         /* check syntax before we reset any capabilities */
         if (!json_object_is_type(jo, json_type_array))
             goto err_exit;
         al = json_object_array_length(jo);
-        while (--al >= 0) {
+        while (al > 0) {
+            --al;
             if (!json_object_is_type(json_object_array_get_idx(jo, al), json_type_string))
                 goto err_exit;
         }
@@ -1162,7 +1163,8 @@ static int simet_uptime2_msghdl_maconfig(struct simet_inetup_server * const s,
 
         /* set any capabilities we know about, warn of others */
         al = json_object_array_length(jo);
-        while (--al >= 0) {
+        while (al > 0) {
+            --al;
             const char *cap = json_object_get_string(json_object_array_get_idx(jo, al));
             if (!strcasecmp("server-keepalive", cap)) {
                 /* this one we should enable even if we did not request it */
@@ -1252,7 +1254,7 @@ static int simet_uptime2_msghdl_serverevents(struct simet_inetup_server * const 
     struct json_object *jroot = NULL;
     struct json_object *jevents, *jev, *jo, *jt;
     int res = 2;
-    int al, i;
+    size_t al, i;
 
     if (hdr->message_size < 13) {
         protocol_trace(s, "events: ignoring small message");
