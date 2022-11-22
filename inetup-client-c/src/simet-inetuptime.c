@@ -46,6 +46,7 @@
 #include "simet-inetuptime.h"
 #include "simet_err.h"
 #include "logger.h"
+#include "tcpaq.h"
 
 #ifdef HAVE_JSON_JSON_H
 #include <json/json.h>
@@ -97,7 +98,7 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 #define SIMET_DISCONNECT_WAIT_TIMEOUT 5
 
 /* maximum payload size of a Uptime2 message */
-#define SIMET_UPTIME2_MAXDATASIZE (SIMET_INETUP_QUEUESIZE - sizeof(struct simet_inetup_msghdr))
+#define SIMET_UPTIME2_MAXDATASIZE (SIMET_TCPAQ_QUEUESIZE - sizeof(struct simet_inetup_msghdr))
 
 /*
  * helpers
@@ -344,7 +345,7 @@ static const char *str_ipv46(int ai_family)
             fflush(stdout); \
             fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
                     (long int)reltime() - client_start_timestamp, \
-                    str_ipv46(protocol_stream->ai_family), protocol_stream->connection_id, \
+                    str_ipv46(protocol_stream->conn.ai_family), protocol_stream->connection_id, \
                     (protocol_stream->connect_timestamp) ? \
                         (long int)reltime() - protocol_stream->connect_timestamp : \
                         0, \
@@ -400,370 +401,6 @@ static void init_signals(void)
         print_warn("failed to set SIGHUP handler");
 }
 
-
-/*
- * TCP async queueing
- *
- * 1. reserve space in the local queue, if not available, try again later (so that
- *    we can be message-atomic at the higher level)
- * 2. commit message to the local queue, we can now return success no matter what.
- * 3. attempt to send() to kernel buffer immediately and return even if nothing or
- *    partial send.  Whatever is left will get sent async by calls to
- *    tcpaq_send_nowait() -- which we call in the program main loop.
- *
- * 1. zero-copy discard of received data available
- * 2. only read from socket buffer when ready to consume something
- * 3. do nothing if the entire object is not available yet
- *    (objects are limited to the queue buffer size)
- */
-
-static void tcpaq_close(struct simet_inetup_server * const s)
-{
-    assert(s);
-    if (s->socket != -1) {
-        shutdown(s->socket, SHUT_RDWR);
-        close(s->socket);
-        s->socket = -1;
-    }
-    s->out_queue.rd_pos = 0;
-    s->out_queue.wr_pos = s->out_queue.wr_pos_reserved = 0;
-    s->in_queue.rd_pos = 0;
-    s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
-}
-
-static int tcpaq_reserve(struct simet_inetup_server * const s, size_t size)
-{
-    assert(s);
-
-    /* paranoia */
-    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved)
-        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
-
-    if (s->out_queue.wr_pos_reserved + size >= s->out_queue.buffer_size)
-        return -ENOSPC;
-
-    s->out_queue.wr_pos_reserved += size;
-    return 0;
-}
-
-/* can unreserve *and* also unqueue unsent data */
-static int tcpaq_unreserve(struct simet_inetup_server * const s, size_t size)
-{
-    assert(s);
-
-    /* paranoia */
-    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved)
-        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
-
-    if (s->out_queue.rd_pos + size <= s->out_queue.wr_pos_reserved) {
-        s->out_queue.wr_pos_reserved -= size;
-        if (s->out_queue.wr_pos_reserved > s->out_queue.wr_pos)
-            s->out_queue.wr_pos = s->out_queue.wr_pos_reserved; /* discard unsent */
-    } else {
-        return -EINVAL;
-    }
-
-    return 0;
-}
-
-/**
- * tcpaq_queue: queue a message for transmisson, does *not* flush
- *
- * @reserved: true if tcpaq_reserve() already done for this message
- *
- * returns: 0, -ENOSPC...
- */
-static int tcpaq_queue(struct simet_inetup_server * const s, void *data, size_t size, int reserved)
-{
-    assert(s && s->out_queue.buffer);
-
-    if (!size)
-        return 0;
-    if (!reserved && tcpaq_reserve(s, size))
-        return -ENOSPC;
-    if (s->out_queue.wr_pos + size >= s->out_queue.buffer_size)
-        return -ENOSPC; /* defang the bug */
-
-    memcpy(&s->out_queue.buffer[s->out_queue.wr_pos], data, size);
-    s->out_queue.wr_pos += size;
-
-    if (s->out_queue.wr_pos > s->out_queue.wr_pos_reserved) {
-        print_warn("internal error: stream %u went past reservation, coping with it", s->connection_id);
-        s->out_queue.wr_pos_reserved = s->out_queue.wr_pos;
-    }
-
-    return 0;
-}
-
-static int tcpaq_is_out_queue_empty(struct simet_inetup_server * const s)
-{
-    /* do it in a fail-safe manner against queue accounting bugs */
-    return (s->out_queue.rd_pos >= s->out_queue.wr_pos || s->out_queue.rd_pos >= s->out_queue.buffer_size);
-}
-
-static void xx_tcpaq_compact(struct simet_inetup_server * const s)
-{
-    /* FIXME: also compact partially transmitted using a watermark */
-    if (s->out_queue.rd_pos >= s->out_queue.wr_pos) {
-        if (s->out_queue.wr_pos_reserved > s->out_queue.rd_pos) {
-            s->out_queue.wr_pos_reserved -= s->out_queue.rd_pos;
-        } else {
-            s->out_queue.wr_pos_reserved = 0;
-        }
-        s->out_queue.wr_pos = 0;
-        s->out_queue.rd_pos = 0;
-    }
-}
-
-static int tcpaq_send_nowait(struct simet_inetup_server * const s)
-{
-    size_t  send_sz;
-    ssize_t sent;
-
-    assert(s && s->out_queue.buffer);
-
-    if (s->socket == -1)
-        return -ENOTCONN;
-    if (s->out_queue.wr_pos == 0)
-        return 0;
-    if (tcpaq_is_out_queue_empty(s)) {
-        xx_tcpaq_compact(s);
-        return 0;
-    }
-
-    send_sz = s->out_queue.wr_pos - s->out_queue.rd_pos;
-    sent = send(s->socket, &s->out_queue.buffer[s->out_queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
-    if (sent < 0) {
-        int err = errno;
-        if (is_EAGAIN_WOULDBLOCK(err) || err == EINTR)
-            return 0;
-        protocol_trace(s, "send() error: %s", strerror(err));
-        return -err;
-    }
-    s->out_queue.rd_pos += sent; /* sent verified to be >= 0 */
-
-#if 0
-    /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
-     * and we already asked for TCP_NODELAY after connect() */
-
-    const int zero = 0;
-    const int one = 1;
-    /* Ask kernel to flush buffer every time our local queue is empty */
-    if (s->out_queue.wr_pos <= s->out_queue.rd_pos) {
-        setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-        setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
-    }
-#endif
-    /* protocol_trace(s, "send() %zd out of %zu bytes", sent, send_sz); */
-
-    xx_tcpaq_compact(s);
-    return 0;
-}
-
-#if 0
-/* Tries hard to flush queue, but only up to timeout seconds */
-static int tcpaq_send_timeout(struct simet_inetup_server * const s, time_t timeout)
-{
-    const time_t tstart = reltime();
-    int rc = -EAGAIN;
-
-    while (rc && !tcpaq_is_queue_empty(s) && timer_check_full(tstart, timeout)) {
-        rc = tcpaq_send_nowait(s);
-    }
-
-    return rc;
-}
-#endif
-
-/* you'd better remember about wr_pos_reserved..., so xx_ */
-static int xx_tcpaq_is_in_queue_empty(struct simet_inetup_server * const s)
-{
-    /* do it in a fail-safe manner against queue accounting bugs */
-    return (s->in_queue.rd_pos >= s->in_queue.wr_pos || s->in_queue.rd_pos >= s->in_queue.buffer_size);
-}
-
-/* discards all pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
-static int tcpaq_drain(struct simet_inetup_server * const s)
-{
-    size_t remaining = 0;
-    ssize_t res = 0;
-
-    assert(s);
-
-    if (s->in_queue.rd_pos < s->in_queue.wr_pos)
-        remaining = s->in_queue.wr_pos - s->in_queue.rd_pos;
-    s->in_queue.rd_pos = s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
-
-    if (s->socket != -1) {
-        do {
-            res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
-        } while (res == -1 && errno == EINTR);
-        if (res == -1) {
-            int err = errno;
-            if (is_EAGAIN_WOULDBLOCK(err))
-                return 0;
-            protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
-            return -err;
-        }
-    }
-    return (remaining > 0 || res > 0);
-}
-
-/* discards object, <0 error; 0 : still need to receive more data; NZ: discarded */
-static int tcpaq_discard(struct simet_inetup_server * const s, size_t object_size)
-{
-    assert(s);
-
-    object_size += s->in_queue.wr_pos_reserved;
-    s->in_queue.wr_pos_reserved = 0;
-
-    /* discard from unread buffer */
-    size_t unread_bufsz = 0;
-    if (s->in_queue.wr_pos > s->in_queue.rd_pos)
-        unread_bufsz = s->in_queue.wr_pos - s->in_queue.rd_pos;
-    if (unread_bufsz >= object_size) {
-        s->in_queue.rd_pos += object_size;
-        if (xx_tcpaq_is_in_queue_empty(s))
-            s->in_queue.rd_pos = s->in_queue.wr_pos = 0; /* compress */
-        return 1;
-    }
-
-    /* discard buffer */
-    s->in_queue.rd_pos = s->in_queue.wr_pos = 0;
-    s->in_queue.wr_pos_reserved = object_size - unread_bufsz;
-
-    /* try to discard wr_pos_reserved bytes from socket buffer */
-    if (s->socket != -1) {
-        ssize_t res;
-
-        do {
-            res = recv(s->socket, NULL, s->in_queue.wr_pos_reserved,
-                       MSG_DONTWAIT | MSG_TRUNC);
-        } while (res == -1 && errno == EINTR);
-        if (res == -1) {
-            int err = errno;
-            if (is_EAGAIN_WOULDBLOCK(err))
-                return 0;
-            protocol_trace(s, "tcpaq_discard: recv() error: %s", strerror(err));
-            return -err;
-        }
-        s->in_queue.wr_pos_reserved -= res; /* recv() ensures 0 < res <= wr_pos_reserved */
-    }
-
-    return (s->in_queue.wr_pos_reserved == 0);
-}
-
-/* < 0: error, 0: need to receive more data; > 0: object ready for tcpaq_receive() */
-static int tcpaq_request_receive_nowait(struct simet_inetup_server * const s, size_t object_size)
-{
-    int res;
-    ssize_t rcvres;
-
-    assert(s && s->in_queue.buffer);
-
-    /* skip any cruft we are still discarding */
-    res = tcpaq_discard(s, 0);
-    if (res <= 0)
-        return res;
-
-    /* note: tcpaq_discard() > 0 ensures s->in_queue.wr_pos_reserved = 0 */
-
-    if (object_size > SIMET_INETUP_QUEUESIZE)
-        return -EFAULT; /* we can't do it */
-
-    size_t unread_bufsz = 0;
-    if (s->in_queue.wr_pos > s->in_queue.rd_pos)
-        unread_bufsz = s->in_queue.wr_pos - s->in_queue.rd_pos;
-
-    if (unread_bufsz >= object_size)
-        return 1; /* we have enough buffered data */
-
-    object_size -= unread_bufsz;
-    if (s->in_queue.wr_pos + object_size > SIMET_INETUP_QUEUESIZE) {
-        /* compress buffer */
-        memmove(s->in_queue.buffer, s->in_queue.buffer + s->in_queue.rd_pos, unread_bufsz);
-        s->in_queue.wr_pos = unread_bufsz;
-        s->in_queue.rd_pos = 0;
-    }
-
-    /* paranoia, must not happen */
-    if (s->in_queue.wr_pos + object_size > SIMET_INETUP_QUEUESIZE)
-        return -EFAULT;
-
-    do {
-        rcvres = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos, object_size, MSG_DONTWAIT);
-    } while (rcvres == -1 && errno == EINTR);
-    if (rcvres == -1) {
-        int err = errno;
-        if (is_EAGAIN_WOULDBLOCK(err))
-            return 0;
-        protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
-        return -err;
-    }
-    s->in_queue.wr_pos += rcvres; /* recv() ensures 0 <= rcvres <= wr_pos */
-    object_size -= rcvres;  /* recv() ensures 0 <= rcvres <= wr_pos */
-
-    return (object_size == 0);
-}
-
-/**
- * tcpaq_receive_nowait() - receive an exactly-sized object
- *
- * Size is limited to SIMET_INETUP_QUEUESIZE.  Does not wait,
- * returns 0 if there is not enough received buffer yet.  If
- * buf is NULL, discards the data.
- *
- * Returns:
- *   < 0: -errno
- *   0  : not enough data buffered
- *   NZ : requested object is in *buf
- */
-static int tcpaq_receive_nowait(struct simet_inetup_server * const s, size_t object_size, void *buf) __attribute__((__unused__));
-static int tcpaq_receive_nowait(struct simet_inetup_server * const s, size_t object_size, void *buf)
-{
-    if (!buf)
-        return tcpaq_discard(s, object_size);
-
-    int res = tcpaq_request_receive_nowait(s, object_size);
-    if (res <= 0)
-        return res;
-
-    memcpy(buf, s->in_queue.buffer + s->in_queue.rd_pos, object_size);
-    s->in_queue.rd_pos += object_size;
-
-    if (xx_tcpaq_is_in_queue_empty(s))
-        s->in_queue.wr_pos = s->in_queue.rd_pos = 0;
-
-    return 1;
-}
-
-/**
- * tcpaq_peek_nowait() - receve in-queue and peek at an object
- *
- * Size is limited to SIMET_INETUP_QUEUESIZE.  Does not wait,
- * returns 0 if there is not enough received buffer yet.  If
- * pbuf is not NULL, it will be set to either NULL or to the
- * (const char *) internal buffer (do NOT modify or free()).
- *
- * Does not advance the read pointer, so a tcpaq_receive()
- * will get the same data, use tcpaq_receive with a NULL buffer
- * (or tcpaq_discard() directly) to "skip" the peeked object.
- *
- * Returns:
- *   < 0: -errno
- *   0  : not enough data buffered
- *   NZ : pointer to requested object is in *buf,
- *        do not modify the contents!  valid until the
- *        next call to tcpaq_* on the same "server"
- */
-static int tcpaq_peek_nowait(struct simet_inetup_server * const s, size_t object_size, const char **pbuf)
-{
-    int res = tcpaq_request_receive_nowait(s, object_size);
-    if (pbuf)
-        *pbuf = (res > 0) ? s->in_queue.buffer + s->in_queue.rd_pos : NULL;
-    return res;
-}
-
 /*
  * SIMET2 Uptime2 protocol helpers
  */
@@ -802,8 +439,8 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
         .tv_sec = s->client_timeout,
         .tv_usec = 0,
     };
-    if (setsockopt(s->socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
-        setsockopt(s->socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
+    if (setsockopt(s->conn.socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
+        setsockopt(s->conn.socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
         protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
     }
 
@@ -825,7 +462,7 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
      * Fixed in: Linux v4.19
      */
     const unsigned int ui = (unsigned int)s->client_timeout * 1000U;
-    if (setsockopt(s->socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
+    if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
         print_warn("failed to enable TCP timeouts, measurement error will increase");
     }
 
@@ -847,10 +484,10 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
     int tcp_keepidle = simet_uptime2_tcp_timeout / tcp_keepcnt;
     if (tcp_keepidle < 5)
         tcp_keepidle = 5;
-    if (setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
-        setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
-        setsockopt(s->socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
-        setsockopt(s->socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
+    if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(int)) ||
+        setsockopt(s->conn.socket, IPPROTO_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(int)) ||
+        setsockopt(s->conn.socket, IPPROTO_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(int)) ||
+        setsockopt(s->conn.socket, SOL_SOCKET, SO_KEEPALIVE, &int_one, sizeof(int_one))) {
         print_warn("failed to enable TCP Keep-Alives, measurement error might increase");
     } else {
         protocol_trace(s, "RFC-1122 TCP Keep-Alives enabled, idle=%ds, intvl=%ds, count=%d", tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
@@ -870,21 +507,21 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
     }
 
     size_t reserve_sz = msgsize + sizeof(hdr);
-    if (tcpaq_reserve(s, reserve_sz))
+    if (tcpaq_reserve(&s->conn, reserve_sz))
         return -EAGAIN; /* can't send right now */
 
     memset(&hdr, 0, sizeof(hdr));
     hdr.message_type = htons(msgtype);
     hdr.message_size = htonl(msgsize); /* safe, < SIMET_UPTIME2_MAXDATASIZE */
 
-    if (tcpaq_queue(s, &hdr, sizeof(hdr), 1) || tcpaq_queue(s, (void *)msgdata, msgsize, 1)) {
+    if (tcpaq_queue(&s->conn, &hdr, sizeof(hdr), 1) || tcpaq_queue(&s->conn, (void *)msgdata, msgsize, 1)) {
         /* should not happen, but if it does, try to recover */
-        if (tcpaq_unreserve(s, reserve_sz))
+        if (tcpaq_unreserve(&s->conn, reserve_sz))
             return -EINVAL; /* internal error?! */
         return -EAGAIN;
     }
 
-    return tcpaq_send_nowait(s);
+    return tcpaq_send_nowait(&s->conn);
 }
 
 /* update remote keepalive timer, we can do that every time we hear from remote */
@@ -895,7 +532,7 @@ static void simet_uptime2_remotekeepalive_update(struct simet_inetup_server * co
 
 static int uptimeserver_drain(struct simet_inetup_server * const s)
 {
-    int res = tcpaq_drain(s);
+    int res = tcpaq_drain(&s->conn);
     if (res > 0) {
             /* we did discard something, so remote is alive */
             protocol_trace(s, "drain: remote watchdog updated");
@@ -916,7 +553,7 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
     int res;
 
     /* we do some dances to reduce buffer copying, and to avoid give backs */
-    res = tcpaq_peek_nowait(s, sizeof(hdr), &data);
+    res = tcpaq_peek_nowait(&s->conn, sizeof(hdr), &data);
     if (res <= 0 || !data)
         return res;
     hdr.message_type = ntohs(((struct simet_inetup_msghdr *)data)->message_type);
@@ -940,14 +577,14 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
         if (handlers->type == hdr.message_type) {
             if (handlers->handler) {
                 /* single-threaded, so we can peek to avoid an extra copy... */
-                res = tcpaq_peek_nowait(s, hdr.message_size + sizeof(hdr), &data);
+                res = tcpaq_peek_nowait(&s->conn, hdr.message_size + sizeof(hdr), &data);
                 if (res > 0 && data)
                     res = (* handlers->handler)(s, &hdr, data + sizeof(hdr));
-                if (tcpaq_discard(s, hdr.message_size + sizeof(hdr)) <= 0)
+                if (tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr)) <= 0)
                     protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
             } else {
                 /* silent discard the whole thing */
-                res = tcpaq_discard(s, hdr.message_size + sizeof(hdr));
+                res = tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr));
             }
             if (res < 0) {
                 protocol_trace(s, "error processing message type 0x%04x, size %" PRIu32 ": %s",
@@ -960,7 +597,7 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
     }
     if (!processed) {
         /* unexpected discard */
-        res = tcpaq_discard(s, hdr.message_size + sizeof(hdr));
+        res = tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr));
         if (res < 0)
             return res;
         protocol_trace(s, "%s message with type 0x%04x and size %" PRIu32,
@@ -972,8 +609,8 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
 
 static int uptimeserver_flush(struct simet_inetup_server * const s)
 {
-    if (s && s->out_queue.buffer && s->socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
-        return tcpaq_send_nowait(s);
+    if (s && s->conn.out_queue.buffer && s->conn.socket != -1 && s->state != SIMET_INETUP_P_C_SHUTDOWN)
+        return tcpaq_send_nowait(&s->conn);
 
     return 0;
 }
@@ -1913,10 +1550,10 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
     assert(s && server_name && server_port);
     assert(s->state == SIMET_INETUP_P_C_INIT || s->state == SIMET_INETUP_P_C_RECONNECT);
 
-    if (s->state == SIMET_INETUP_P_C_RECONNECT && s->socket != -1)
-        tcpaq_close(s);
+    if (s->state == SIMET_INETUP_P_C_RECONNECT && s->conn.socket != -1)
+        tcpaq_close(&s->conn);
 
-    assert(s->socket == -1);
+    assert(s->conn.socket == -1);
 
     /* Backoff timer */
     int waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
@@ -1952,7 +1589,7 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
     memset(&ai, 0, sizeof(ai));
     ai.ai_flags = AI_ADDRCONFIG;
     ai.ai_socktype = SOCK_STREAM;
-    ai.ai_family = s->ai_family;
+    ai.ai_family = s->conn.ai_family;
     ai.ai_protocol = IPPROTO_TCP;
 
     r = getaddrinfo(server_name, server_port, &ai, &s->peer_gai);
@@ -1981,21 +1618,21 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
 
     assert(s && s->state == SIMET_INETUP_P_C_CONNECT);
 
-    while (s->socket == -1 && s->peer_ai != NULL) {
+    while (s->conn.socket == -1 && s->peer_ai != NULL) {
         struct addrinfo * const airp = s->peer_ai;
 
         /* avoid fast reconnect to same peer */
-        if (s->peer_noconnect_ttl && xx_cmpnameinfo(airp, s->ai_family, s->peer_name)) {
+        if (s->peer_noconnect_ttl && xx_cmpnameinfo(airp, s->conn.ai_family, s->peer_name)) {
             protocol_trace(s, "skipping peer %s on this attempt", s->peer_name);
 
             s->peer_ai = s->peer_ai->ai_next;
             continue;
         }
 
-        s->socket = socket(airp->ai_family,
+        s->conn.socket = socket(airp->ai_family,
                            airp->ai_socktype | SOCK_CLOEXEC | SOCK_NONBLOCK,
                            airp->ai_protocol);
-        if (s->socket == -1) {
+        if (s->conn.socket == -1) {
             s->peer_ai = s->peer_ai->ai_next;
             continue;
         }
@@ -2003,7 +1640,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
         xx_set_tcp_timeouts(s);
 
         /* Defang OOB/urgent data, we might need it to implement resync messages */
-        setsockopt(s->socket, IPPROTO_TCP, SO_OOBINLINE, &int_one, sizeof(int_one));
+        setsockopt(s->conn.socket, IPPROTO_TCP, SO_OOBINLINE, &int_one, sizeof(int_one));
 
         /* Linux TCP Thin-stream optimizations.
          *
@@ -2013,12 +1650,12 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
          * Refer to: https://github.com/torvalds/linux/blob/master/Documentation/networking/tcp-thin.txt
          */
 #ifdef TCP_THIN_LINEAR_TIMEOUTS
-        if (setsockopt(s->socket, IPPROTO_TCP, TCP_THIN_LINEAR_TIMEOUTS, &int_one, sizeof(int_one))) {
+        if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_THIN_LINEAR_TIMEOUTS, &int_one, sizeof(int_one))) {
             print_warn("failed to enable TCP thin-stream linear timeouts, false positives may increase");
         }
 #endif /* TCP_THIN_LINEAR_TIMEOUTS */
 #ifdef TCP_THIN_DUPACK
-        if (setsockopt(s->socket, IPPROTO_TCP, TCP_THIN_DUPACK, &int_one, sizeof(int_one))) {
+        if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_THIN_DUPACK, &int_one, sizeof(int_one))) {
             print_warn("failed to enable TCP thin-stream dupack, false positives may increase");
         }
 #endif /* TCP_THIN_DUPACK */
@@ -2031,7 +1668,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
          * http://cr.yp.to/docs/connect.html
          * http://www.madore.org/~david/computers/connect-intr.html
          */
-        r = connect(s->socket, airp->ai_addr, airp->ai_addrlen);
+        r = connect(s->conn.socket, airp->ai_addr, airp->ai_addrlen);
         if (!r) {
             connected = 1;
             break; /* connected immediately */
@@ -2050,17 +1687,17 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
 
         if (errno == EINTR) {
             /* redo loop without advancing */
-            close(s->socket);
-            s->socket = -1;
+            close(s->conn.socket);
+            s->conn.socket = -1;
             continue;
         }
 
-        close(s->socket);
-        s->socket = -1;
+        close(s->conn.socket);
+        s->conn.socket = -1;
         s->peer_ai = s->peer_ai->ai_next;
     }
 
-    if (s->socket == -1) {
+    if (s->conn.socket == -1) {
         if (s->peer_noconnect_ttl)
             s->peer_noconnect_ttl--;
 
@@ -2090,7 +1727,7 @@ static int uptimeserver_connectwait(struct simet_inetup_server * const s)
 
     assert(s && s->state == SIMET_INETUP_P_C_CONNECTWAIT);
 
-    if (s->socket == -1 || !s->peer_ai) {
+    if (s->conn.socket == -1 || !s->peer_ai) {
         /* should never happen, recover */
         s->state = SIMET_INETUP_P_C_RECONNECT;
         return 0;
@@ -2098,7 +1735,7 @@ static int uptimeserver_connectwait(struct simet_inetup_server * const s)
 
     /* We could hit this codepath before poll() returned ready for writing or an error */
     struct pollfd pfd = {
-        .fd     = s->socket,
+        .fd     = s->conn.socket,
         .events = POLLOUT | POLLERR | POLLRDHUP | POLLHUP,
     };
     do {
@@ -2117,7 +1754,7 @@ static int uptimeserver_connectwait(struct simet_inetup_server * const s)
      * http://cr.yp.to/docs/connect.html
      * http://www.madore.org/~david/computers/connect-intr.html
      */
-    if (getsockopt(s->socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz))
+    if (getsockopt(s->conn.socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz))
         socket_err = errno;
     switch (socket_err) {
     case 0:
@@ -2136,8 +1773,8 @@ static int uptimeserver_connectwait(struct simet_inetup_server * const s)
 
         /* connection attempt failed */
         s->peer_ai = s->peer_ai->ai_next;
-        close(s->socket);
-        s->socket = -1;
+        close(s->conn.socket);
+        s->conn.socket = -1;
 
         /* go back to the previous state, to loop */
         s->state = SIMET_INETUP_P_C_CONNECT;
@@ -2155,14 +1792,14 @@ static int uptimeserver_connected(struct simet_inetup_server * const s)
     /* Get metadata of the connected socket */
     sa_len = sizeof(struct sockaddr_storage);
     sa.ss_family = AF_UNSPEC;
-    if (getpeername(s->socket, (struct sockaddr *)&sa, &sa_len)) {
+    if (getpeername(s->conn.socket, (struct sockaddr *)&sa, &sa_len)) {
         /* Resilience: ENOTCON here is sometimes the only thing that works */
         if (errno == ENOTCONN) {
             protocol_trace(s, "connect: late detection of connection failure");
             /* connection attempt failed */
             s->peer_ai = s->peer_ai->ai_next;
-            close(s->socket);
-            s->socket = -1;
+            close(s->conn.socket);
+            s->conn.socket = -1;
 
             /* go back to the previous state, to loop */
             s->state = SIMET_INETUP_P_C_CONNECT;
@@ -2176,12 +1813,12 @@ static int uptimeserver_connected(struct simet_inetup_server * const s)
 
     sa_len = sizeof(struct sockaddr_storage);
     sa.ss_family = AF_UNSPEC;
-    if (getsockname(s->socket, (struct sockaddr *)&sa, &sa_len) ||
+    if (getsockname(s->conn.socket, (struct sockaddr *)&sa, &sa_len) ||
         xx_nameinfo(&sa, sa_len, &s->local_family, &s->local_name, &s->local_port))
         print_warn("failed to get local metadata, coping with it");
 
     /* Disable Naggle, we don't need it (but we can tolerate it) */
-    setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
+    setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
 
     /* done... */
     s->connect_timestamp = reltime();
@@ -2238,7 +1875,7 @@ static int uptimeserver_disconnect(struct simet_inetup_server *s)
     int rc = 0;
 
     /* warning: state INIT might not have run! */
-    if (s->socket == -1) {
+    if (s->conn.socket == -1) {
         /* not connected */
         s->state = SIMET_INETUP_P_C_SHUTDOWN;
         s->disconnect_clock = 0;
@@ -2268,7 +1905,7 @@ static int uptimeserver_disconnect(struct simet_inetup_server *s)
 
 static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
 {
-    if (s->socket == -1) {
+    if (s->conn.socket == -1) {
         /* not connected */
         s->state = SIMET_INETUP_P_C_SHUTDOWN;
         s->disconnect_clock = 0;
@@ -2279,10 +1916,10 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
         s->disconnect_clock = reltime(); /* should not happen */
 
     int rc = timer_check(s->disconnect_clock, SIMET_DISCONNECT_WAIT_TIMEOUT);
-    if (!rc || tcpaq_is_out_queue_empty(s)) {
+    if (!rc || tcpaq_is_out_queue_empty(&s->conn)) {
         /* tcpaq queue is empty, or we are out of time */
-        tcpaq_close(s);
-        s->socket = -1;
+        tcpaq_close(&s->conn);
+        s->conn.socket = -1;
         s->disconnect_clock = 0;
 
         protocol_msg(MSG_IMPORTANT, s, "client disconnected");
@@ -2297,14 +1934,13 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
 static void uptimeserver_destroy(struct simet_inetup_server *s)
 {
     if (s) {
-        if (s->socket != -1) {
-            tcpaq_close(s);
-            s->socket = -1;
+        if (s->conn.socket != -1) {
+            tcpaq_close(&s->conn);
+            s->conn.socket = -1;
             protocol_msg(MSG_IMPORTANT, s, "client forcefully disconnected");
         }
 
-        free(s->out_queue.buffer);
-        free(s->in_queue.buffer);
+        tcpaq_free_members(&s->conn);
 
         if (s->peer_gai)
             freeaddrinfo(s->peer_gai);
@@ -2330,6 +1966,7 @@ static int uptimeserver_create(struct simet_inetup_server ** const sp,
     static unsigned int next_connection_id = 1;
 
     struct simet_inetup_server *s;
+    int rc;
 
     if (!sp || !sc || (ai_family != AF_INET && ai_family != AF_INET6))
         return -EINVAL;
@@ -2339,21 +1976,15 @@ static int uptimeserver_create(struct simet_inetup_server ** const sp,
     if (!s)
         return -ENOMEM;
 
-    s->socket = -1;
+    if ((rc = tcpaq_init(&s->conn, SIMET_TCPAQ_QUEUESIZE)) != 0) {
+        free(s);
+        return rc;
+    }
+    s->conn.ai_family = ai_family;
+
     s->state = SIMET_INETUP_P_C_INIT;
-    s->ai_family = ai_family;
     s->connection_id = next_connection_id;
     s->cluster = sc;
-    s->out_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
-    s->in_queue.buffer = calloc(1, SIMET_INETUP_QUEUESIZE);
-    if (!s->out_queue.buffer || !s->in_queue.buffer) {
-        free(s->out_queue.buffer);
-        free(s->in_queue.buffer);
-        free(s);
-        return -ENOMEM;
-    }
-    s->out_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
-    s->in_queue.buffer_size = SIMET_INETUP_QUEUESIZE;
 
     next_connection_id++;
 
@@ -2861,7 +2492,7 @@ int main(int argc, char **argv) {
 
             switch (s->state) {
             case SIMET_INETUP_P_C_INIT:
-                assert(s->socket == -1 && s->out_queue.buffer && s->in_queue.buffer && s->cluster);
+                assert(s->conn.socket == -1 && s->conn.out_queue.buffer && s->conn.in_queue.buffer && s->cluster);
                 servers_pollfds[j].fd = -1;
                 /* fall-through */
             case SIMET_INETUP_P_C_RECONNECT:
@@ -2881,7 +2512,7 @@ int main(int argc, char **argv) {
                 break;
             case SIMET_INETUP_P_C_CONNECT:
                 wait = uptimeserver_connect(s);
-                servers_pollfds[j].fd = s->socket;
+                servers_pollfds[j].fd = s->conn.socket;
                 servers_pollfds[j].events = POLLRDHUP | POLLIN | POLLOUT | POLLERR;
                 break;
             case SIMET_INETUP_P_C_CONNECTWAIT:

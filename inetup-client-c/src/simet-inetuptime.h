@@ -23,6 +23,8 @@
 #include <time.h>
 #include <sys/socket.h>
 
+#include "tcpaq.h"
+
 #define SIMET_UPTIME2_DEFAULT_PORT	"22000"
 
 /* SIMET2 Uptime2 defaults and limits */
@@ -67,15 +69,6 @@ struct simet_inetup_msghdr {
     /* the message goes here */
 } __attribute__((__packed__));
 
-#define SIMET_INETUP_QUEUESIZE 8192U
-struct simet_tcpqueue {
-    char *buffer;
-    size_t buffer_size;
-    size_t rd_pos;
-    size_t wr_pos_reserved;
-    size_t wr_pos;
-};
-
 struct simet_inetup_server_cluster {
     struct simet_inetup_server_cluster *next;
     const char * cluster_name;
@@ -83,11 +76,7 @@ struct simet_inetup_server_cluster {
 };
 
 struct simet_inetup_server {
-    struct simet_tcpqueue in_queue;
-    struct simet_tcpqueue out_queue;
-
-    sa_family_t ai_family;
-    int socket;
+    struct tcpaq_conn conn;
 
     enum simet_inetup_protocol_state state;
     time_t keepalive_clock;
