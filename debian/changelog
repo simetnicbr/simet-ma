@@ -1,3 +1,12 @@
+simet-ma (0.17.9.2) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.2
+  * twampc: really implement connection timeout cli parameter
+  * inetup: several minor fixes
+  * inetup: tcpaq refactoring
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 24 Nov 2022 20:33:32 -0300
+
 simet-ma (0.17.9.1) unstable; urgency=medium
 
   * simet-ma version 0.17.9.1
