@@ -171,7 +171,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     // CREATE SOCKET
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
-    fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param.family), param.host, param.port, &remote_addr_control, 2000);
+    fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param.family), param.host, param.port, &remote_addr_control, param.connect_timeout*1000);
     if (fd_control < 0) {
         print_err("could not resolve server name or address");
         rc = SEXIT_DNSERR;
@@ -266,7 +266,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     // CREATE UDP SOCKET FOR THE TEST
     memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
-    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, 2000);
+    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, param.connect_timeout * 1000);
     if (fd_test < 0) {
         print_err("usock_inet_timeout problem on test socket");
         rc = SEXIT_MP_REFUSED;
