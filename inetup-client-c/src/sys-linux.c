@@ -177,7 +177,7 @@ int os_netdev_change(const char * const netdev_name, void *netdev_ctx)
         ctx->rx_fname = rx_fn;
     } else {
         free(tx_fn);
-        free(tx_fn);
+        free(rx_fn);
         free(n_dev);
     }
     return rc;
