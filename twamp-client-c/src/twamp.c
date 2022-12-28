@@ -45,7 +45,7 @@ static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t ma
 static int convert_family(int family);
 static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
 static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
-static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t *bytes_recv);
+static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
 
 static int twamp_test(TestParameters);
@@ -307,7 +307,7 @@ int twamp_run_client(TWAMPParameters param) {
             break;
     }
 
-    if (message_format_request_session(param.family, sender_port, rqtSession) != 0) {
+    if (message_format_request_session(param.family, param.payload_size, sender_port, rqtSession) != 0) {
         print_err("message_format_request_session problem");
         rc = SEXIT_CTRLPROT_ERR;
         goto TEST_CLOSE;
@@ -520,7 +520,6 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
 // non-reentrant due to static return_result
 static void *twamp_callback_thread(void *p) {
     TestParameters *t_param = (TestParameters *)p;
-    UnauthReflectedPacket *reflectedPacket = NULL;
     size_t bytes_recv = 0;
     int ret;
     unsigned int pkg_count = 0;
@@ -534,16 +533,17 @@ static void *twamp_callback_thread(void *p) {
     /* what we need to add to CLOCK_MONOTONIC to get absolute time */
     const struct timespec ts_offset = t_param->clock_offset;
 
-    print_msg(MSG_NORMAL, "reflected packet receiveing thread started");
-
+    const unsigned int expected_pktsize = t_param->param.payload_size;
+    assert(expected_pktsize >= sizeof(UnauthReflectedPacket));
     // FIXME: drop this double copying
-    reflectedPacket = malloc(sizeof(UnauthReflectedPacket));
+    UnauthReflectedPacket *reflectedPacket = calloc(1, expected_pktsize);
     if (!reflectedPacket) {
        print_err("Error allocating memory for reflected packet");
        ret = SEXIT_OUTOFRESOURCE;
        goto error_out;
     }
-    memset(reflectedPacket, 0, sizeof(UnauthReflectedPacket)); /* FIXME */
+
+    print_msg(MSG_NORMAL, "reflected packet receiveing thread started");
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
     unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
@@ -559,7 +559,7 @@ static void *twamp_callback_thread(void *p) {
 
     while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_max)) {
         // Read message
-        ret = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket, &bytes_recv);
+        ret = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
 
         if (clock_gettime(CLOCK_MONOTONIC, &ts_recv)) {
             ret = SEXIT_INTERNALERR;
@@ -571,9 +571,10 @@ static void *twamp_callback_thread(void *p) {
         if (ret != SEXIT_SUCCESS)
             goto error_out;
 
-        if (bytes_recv == sizeof(UnauthReflectedPacket)) {
+        if (bytes_recv == expected_pktsize) {
             // Save result
             t_param->report->result->raw_data[pkg_count].time = relative_timespec_to_timestamp(&ts_recv, &ts_offset);
+            /* FIXME: zero-copy this! */
             memcpy(&(t_param->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
             pkg_count++;
         } else {
@@ -603,6 +604,7 @@ error_out:
     return &return_result;
 }
 
+/* FIXME: struct passing by value? */
 static int twamp_test(TestParameters test_param) {
     struct timespec ts_offset, ts_cur;
     uint counter = 0;
@@ -610,12 +612,13 @@ static int twamp_test(TestParameters test_param) {
     int rc = SEXIT_SUCCESS;
     int ret;
 
-    UnauthPacket *packet = malloc(sizeof(UnauthPacket));
+    const unsigned int pktsize = test_param.param.payload_size;
+    assert(pktsize >= sizeof(UnauthReflectedPacket));
+    UnauthPacket *packet = calloc(1, pktsize);
     if (!packet) {
        print_err("Error allocating memory for test packet to send");
        return SEXIT_OUTOFRESOURCE;
     }
-    memset(packet, 0 , sizeof(UnauthPacket));
 
     if (test_param.cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
@@ -658,10 +661,11 @@ static int twamp_test(TestParameters test_param) {
         packet->Time = hton_timestamp(relative_timespec_to_timestamp(&ts_cur, &ts_offset));
 
         /* TODO: send directly */
-        if (message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket)) < 0) {
+        if (message_send(test_param.test_socket, 5, packet, test_param.param.payload_size) < 0) {
             print_warn("message_send returned -1 for test packet %u", counter-1);
             counter--;
         }
+        /* FIXME: switch to clock_nanosleep with absolute time -- but check musl/openwrt */
         usleep(test_param.param.packets_interval_us);
     }
 
@@ -683,13 +687,14 @@ err_out:
 }
 
 static int receive_reflected_packet(int socket, struct timeval *timeout,
-                                    UnauthReflectedPacket *reflectedPacket, size_t *recv_total) {
+                                    UnauthReflectedPacket *reflectedPacket,
+                                    size_t expected_size, size_t *recv_total) {
     ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
 
     FD_ZERO(&rset_master);
-    FD_SET((unsigned long)socket, &rset_master);
+    FD_SET(socket, &rset_master);
 
     *recv_total = 0;
 
@@ -699,7 +704,9 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
         /* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
         fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
         if (fd_ready > 0 && FD_ISSET(socket, &rset)) {
-            recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC | MSG_DONTWAIT);
+            /* "receives" up to bufsize, but sets recv_size to the *real* size */
+            /* any extra data (recv_size > bufsize) is discarded */
+            recv_size = recv(socket, reflectedPacket, expected_size, MSG_TRUNC | MSG_DONTWAIT);
 
             // Caso recv apresente algum erro
             if (recv_size < 0) {
@@ -712,7 +719,7 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
                 }
             }
 
-            if (recv_size == sizeof(UnauthReflectedPacket)) {
+            if ((size_t) recv_size == expected_size) {
                 // Sender info
                 reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
                 reflectedPacket->SenderTime = ntoh_timestamp(reflectedPacket->SenderTime);

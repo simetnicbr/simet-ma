@@ -50,7 +50,7 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-p <service port>] [-t <timeout>] "
-        "[-c <packet count>] [-i <interpacket interval>] [-T <packet discard timeout>] "
+        "[-c <packet count>] [-s <payload size>] [-i <interpacket interval>] [-T <packet discard timeout>] "
         "[-r <report mode>] [-o <path>] <server>\n", p);
     if (mode) {
         fprintf(stderr, "\n"
@@ -62,6 +62,7 @@ static void print_usage(const char * const p, int mode)
             "\t-6\tuse IPv6, instead of system default\n"
             "\t-t\tconnection timeout in seconds\n"
             "\t-c\tnumber of packets to transmit per session\n"
+            "\t-s\tsize of the packet payload (UDP/IP headers not included)\n"
             "\t-i\ttime in microseconds between each packet (lower bound)\n"
             "\t-T\ttime in microseconds to wait for the last packet\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
@@ -123,6 +124,7 @@ int main(int argc, char **argv)
     int family = 0;
     int connect_timeout = 15;
     int packet_count = 200;
+    int payload_size = DFL_TSTPKT_SIZE;
     int report_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
@@ -132,7 +134,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVp:t:c:T:i:r:o:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVp:t:c:s:T:i:r:o:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -167,6 +169,9 @@ int main(int argc, char **argv)
         case 'c':
             packet_count = atoi(optarg);
             break;
+        case 's':
+            payload_size = atoi(optarg);
+            break;
         case 'i':
             packet_interval_us = atol(optarg);
             break;
@@ -199,6 +204,7 @@ int main(int argc, char **argv)
     param.report_mode = report_mode;
     param.connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout;
     param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count);
+    param.payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE);
     param.packets_max = param.packets_count * 2;
     param.packets_interval_us = (packet_interval_us > 0) ? (unsigned long int) packet_interval_us : 30000U;
     param.packets_timeout_us = (packet_timeout_us > 0) ? (unsigned long int) packet_timeout_us : 100000U;

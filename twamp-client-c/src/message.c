@@ -231,7 +231,7 @@ int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *s
     return 0;
 }
 
-int message_format_request_session(int ipvn, uint16_t sender_port, RequestSession *rqtSession) {
+int message_format_request_session(int ipvn, size_t padding_size, uint16_t sender_port, RequestSession *rqtSession) {
     rqtSession->Type = 5;
 
     // Set 0 as default
@@ -240,7 +240,16 @@ int message_format_request_session(int ipvn, uint16_t sender_port, RequestSessio
     rqtSession->SlotsNo = 0;
     rqtSession->PacketsNo = 0;
     rqtSession->IPVN = (uint8_t)ipvn;
-    rqtSession->PaddingLength = htonl(TST_PKT_SIZE - 14); /* FIXME */
+
+    uint16_t size;
+    if (padding_size > MAX_TSTPKT_SIZE || padding_size > UINT16_MAX) {
+	size = MAX_TSTPKT_SIZE;
+    } else if (padding_size < MIN_TSTPKT_SIZE) {
+	size = MIN_TSTPKT_SIZE;
+    } else {
+	size = (uint16_t)padding_size;
+    }
+    rqtSession->PaddingLength = htonl(size - OWAMP_PAD_OFFSET); /* FIXME: auth packet changes this */
 
     rqtSession->SenderAddress = htonl(0);
     rqtSession->ReceiverAddress = htonl(0);

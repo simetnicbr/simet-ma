@@ -235,7 +235,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
         "LossThresholdUs%lu-IntervalDurationUs%lu-"
         "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
         param->packets_timeout_us, param->packets_interval_us,
-        param->packets_count, TST_PKT_SIZE);
+        param->packets_count, param->payload_size);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 

@@ -45,6 +45,7 @@ typedef struct twamp_parameters {
     int connect_timeout;
     int report_mode;
     unsigned int packets_count;
+    unsigned int payload_size;
     unsigned int packets_max;
     unsigned long int packets_interval_us;
     unsigned long int packets_timeout_us;
