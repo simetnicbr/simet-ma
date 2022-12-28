@@ -279,17 +279,10 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     for (unsigned int it = 0; it < np; it++) {
         ReportPacket pkg;
 
-        struct timeval tv_sender = timestamp_to_timeval(&(report->result->raw_data[it].data.SenderTime));
-        uint64_t sendTime = timeval_to_microsec(&tv_sender);
-
-        struct timeval tv_reflector_recv = timestamp_to_timeval(&(report->result->raw_data[it].data.RecvTime));
-        uint64_t reflRecvTime = timeval_to_microsec(&tv_reflector_recv);
-
-        struct timeval tv_reflector_ret = timestamp_to_timeval(&(report->result->raw_data[it].data.Time));
-        uint64_t reflReturnTime = timeval_to_microsec(&tv_reflector_ret);
-
-        struct timeval tv_ret = timestamp_to_timeval(&(report->result->raw_data[it].time));
-        uint64_t returnTime = timeval_to_microsec(&tv_ret);
+        uint64_t sendTime = timestamp_to_microsec(report->result->raw_data[it].data.SenderTime);
+        uint64_t reflRecvTime = timestamp_to_microsec(report->result->raw_data[it].data.RecvTime);
+        uint64_t reflReturnTime = timestamp_to_microsec(report->result->raw_data[it].data.Time);
+        uint64_t returnTime = timestamp_to_microsec(report->result->raw_data[it].time);
 
         uint64_t processTime = reflReturnTime - reflRecvTime;
 

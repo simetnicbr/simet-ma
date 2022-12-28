@@ -655,9 +655,7 @@ static int twamp_test(TestParameters test_param) {
             rc = SEXIT_INTERNALERR;
             goto err_out;
         }
-        Timestamp ts = relative_timespec_to_timestamp(&ts_cur, &ts_offset);
-        encode_be_timestamp(&ts);
-        packet->Time = ts;
+        packet->Time = hton_timestamp(relative_timespec_to_timestamp(&ts_cur, &ts_offset));
 
         /* TODO: send directly */
         if (message_send(test_param.test_socket, 5, packet, sizeof(UnauthPacket)) < 0) {
@@ -717,12 +715,12 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
             if (recv_size == sizeof(UnauthReflectedPacket)) {
                 // Sender info
                 reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
-                decode_be_timestamp(&reflectedPacket->SenderTime);
+                reflectedPacket->SenderTime = ntoh_timestamp(reflectedPacket->SenderTime);
 
                 // Reflector info
                 reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
-                decode_be_timestamp(&reflectedPacket->RecvTime);
-                decode_be_timestamp(&reflectedPacket->Time);
+                reflectedPacket->RecvTime = ntoh_timestamp(reflectedPacket->RecvTime);
+                reflectedPacket->Time = ntoh_timestamp(reflectedPacket->Time);
 
                 *recv_total = (size_t) recv_size; /* verified, recv_size can never be negative */
                 return 0;
