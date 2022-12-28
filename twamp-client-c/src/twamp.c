@@ -291,7 +291,6 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    // Verificar se o Endian está invertido....
     switch(local_addr_measure.ss_family) {
         case AF_INET:
             sender_port = ntohs(((struct sockaddr_in *) &local_addr_measure)->sin_port);
