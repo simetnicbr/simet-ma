@@ -216,6 +216,26 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings) {
         print_msg(MSG_IMPORTANT, "the server does not wish to communicate");
         return -1;
     }
+    if ((srvGreetings->Modes & 1) != 1) {
+	print_msg(MSG_IMPORTANT, "the server does not support unauthenticated mode");
+	return -1;
+    }
+
+    if ((srvGreetings->Modes & 64) != 64) {
+	print_msg(MSG_IMPORTANT, "the server seems not to support symmetric mode, measurement may fail");
+
+	/* We just warn about it because older versions of the SIMET2
+	 * server did not set this bit correctly.  The perfSonar server
+	 * doesn't announce symmetric mode support either, and yet
+	 * replies with symmetric-compatible packets just like we used
+	 * to.
+	 *
+	 * For that reason, it is best if we simply try the measurement,
+	 * we can add heuristics that abort with the appropriate error
+	 * when we discard an incorrectly-sized reply if bit 6 is
+	 * unset...
+	 */
+    }
 
     return 0;
 }
@@ -225,8 +245,10 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings) {
 /***********************/
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse) {
-    stpResponse->Mode = srvGreetings->Modes & (01);
-    stpResponse->Mode = htonl(stpResponse->Mode);
+    /* We want TWAMP unauthenticated mode, and RFC-6038 symmetric packets */
+
+    /* note: older SIMET2 twamp reflectors do not set bit 6 but always operate in symmetric mode */
+    stpResponse->Mode = htonl(srvGreetings->Modes & (0b1000001U));
 
     return 0;
 }
