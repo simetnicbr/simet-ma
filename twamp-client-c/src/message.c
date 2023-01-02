@@ -154,6 +154,7 @@ ssize_t message_start_ack(const int socket, const int timeout, StartAck * const 
 ssize_t message_send(const int socket, const int timeout, void * const message, const size_t len) {
     fd_set wset, wset_master;
     struct timeval tv_timeo;
+    int err;
 
     if (!message || socket < 0 || len >= SSIZE_MAX) {
 	errno = EINVAL;
@@ -202,7 +203,9 @@ ssize_t message_send(const int socket, const int timeout, void * const message, 
     return (ssize_t) total_sent; /* verified, len < SSIZE_MAX, total_sent <= len */
 
 err_exit:
-    print_err("error sending data to server: %s", strerror(errno));
+    err = errno;
+    print_err("error sending data to server: %s", strerror(err));
+    errno = err;
     return -1;
 }
 
