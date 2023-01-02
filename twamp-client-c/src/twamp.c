@@ -139,6 +139,97 @@ static int twamp_run_prepare(TestParameters *t_param, TWAMPParameters *param)
     return 0;
 }
 
+int twamp_run_light_client(TWAMPParameters * const param)
+{
+    int fd_test = -1;
+    struct sockaddr_storage remote_addr_measure;
+    int do_report = 0;
+
+    TestParameters t_param;
+    int rc = twamp_run_prepare(&t_param, param);
+    if (rc != 0)
+        return rc;
+
+    /* FIXME from this point onwards */
+
+    /* CREATE UDP SOCKET FOR THE TEST */
+    memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
+    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param->family), param->host, param->port, &remote_addr_measure, param->connect_timeout * 1000);
+    if (fd_test < 0) {
+        print_err("usock_inet_timeout problem on test socket");
+        rc = SEXIT_MP_REFUSED;
+        goto TEST_EXIT;
+    }
+    if (usock_wait_ready(fd_test, 5000) != 0) {
+        print_err("usock_wait_ready problem on test socket");
+        rc = SEXIT_MP_TIMEOUT;
+        goto TEST_EXIT;
+    }
+
+    print_msg(MSG_NORMAL, "TEST socket connected");
+
+    /* Store remote address for report */
+    char hostAddr[INET6_ADDRSTRLEN];
+    if (get_ip_str(&remote_addr_measure, hostAddr, INET6_ADDRSTRLEN) == NULL) {
+        print_warn("get_ip_str problem");
+    }
+    t_param.report->address = hostAddr;
+
+    if (remote_addr_measure.ss_family == AF_INET) {
+        param->family = 4;
+    } else {
+        param->family = 6;
+    }
+
+    if (report_socket_metrics(t_param.report, fd_test, IPPROTO_UDP)) {
+        print_warn("failed to add TEST socket information to report, proceeding anyway...");
+    } else {
+        print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
+    }
+
+    print_msg(MSG_NORMAL, "measurement starting...");
+    t_param.test_socket = fd_test;
+
+    rc = twamp_test(&t_param);
+    do_report = (rc == SEXIT_SUCCESS || (rc == SEXIT_MP_TIMEOUT && t_param.report->result->packets_received > 0));
+
+    /* Change to SEXIT_OUTOFRESOURCE if we got way too many duplicates */
+    if (rc == SEXIT_SUCCESS &&
+            t_param.report->result->packets_received >= t_param.param.packets_max) {
+        rc = SEXIT_OUTOFRESOURCE;
+        print_warn("Received too many packets, test aborted with partial results");
+    }
+
+    print_msg(MSG_IMPORTANT, "measurement finished %s",
+            (rc == SEXIT_SUCCESS) ? "successfully" : "unsuccessfully");
+
+    /* FIXME: remove or repurpose packets_dropped_timeout */
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+            t_param.report->result->packets_sent, t_param.report->result->packets_received,
+            t_param.report->result->packets_dropped_timeout);
+
+TEST_EXIT:
+    if (fd_test >= 0) {
+        if (shutdown(fd_test, SHUT_RDWR) != 0) {
+            print_warn("TEST socket shutdown problem: %s", strerror(errno));
+        }
+
+        if (close(fd_test) != 0) {
+            print_warn("TEST socket close problem: %s", strerror(errno));
+        }
+        print_msg(MSG_DEBUG, "TEST socket close OK");
+
+        fd_test = -1;
+    }
+
+    if (do_report)
+        twamp_report(t_param.report, param);
+    twamp_report_done(t_param.report);
+    t_param.report = NULL;
+
+    return rc;
+}
+
 int twamp_run_client(TWAMPParameters * const param)
 {
     int fd_control, fd_test;

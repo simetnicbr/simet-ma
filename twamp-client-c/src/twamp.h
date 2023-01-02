@@ -37,6 +37,11 @@ struct simet_cookie { /* max 24 bytes, refer to messages.h */
     uint8_t data[SIMET_TWAMP_IDCOOKIE_V1LEN]; /* SID from Accept-TW-Session */
 };
 
+enum {
+    TWAMP_MODE_TWAMP = 0,
+    TWAMP_MODE_TWAMPLIGHT,
+};
+
 /* TWAMP parameters struct */
 typedef struct twamp_parameters {
     const char *host;
@@ -61,6 +66,7 @@ typedef struct twamp_test_parameters {
 } TestParameters;
 
 int twamp_run_client(TWAMPParameters * const param);
+int twamp_run_light_client(TWAMPParameters * const param);
 int twamp_report(TWAMPReport*, TWAMPParameters*);
 TWAMPReport * twamp_report_init(const int family, const char * const host);
 void twamp_report_done(TWAMPReport *);

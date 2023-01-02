@@ -49,7 +49,7 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-p <service port>] [-t <timeout>] "
+    fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-m twamp|light] [-p <service port>] [-t <timeout>] "
         "[-c <packet count>] [-s <payload size>] [-i <interpacket interval>] [-T <packet discard timeout>] "
         "[-r <report mode>] [-o <path>] <server>\n", p);
     if (mode) {
@@ -60,6 +60,7 @@ static void print_usage(const char * const p, int mode)
             "\t-q\tquiet mode (repeat for errors-only)\n"
             "\t-4\tuse IPv4, instead of system default\n"
             "\t-6\tuse IPv6, instead of system default\n"
+            "\t-m\toperating mode: twamp (default), light\n"
             "\t-t\tconnection timeout in seconds\n"
             "\t-c\tnumber of packets to transmit per session\n"
             "\t-s\tsize of the packet payload (UDP/IP headers not included)\n"
@@ -126,6 +127,7 @@ int main(int argc, char **argv)
     int packet_count = 200;
     int payload_size = DFL_TSTPKT_SIZE;
     int report_mode = 0;
+    int twamp_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
 
@@ -134,7 +136,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVp:t:c:s:T:i:r:o:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVm:p:t:c:s:T:i:r:o:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -181,6 +183,15 @@ int main(int argc, char **argv)
         case 'r':
             report_mode = atoi(optarg);
             break;
+        case 'm':
+            if (optarg && !strcasecmp("twamp", optarg)) {
+                twamp_mode = TWAMP_MODE_TWAMP;
+            } else if (optarg && !strcasecmp("light", optarg)) {
+                twamp_mode = TWAMP_MODE_TWAMPLIGHT;
+            } else {
+                print_usage(argv[0], 1);
+            }
+            break;
         case 'h':
             print_usage(argv[0], 1);
             /* fall-through */ /* silence bogus warning */
@@ -212,7 +223,15 @@ int main(int argc, char **argv)
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
-    int value = twamp_run_client(&param);
+    int value = SEXIT_INTERNALERR;
+    switch (twamp_mode) {
+    case TWAMP_MODE_TWAMP:
+        value = twamp_run_client(&param);
+        break;
+    case TWAMP_MODE_TWAMPLIGHT:
+        value = twamp_run_light_client(&param);
+        break;
+    }
 
     if (value != 0) {
         print_err("TWAMP-CLIENT ERROR");
