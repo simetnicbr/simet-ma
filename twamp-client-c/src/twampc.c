@@ -212,7 +212,7 @@ int main(int argc, char **argv)
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
-    int value = twamp_run_client(param);
+    int value = twamp_run_client(&param);
 
     if (value != 0) {
         print_err("TWAMP-CLIENT ERROR");

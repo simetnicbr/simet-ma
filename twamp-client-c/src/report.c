@@ -368,7 +368,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
  *
  * Returns NULL on ENOMEM.
  */
-TWAMPReport * twamp_report_init(void)
+TWAMPReport * twamp_report_init(const int family, const char * const host)
 {
     struct twamp_report_private *rp = NULL;
     TWAMPResult *tr = NULL;
@@ -397,6 +397,9 @@ TWAMPReport * twamp_report_init(void)
 
     r->result = tr;
     r->privdata = rp;
+
+    r->family = family;
+    r->host = host;
 
     return r;
 

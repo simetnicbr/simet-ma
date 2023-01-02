@@ -79,14 +79,34 @@ static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struc
         memcpy(dst, cookie, sizeof(struct simet_cookie) <= dst_sz ? sizeof(struct simet_cookie) : dst_sz);
 }
 
-int twamp_run_client(TWAMPParameters param) {
-    int fd_control, fd_test;
-    struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
-    char * testPort = NULL;
-    int do_report = 0;
+static int twamp_rawdata_init(unsigned int num_packets, TWAMPRawData **pbuffer)
+{
+    if (!pbuffer)
+        return SEXIT_INTERNALERR;
 
-    if (param.packets_count > param.packets_max) {
-        print_err("Configuration error: packet train size (%u) too big (max %u)", param.packets_count, param.packets_max);
+    *pbuffer = calloc(num_packets, sizeof(TWAMPRawData));
+    if (! *pbuffer) {
+        print_err("Error allocating memory for raw_data");
+        return SEXIT_OUTOFRESOURCE;
+    }
+
+    return 0;
+}
+
+static int twamp_run_prepare(TestParameters *t_param, TWAMPParameters *param)
+{
+    if (!t_param || !param)
+        return SEXIT_INTERNALERR;
+
+    memset(t_param, 0, sizeof(*t_param));
+
+    if (param->packets_count > param->packets_max) {
+        print_err("Configuration error: packet train length (%u) too big (max %u)", param->packets_count, param->packets_max);
+        return SEXIT_BADCMDLINE;
+    }
+
+    if (param->packets_count <= 0) {
+        print_err("Configuration error: packet train length too small");
         return SEXIT_BADCMDLINE;
     }
 
@@ -101,26 +121,36 @@ int twamp_run_client(TWAMPParameters param) {
      * this line, you must adjust the post-receive routines to not
      * ignore the last packet when packets_received == packets_max.
      */
-    param.packets_max++;
+    param->packets_max++;
 
     // Create TWAMPReport
-    TWAMPReport * report = twamp_report_init();
-    if (!report) {
+    TWAMPReport * report = twamp_report_init(param->family, param->host);
+    if (!report || !report->result) {
         print_err("Error initializing TWAMP report");
         return SEXIT_OUTOFRESOURCE;
     }
-    report->result->raw_data = malloc(sizeof(TWAMPRawData) * param.packets_max);
-    if (!report->result->raw_data) {
-        print_err("Error allocating memory for raw_data");
-        return SEXIT_OUTOFRESOURCE;
-    }
+    // Init receive buffer
+    int rc = twamp_rawdata_init(param->packets_max, &report->result->raw_data);
+    if (rc)
+        return rc;
 
-    report->family = param.family;
-    report->host = param.host;
+    memcpy(&t_param->param, param, sizeof(t_param->param));
+    t_param->report = report;
+    return 0;
+}
+
+int twamp_run_client(TWAMPParameters * const param)
+{
+    int fd_control, fd_test;
+    int rc;
+    struct sockaddr_storage remote_addr_control, local_addr_control, remote_addr_measure, local_addr_measure;
+    char * testPort = NULL;
+    int do_report = 0;
 
     TestParameters t_param;
-    t_param.param = param;
-    t_param.report = report;
+    rc = twamp_run_prepare(&t_param, param);
+    if (rc)
+        return rc;
 
     ServerGreeting *srvGreetings = malloc(SERVER_GREETINGS_SIZE);
     if (!srvGreetings) {
@@ -167,11 +197,9 @@ int twamp_run_client(TWAMPParameters param) {
     }
     memset(stpSessions, 0 , sizeof(StopSessions));
 
-    int rc;
-
     // CREATE SOCKET
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
-    fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param.family), param.host, param.port, &remote_addr_control, param.connect_timeout*1000);
+    fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param->family), param->host, param->port, &remote_addr_control, param->connect_timeout*1000);
     if (fd_control < 0) {
         print_err("could not resolve server name or address");
         rc = SEXIT_DNSERR;
@@ -191,15 +219,15 @@ int twamp_run_client(TWAMPParameters param) {
     if (get_ip_str(&remote_addr_control, hostAddr, INET6_ADDRSTRLEN) == NULL) {
         print_warn("get_ip_str problem");
     }
-    report->address = hostAddr;
+    t_param.report->address = hostAddr;
 
     memset(&local_addr_measure, 0, sizeof(struct sockaddr_storage));
     cp_remote_addr(&remote_addr_control, &local_addr_measure);
 
     if (remote_addr_control.ss_family == AF_INET) {
-        param.family = 4;
+        param->family = 4;
     } else {
-        param.family = 6;
+        param->family = 6;
     }
 
     rc = SEXIT_CTRLPROT_ERR;
@@ -266,7 +294,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     // CREATE UDP SOCKET FOR THE TEST
     memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
-    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param.family), param.host, "862", &remote_addr_measure, param.connect_timeout * 1000);
+    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param->family), param->host, "862", &remote_addr_measure, param->connect_timeout * 1000);
     if (fd_test < 0) {
         print_err("usock_inet_timeout problem on test socket");
         rc = SEXIT_MP_REFUSED;
@@ -306,7 +334,7 @@ int twamp_run_client(TWAMPParameters param) {
             break;
     }
 
-    if (message_format_request_session(param.family, param.payload_size, sender_port, rqtSession) != 0) {
+    if (message_format_request_session(param->family, param->payload_size, sender_port, rqtSession) != 0) {
         print_err("message_format_request_session problem");
         rc = SEXIT_CTRLPROT_ERR;
         goto TEST_CLOSE;
@@ -335,7 +363,7 @@ int twamp_run_client(TWAMPParameters param) {
 
     /* FIXME: log this better */
     uint16_t receiver_port = actSession->Port;
-    report->serverPort = (unsigned int)receiver_port;
+    t_param.report->serverPort = (unsigned int)receiver_port;
     print_msg(MSG_DEBUG, "session port: %" PRIu16, receiver_port);
 
     testPort = malloc(sizeof(char) * 6);
@@ -361,7 +389,7 @@ int twamp_run_client(TWAMPParameters param) {
         goto TEST_CLOSE;
     }
 
-    if (report_socket_metrics(report, fd_test, IPPROTO_UDP))
+    if (report_socket_metrics(t_param.report, fd_test, IPPROTO_UDP))
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     else
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
@@ -451,9 +479,9 @@ MEM_FREE:
     free(testPort);
 
     if (do_report)
-        twamp_report(report, &param);
-    twamp_report_done(report);
-    report = NULL;
+        twamp_report(t_param.report, param);
+    twamp_report_done(t_param.report);
+    t_param.report = NULL;
 
     return rc;
 }
