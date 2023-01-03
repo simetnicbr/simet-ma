@@ -234,11 +234,12 @@ int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *s
 int message_format_request_session(int ipvn, size_t padding_size, uint16_t sender_port, RequestSession *rqtSession) {
     rqtSession->Type = 5;
 
-    // Set 0 as default
+    /* redundant, all zeroes already */
     rqtSession->ConfSender = 0;
     rqtSession->ConfReceiver = 0;
     rqtSession->SlotsNo = 0;
     rqtSession->PacketsNo = 0;
+
     rqtSession->IPVN = (uint8_t)ipvn;
 
     uint16_t size;
@@ -251,11 +252,16 @@ int message_format_request_session(int ipvn, size_t padding_size, uint16_t sende
     }
     rqtSession->PaddingLength = htonl(size - OWAMP_PAD_OFFSET); /* FIXME: auth packet changes this */
 
+    /* redundant, all zeroes already */
     rqtSession->SenderAddress = htonl(0);
     rqtSession->ReceiverAddress = htonl(0);
 
     rqtSession->SenderPort = htons(sender_port);
     rqtSession->ReceiverPort = htons(862);
+
+    /* Timeout and StartTime are already all-zeroes timestamps,
+     * and this is correct for TWAMP.  We do not need any wait
+     * after we issue the Stop Sessions command */
 
     return 0;
 }
