@@ -197,17 +197,18 @@ int main(int argc, char **argv)
 
     host = argv[optind];
 
-    TWAMPParameters param;
-    param.host = host;
-    param.port = port;
-    param.family = family;
-    param.report_mode = report_mode;
-    param.connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout;
-    param.packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count);
-    param.payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE);
-    param.packets_max = param.packets_count * 2;
-    param.packets_interval_us = (packet_interval_us > 0) ? (unsigned long int) packet_interval_us : 30000U;
-    param.packets_timeout_us = (packet_timeout_us > 0) ? (unsigned long int) packet_timeout_us : 100000U;
+    TWAMPParameters param = {
+        .host = host,
+        .port = port,
+        .family = family,
+        .report_mode = report_mode,
+        .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,
+        .packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count),
+        .payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE),
+        .packets_max = param.packets_count * 2,
+        .packets_interval_us = (packet_interval_us > 0) ? (unsigned long int) packet_interval_us : 30000U,
+        .packets_timeout_us = (packet_timeout_us > 0) ? (unsigned long int) packet_timeout_us : 100000U,
+    };
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
