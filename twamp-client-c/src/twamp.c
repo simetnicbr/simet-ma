@@ -542,7 +542,7 @@ static void *twamp_callback_thread(void *p) {
        goto error_out;
     }
 
-    print_msg(MSG_NORMAL, "reflected packet receiveing thread started");
+    print_msg(MSG_NORMAL, "reflected packet receiving thread started");
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
     unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
