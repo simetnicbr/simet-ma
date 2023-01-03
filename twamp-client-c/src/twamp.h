@@ -60,7 +60,7 @@ typedef struct twamp_test_parameters {
     TWAMPReport * report;
 } TestParameters;
 
-int twamp_run_client(TWAMPParameters *param);
+int twamp_run_client(TWAMPParameters * const param);
 int twamp_report(TWAMPReport*, TWAMPParameters*);
 TWAMPReport * twamp_report_init(const int family, const char * const host);
 void twamp_report_done(TWAMPReport *);

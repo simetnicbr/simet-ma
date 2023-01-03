@@ -48,7 +48,7 @@ static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
 static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
 
-static int twamp_test(TestParameters);
+static int twamp_test(TestParameters * const);
 
 /* generates an "id cookie" from server data; returns 0 for cookie disabled */
 static int simet_generate_cookie(struct simet_cookie *cookie, const void * const src, size_t src_sz)
@@ -421,7 +421,7 @@ int twamp_run_client(TWAMPParameters * const param)
     print_msg(MSG_NORMAL, "measurement starting...");
     t_param.test_socket = fd_test;
 
-    rc = twamp_test(t_param);
+    rc = twamp_test(&t_param);
     if (rc == SEXIT_OUTOFRESOURCE)
         goto TEST_CLOSE;
 
@@ -631,8 +631,7 @@ error_out:
     return &return_result;
 }
 
-/* FIXME: struct passing by value? */
-static int twamp_test(TestParameters test_param) {
+static int twamp_test(TestParameters * const test_param) {
     struct timespec ts_offset, ts_cur;
     unsigned int counter = 0;
     unsigned int error_counter = 0;
@@ -640,7 +639,7 @@ static int twamp_test(TestParameters test_param) {
     int rc = SEXIT_SUCCESS;
     int ret;
 
-    const unsigned int pktsize = test_param.param.payload_size;
+    const unsigned int pktsize = test_param->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
     UnauthPacket *packet = calloc(1, pktsize);
     if (!packet) {
@@ -648,9 +647,9 @@ static int twamp_test(TestParameters test_param) {
        return SEXIT_OUTOFRESOURCE;
     }
 
-    if (test_param.cookie_enabled) {
+    if (test_param->cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
-        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &test_param.cookie);
+        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &(test_param->cookie));
     }
 
     if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
@@ -659,10 +658,10 @@ static int twamp_test(TestParameters test_param) {
     }
     timespec_to_offset(&ts_offset, &ts_cur);
 
-    test_param.clock_offset = ts_offset;
+    test_param->clock_offset = ts_offset;
 
     pthread_t receiver_thread;
-    ret = pthread_create(&receiver_thread, NULL, twamp_callback_thread, &test_param);
+    ret = pthread_create(&receiver_thread, NULL, twamp_callback_thread, test_param);
     if (ret) {
        if (ret == EAGAIN) {
           print_err("No resources to create reflected packets receiving thread");
@@ -677,7 +676,7 @@ static int twamp_test(TestParameters test_param) {
     print_msg(MSG_DEBUG, "sending test packets...");
 
     // Sending test packets
-    while (counter < test_param.param.packets_count) {
+    while (counter < test_param->param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter);
 
@@ -689,7 +688,7 @@ static int twamp_test(TestParameters test_param) {
         packet->Time = hton_timestamp(relative_timespec_to_timestamp(&ts_cur, &ts_offset));
 
         /* TODO: send directly? */
-        if (message_send(test_param.test_socket, 5, packet, test_param.param.payload_size) >= 0) {
+        if (message_send(test_param->test_socket, 5, packet, test_param->param.payload_size) >= 0) {
             counter++;
         } else {
             error_counter++;
@@ -701,10 +700,10 @@ static int twamp_test(TestParameters test_param) {
             }
         }
         /* FIXME: switch to clock_nanosleep with absolute time -- but check musl/openwrt */
-        usleep(test_param.param.packets_interval_us);
+        usleep(test_param->param.packets_interval_us);
     }
 
-    test_param.report->result->packets_sent = counter;
+    test_param->report->result->packets_sent = counter;
 
     /* we expect to wait here on pthread_join */
     if (pthread_join(receiver_thread, &thread_retval) == 0) {
