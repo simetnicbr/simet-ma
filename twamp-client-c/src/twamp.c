@@ -606,7 +606,8 @@ error_out:
 /* FIXME: struct passing by value? */
 static int twamp_test(TestParameters test_param) {
     struct timespec ts_offset, ts_cur;
-    uint counter = 0;
+    unsigned int counter = 0;
+    unsigned int error_counter = 0;
     void *thread_retval = NULL;
     int rc = SEXIT_SUCCESS;
     int ret;
@@ -650,7 +651,7 @@ static int twamp_test(TestParameters test_param) {
     // Sending test packets
     while (counter < test_param.param.packets_count) {
         // Set packet counter
-        packet->SeqNumber = htonl(counter++);
+        packet->SeqNumber = htonl(counter);
 
         // Set packet timestamp
         if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
@@ -659,10 +660,17 @@ static int twamp_test(TestParameters test_param) {
         }
         packet->Time = hton_timestamp(relative_timespec_to_timestamp(&ts_cur, &ts_offset));
 
-        /* TODO: send directly */
-        if (message_send(test_param.test_socket, 5, packet, test_param.param.payload_size) < 0) {
-            print_warn("message_send returned -1 for test packet %u", counter-1);
-            counter--;
+        /* TODO: send directly? */
+        if (message_send(test_param.test_socket, 5, packet, test_param.param.payload_size) >= 0) {
+            counter++;
+        } else {
+            error_counter++;
+            print_warn("failed to send test packet %u", counter);
+            if (error_counter > 3 || errno == ECONNREFUSED) {
+                print_err("Cancelling measurement due to sending errors");
+                rc = SEXIT_MP_REFUSED; /* FIXME: most usual reason, but we could do better */
+                goto err_out;
+            }
         }
         /* FIXME: switch to clock_nanosleep with absolute time -- but check musl/openwrt */
         usleep(test_param.param.packets_interval_us);
