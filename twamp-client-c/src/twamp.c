@@ -41,14 +41,53 @@
 
 #include "libubox/usock.h"
 
-static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen);
-static int convert_family(int family);
-static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst);
-static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port);
 static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
-
 static int twamp_test(TestParameters * const);
+
+static int usock_convert_family(sa_family_t family) {
+    if (family == AF_INET) {
+        return USOCK_IPV4ONLY;
+    } else if (family == AF_INET6) {
+        return USOCK_IPV6ONLY;
+    } else {
+        return 0;
+    }
+}
+
+static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen)
+{
+    switch(sa->ss_family) {
+        case AF_INET:
+            inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),s, maxlen);
+            break;
+
+        case AF_INET6:
+            inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),s, maxlen);
+            break;
+
+        default:
+            strncpy(s, "Unknown AF", maxlen);
+            return NULL;
+    }
+
+    return s;
+}
+
+static void sa_set_port(struct sockaddr_storage *sa, in_port_t port) {
+    /* htons() */
+    static_assert(sizeof(in_port_t) == sizeof(unsigned short), "in_port_t is not an alias for unsigned short int");
+
+    switch(sa->ss_family) {
+        case AF_INET:
+            ((struct sockaddr_in *)sa)->sin_port = htons(port);
+            break;
+
+        case AF_INET6:
+            ((struct sockaddr_in6 *)sa)->sin6_port = htons(port);
+            break;
+    }
+}
 
 /* generates an "id cookie" from server data; returns 0 for cookie disabled */
 static int simet_generate_cookie(struct simet_cookie *cookie, const void * const src, size_t src_sz)
@@ -139,10 +178,93 @@ static int twamp_run_prepare(TestParameters *t_param, TWAMPParameters *param)
     return 0;
 }
 
+/* Returns -1 on error (error messages printed), 0 + res on success */
+/* caller needs to freeaddrinfo(res) when done.  res == NULL is possible */
+static int twamp_resolve_host(const char * const host, const char * const port, const sa_family_t family,
+                       const int socktype, const int protocol, struct addrinfo ** const res)
+{
+    if (!res)
+        return -1; /* should never happen */
+
+    struct addrinfo hints = {
+        .ai_family = family,
+        .ai_socktype = socktype,
+        .ai_protocol = protocol,
+        .ai_flags = AI_ADDRCONFIG,
+    };
+
+    int r = getaddrinfo(host, port, &hints, res);
+    if (r) {
+        print_err("could not resolve %s%s%s: %s", (host)? host : "", (port)? ":" : "", (port)? port : "", gai_strerror(r));
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Returns bound and connected socket, or -1 + errno */
+/* note: ss_source better be compatible with the contents of dest_list, or else this call *will* fail */
+/* note: optiized for UDP right now, so assumes immediate connect() */
+static int twamp_connect(const struct sockaddr_storage * const ss_source, struct sockaddr_storage * const sa, struct addrinfo *dest_list)
+{
+    int family = AF_UNSPEC;
+    int fd_test = -1;
+    int err = ENOENT;
+
+    for (const struct addrinfo *ai = dest_list; ai != NULL; ai = ai->ai_next) {
+        if (ai->ai_addrlen > sizeof(struct sockaddr_storage)) {
+            /* HUH?! */
+            err = EINVAL;
+            break;
+        }
+
+        if (fd_test < 0 || family != ai->ai_family) {
+            if (fd_test >= 0)
+                close(fd_test);
+
+            family = ai->ai_family;
+            fd_test = socket(family, ai->ai_socktype, ai->ai_protocol);
+            if (fd_test < 0) {
+                return -1;
+            }
+        }
+
+        /* local address override */
+        if (ss_source &&
+                bind(fd_test, (const struct sockaddr *)ss_source, sizeof(*ss_source)) < 0) {
+            err = errno;
+            continue;
+        }
+
+        if (connect(fd_test, ai->ai_addr, ai->ai_addrlen) < 0) {
+            /* FIXME?  EINTR.  but right now we either ignore or abort on all signals... */
+            err = errno;
+            continue;
+        }
+
+        /* connected */
+        err = 0;
+        if (sa) {
+            memcpy(sa, ai->ai_addr, ai->ai_addrlen);
+        }
+        break;
+    }
+
+    if (err) {
+        if (fd_test >= 0)
+            close(fd_test);
+
+        fd_test = -1;
+    }
+    errno = err;
+    return fd_test;
+}
+
 int twamp_run_light_client(TWAMPParameters * const param)
 {
-    int fd_test = -1;
+    struct addrinfo *res = NULL;
     struct sockaddr_storage remote_addr_measure;
+    int fd_test = -1;
     int do_report = 0;
 
     TestParameters t_param;
@@ -150,21 +272,22 @@ int twamp_run_light_client(TWAMPParameters * const param)
     if (rc != 0)
         return rc;
 
-    /* FIXME from this point onwards */
+    memset(&remote_addr_measure, 0, sizeof(remote_addr_measure));
 
-    /* CREATE UDP SOCKET FOR THE TEST */
-    memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
-    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param->family), param->host, param->port, &remote_addr_measure, param->connect_timeout * 1000);
+    if (twamp_resolve_host(param->host, param->port, param->family, SOCK_DGRAM, IPPROTO_UDP, &res) < 0) {
+        return SEXIT_FAILURE;
+    }
+
+    fd_test = twamp_connect(param->source_ss, &remote_addr_measure, res);
+    freeaddrinfo(res);
+    res = NULL;
     if (fd_test < 0) {
-        print_err("usock_inet_timeout problem on test socket");
+        print_err("could not create TWAMP-TEST connection");
         rc = SEXIT_MP_REFUSED;
         goto TEST_EXIT;
     }
-    if (usock_wait_ready(fd_test, 5000) != 0) {
-        print_err("usock_wait_ready problem on test socket");
-        rc = SEXIT_MP_TIMEOUT;
-        goto TEST_EXIT;
-    }
+    /* possibly update from AF_UNSPEC to real one */
+    param->family = remote_addr_measure.ss_family;
 
     print_msg(MSG_NORMAL, "TEST socket connected");
 
@@ -174,12 +297,6 @@ int twamp_run_light_client(TWAMPParameters * const param)
         print_warn("get_ip_str problem");
     }
     t_param.report->address = hostAddr;
-
-    if (remote_addr_measure.ss_family == AF_INET) {
-        param->family = 4;
-    } else {
-        param->family = 6;
-    }
 
     if (report_socket_metrics(t_param.report, fd_test, IPPROTO_UDP)) {
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
@@ -288,9 +405,9 @@ int twamp_run_client(TWAMPParameters * const param)
     }
     memset(stpSessions, 0 , sizeof(StopSessions));
 
-    // CREATE SOCKET
+    /* CREATE CONTROL CONNECTION */
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
-    fd_control = usock_inet_timeout(USOCK_TCP | convert_family(param->family), param->host, param->port, &remote_addr_control, param->connect_timeout*1000);
+    fd_control = usock_inet_timeout(USOCK_TCP | usock_convert_family(param->family), param->host, param->port, &remote_addr_control, param->connect_timeout*1000);
     if (fd_control < 0) {
         print_err("could not resolve server name or address");
         rc = SEXIT_DNSERR;
@@ -312,14 +429,8 @@ int twamp_run_client(TWAMPParameters * const param)
     }
     t_param.report->address = hostAddr;
 
-    memset(&local_addr_measure, 0, sizeof(struct sockaddr_storage));
-    cp_remote_addr(&remote_addr_control, &local_addr_measure);
-
-    if (remote_addr_control.ss_family == AF_INET) {
-        param->family = 4;
-    } else {
-        param->family = 6;
-    }
+    /* Update possibly AF_UNSPEC to real family */
+    param->family = remote_addr_control.ss_family;
 
     rc = SEXIT_CTRLPROT_ERR;
 
@@ -368,7 +479,7 @@ int twamp_run_client(TWAMPParameters * const param)
     // REQUEST SESSION
     socklen_t addr_len = sizeof(local_addr_control);
     memset(&local_addr_control, 0, addr_len);
-    if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, (socklen_t *) &addr_len) < 0){
+    if (getsockname(fd_control, (struct sockaddr *) &local_addr_control, &addr_len) < 0){
         print_err("getsockname problem on control socket");
         rc = SEXIT_INTERNALERR;
         goto CONTROL_CLOSE;
@@ -385,7 +496,7 @@ int twamp_run_client(TWAMPParameters * const param)
 
     // CREATE UDP SOCKET FOR THE TEST
     memset(&remote_addr_measure, 0, sizeof(struct sockaddr_storage));
-    fd_test = usock_inet_timeout(USOCK_UDP | convert_family(param->family), param->host, "862", &remote_addr_measure, param->connect_timeout * 1000);
+    fd_test = usock_inet_timeout(USOCK_UDP | usock_convert_family(param->family), param->host, "862", &remote_addr_measure, param->connect_timeout * 1000);
     if (fd_test < 0) {
         print_err("usock_inet_timeout problem on test socket");
         rc = SEXIT_MP_REFUSED;
@@ -465,7 +576,7 @@ int twamp_run_client(TWAMPParameters * const param)
     }
     snprintf(testPort, 6, "%u", receiver_port);
 
-    add_remote_port(&remote_addr_measure, receiver_port);
+    sa_set_port(&remote_addr_measure, receiver_port);
     addr_len = sizeof(remote_addr_measure);
 
     /* FIXME: log it like inetupc, this is broken
@@ -575,63 +686,6 @@ MEM_FREE:
     t_param.report = NULL;
 
     return rc;
-}
-
-static int convert_family(int family) {
-    if (family == 4) {
-        return USOCK_IPV4ONLY;
-    } else if (family == 6) {
-        return USOCK_IPV6ONLY;
-    } else {
-        return 0;
-    }
-}
-
-static char *get_ip_str(const struct sockaddr_storage *sa, char *s, socklen_t maxlen)
-{
-    switch(sa->ss_family) {
-        case AF_INET:
-            inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),s, maxlen);
-            break;
-
-        case AF_INET6:
-            inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),s, maxlen);
-            break;
-
-        default:
-            strncpy(s, "Unknown AF", maxlen);
-            return NULL;
-    }
-
-    return s;
-}
-
-static int cp_remote_addr(const struct sockaddr_storage *sa_src, struct sockaddr_storage *sa_dst) {
-    switch(sa_src->ss_family) {
-        case AF_INET:
-            ((struct sockaddr_in *)sa_dst)->sin_addr = ((struct sockaddr_in *)sa_src)->sin_addr;
-            break;
-
-        case AF_INET6:
-            ((struct sockaddr_in6 *)sa_dst)->sin6_addr = ((struct sockaddr_in6 *)sa_src)->sin6_addr;
-            break;
-    }
-
-    return 0;
-}
-
-static int add_remote_port(struct sockaddr_storage *sa, uint16_t remote_port) {
-    switch(sa->ss_family) {
-        case AF_INET:
-            ((struct sockaddr_in *)sa)->sin_port = htons(remote_port);
-            break;
-
-        case AF_INET6:
-            ((struct sockaddr_in6 *)sa)->sin6_port = htons(remote_port);
-            break;
-    }
-
-    return 0;
 }
 
 // twamp_callback_thread receive the reflected packets and return the result array

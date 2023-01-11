@@ -29,6 +29,8 @@
 #include <json.h>
 #endif
 
+#define TWAMP_DEFAULT_PORT "862"
+
 #define SIMET_TWAMP_IDCOOKIE_V1LEN 16
 #define SIMET_TWAMP_IDCOOKIE_V1SIG 0x83b8c493
 struct simet_cookie { /* max 24 bytes, refer to messages.h */
@@ -43,10 +45,12 @@ enum {
 };
 
 /* TWAMP parameters struct */
+/* all pointers are *not* owned by the struct */
 typedef struct twamp_parameters {
-    const char *host;
-    const char *port;
-    int family;
+    const char * const host;
+    const char * const port;
+    const struct sockaddr_storage * const source_ss;
+    sa_family_t family;
     int connect_timeout;
     int report_mode;
     unsigned int packets_count;
@@ -56,6 +60,8 @@ typedef struct twamp_parameters {
     unsigned long int packets_timeout_us;
 } TWAMPParameters;
 
+/* Context */
+/* Pointers are *not* owned by this struct */
 typedef struct twamp_test_parameters {
     int test_socket;
     struct timespec clock_offset;
@@ -68,7 +74,7 @@ typedef struct twamp_test_parameters {
 int twamp_run_client(TWAMPParameters * const param);
 int twamp_run_light_client(TWAMPParameters * const param);
 int twamp_report(TWAMPReport*, TWAMPParameters*);
-TWAMPReport * twamp_report_init(const int family, const char * const host);
+TWAMPReport * twamp_report_init(const sa_family_t family, const char * const host);
 void twamp_report_done(TWAMPReport *);
 int report_socket_metrics(TWAMPReport *, int sockfd, int sock_protocol);
 

@@ -25,6 +25,12 @@
 #include <string.h>
 #include <getopt.h>
 
+#include <ctype.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 #include <fcntl.h>
 #include <errno.h>
 
@@ -35,45 +41,52 @@
 int log_level = 2;
 const char* progname = PACKAGE_NAME;
 
-static const char program_copyright[]=
-    "Copyright (c) 2018,2019 NIC.br\n\n"
-    "This is free software; see the source for copying conditions.\n"
-    "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR\n"
-    "A PARTICULAR PURPOSE.\n";
+/*
+ * helpers
+ */
 
-static void print_version(void)
+/* lets not blind the type system just to squash a false-positive */
+static inline void free_constchar(const char *p) { free((void *)p); }
+
+/* strcmp with proper semanthics for NULL */
+static inline int xstrcmp(const char * const s1, const char * const s2)
 {
-    fprintf(stdout, "%s %s\n%s\n", PACKAGE_NAME, PACKAGE_VERSION, program_copyright);
-    exit(SEXIT_SUCCESS);
+    if (s1 && s2)
+        return strcmp(s1, s2);
+    if (!s1 && !s2)
+        return 0;
+    if (!s1)
+        return -1;
+    return 1;
 }
 
-static void print_usage(const char * const p, int mode)
+/* trim spaces, note we return NULL if the result is empty or ENOMEM */
+static char *strndup_trim(const char *s, size_t l)
 {
-    fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-m twamp|light] [-p <service port>] [-t <timeout>] "
-        "[-c <packet count>] [-s <payload size>] [-i <interpacket interval>] [-T <packet discard timeout>] "
-        "[-r <report mode>] [-o <path>] <server>\n", p);
-    if (mode) {
-        fprintf(stderr, "\n"
-            "\t-h\tprint usage help and exit\n"
-            "\t-V\tprint program version and copyright, and exit\n"
-            "\t-v\tverbose mode (repeat for increased verbosity)\n"
-            "\t-q\tquiet mode (repeat for errors-only)\n"
-            "\t-4\tuse IPv4, instead of system default\n"
-            "\t-6\tuse IPv6, instead of system default\n"
-            "\t-m\toperating mode: twamp (default), light\n"
-            "\t-t\tconnection timeout in seconds\n"
-            "\t-c\tnumber of packets to transmit per session\n"
-            "\t-s\tsize of the packet payload (UDP/IP headers not included)\n"
-            "\t-i\ttime in microseconds between each packet (lower bound)\n"
-            "\t-T\ttime in microseconds to wait for the last packet\n"
-            "\t-p\tservice name or numeric port of the TWAMP server\n"
-            "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
-            "\t-o\tredirect report output to <path>\n"
-            "\nserver: hostname or IP address of the TWAMP server\n\n");
-    }
-    exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
+    if (!s)
+        return NULL;
+
+    while (isspace(*s) && l > 0) {
+        s++;
+        l--;
+    };
+
+    if (!*s || l <= 0)
+        return NULL;
+
+    while (l > 0 && isspace(s[l-1]))
+        l--;
+
+    return (l > 0) ? strndup(s, l) : NULL;
 }
 
+/* trim spaces, note we return NULL if the result is empty or ENOMEM */
+static char *strdup_trim(const char *s)
+{
+    if (!s)
+        return NULL;
+    return strndup_trim(s, strlen(s));
+}
 
 static int is_valid_fd(const int fd)
 {
@@ -118,11 +131,159 @@ static void sanitize_std_fds(void)
    fix_fds(STDERR_FILENO, O_RDWR);
 }
 
+/* breaks name into hostname and port, either can be NULL */
+/* returns 0 ok, 1 error */
+static int cmdln_parse_hostport(const char *name, const char ** const phost, const char ** const pport)
+{
+    char *hostname = NULL;
+    char *port = NULL;
+    const char *r;
+
+    if (!name)
+        goto finish;
+
+    while (*name && isspace(*name))
+        name++;
+
+    if (!*name)
+        return 1;
+
+    r = name;
+
+    /* handle IPv6 [<ip address>]:<port> */
+    /* FIXME: this is lax, accepts [<dns hostname>] as well, and [<ipv4>], etc */
+    if (*name == '[') {
+        name++;
+        r = strchr(name, ']');
+        if (!r)
+            goto err_exit;
+
+        hostname = strndup_trim(name, (size_t)(r - name));
+        r++;
+
+        if (*r && *r != ':') {
+            while (*r && isspace(*r))
+                r++;
+            if (*r)
+                goto err_exit;
+            r = NULL;
+        }
+    } else {
+        r = strrchr(r, ':');
+        if (r) {
+            hostname = strndup_trim(name, (size_t)(r - name));
+        } else {
+            hostname = strdup_trim(name);
+        }
+    }
+
+    if (r && *r == ':') {
+        /* parse optional :<port> */
+        r++;
+        if (!*r)
+            goto err_exit;
+        port = strdup_trim(r);
+    }
+
+finish:
+    if (pport)
+        *pport = port;
+
+    if (phost)
+        *phost = hostname;
+
+    return 0;
+
+err_exit:
+    free(hostname);
+    free(port);
+    return 1;
+}
+
+static int cmdline_parse_bindsrc(const char * const p, struct sockaddr_storage *ss)
+{
+    const char *host = NULL;
+    const char *port = NULL;
+
+    struct addrinfo *res;
+    struct addrinfo hints = {
+        .ai_flags = AI_NUMERICSERV | AI_NUMERICHOST | AI_PASSIVE | AI_ADDRCONFIG,
+    };
+
+    if (!ss)
+        return 1;
+    if (cmdln_parse_hostport(p, &host, &port))
+        return 1;
+    if (!host && !port)
+        return 1;
+
+    hints.ai_family = (ss->ss_family != 0) ? ss->ss_family : AF_UNSPEC;
+    int s = getaddrinfo(host, port, &hints, &res);
+    if (s) {
+        print_err("%s: failed to resolve: %s", p, gai_strerror(s));
+        return 1;
+    }
+    if (!res) {
+        print_err("%s: address not found", p);
+        return 1;
+    }
+
+    memcpy(ss, res->ai_addr, res->ai_addrlen);
+
+    freeaddrinfo(res);
+    free_constchar(port);
+    free_constchar(host);
+
+    return 0;
+}
+
+static const char program_copyright[]=
+    "Copyright (c) 2018,2019 NIC.br\n\n"
+    "This is free software; see the source for copying conditions.\n"
+    "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR\n"
+    "A PARTICULAR PURPOSE.\n";
+
+static void print_version(void)
+{
+    fprintf(stdout, "%s %s\n%s\n", PACKAGE_NAME, PACKAGE_VERSION, program_copyright);
+    exit(SEXIT_SUCCESS);
+}
+
+static void print_usage(const char * const p, int mode)
+{
+    fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-m twamp|light] [-p <service port>] [-t <timeout>] "
+        "[-c <packet count>] [-s <payload size>] [-i <interpacket interval>] [-T <packet discard timeout>] "
+        "[-r <report mode>] [-o <path>] <server>\n", p);
+    if (mode) {
+        fprintf(stderr, "\n"
+            "\t-h\tprint usage help and exit\n"
+            "\t-V\tprint program version and copyright, and exit\n"
+            "\t-v\tverbose mode (repeat for increased verbosity)\n"
+            "\t-q\tquiet mode (repeat for errors-only)\n"
+            "\t-4\tuse IPv4, instead of system default\n"
+            "\t-6\tuse IPv6, instead of system default\n"
+            "\t-m\toperating mode: twamp (default), light\n"
+            "\t-t\tconnection timeout in seconds\n"
+            "\t-c\tnumber of packets to transmit per session\n"
+            "\t-s\tsize of the packet payload (UDP/IP headers not included)\n"
+            "\t-i\ttime in microseconds between each packet (lower bound)\n"
+            "\t-T\ttime in microseconds to wait for the last packet\n"
+            "\t-p\tservice name or numeric port of the TWAMP server\n"
+            "\t-I\tsource IP address and/or :port for TWAMP-Light TEST stream, use [] for ipv6 literals\n"
+            "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
+            "\t-o\tredirect report output to <path>\n"
+            "\nserver: hostname or IP address of the TWAMP server\n\n");
+    }
+    exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
+}
+
 int main(int argc, char **argv)
 {
     const char *host = NULL;
-    const char *port = "862";
-    int family = 0;
+    const char *port = TWAMP_DEFAULT_PORT;
+    struct sockaddr_storage *ss_source = NULL;
+
+    sa_family_t family = AF_UNSPEC;
     int connect_timeout = 15;
     int packet_count = 200;
     int payload_size = DFL_TSTPKT_SIZE;
@@ -136,7 +297,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVm:p:t:c:s:T:i:r:o:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:o:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -157,13 +318,25 @@ int main(int argc, char **argv)
             }
             break;
         case '4':
-            family = 4;
+            family = AF_INET;
             break;
         case '6':
-            family = 6;
+            family = AF_INET6;
             break;
         case 'p':
             port = optarg;
+            break;
+        case 'I':
+            ss_source = malloc(sizeof(*ss_source));
+            if (!ss_source)
+                exit(SEXIT_FAILURE);
+            memset(ss_source, 0, sizeof(*ss_source));
+
+            ss_source->ss_family = family;
+            if (cmdline_parse_bindsrc(optarg, ss_source)) {
+                print_err("invalid source interface address or port");
+                exit(SEXIT_FAILURE);
+            }
             break;
         case 't':
             connect_timeout = atoi(optarg);
@@ -211,6 +384,7 @@ int main(int argc, char **argv)
     TWAMPParameters param = {
         .host = host,
         .port = port,
+        .source_ss = ss_source,
         .family = family,
         .report_mode = report_mode,
         .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,
@@ -236,6 +410,8 @@ int main(int argc, char **argv)
     if (value != 0) {
         print_err("TWAMP-CLIENT ERROR");
     }
+
+    free(ss_source);
 
     return value;
 }

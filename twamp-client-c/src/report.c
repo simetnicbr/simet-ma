@@ -71,7 +71,7 @@ static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
     json_object_array_add(j, json_object_new_string(buf));
 }
 
-static const char *str_ip46(int ai_family)
+static const char *str_ip46(sa_family_t ai_family)
 {
     switch (ai_family) {
     case AF_INET:
@@ -368,7 +368,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
  *
  * Returns NULL on ENOMEM.
  */
-TWAMPReport * twamp_report_init(const int family, const char * const host)
+TWAMPReport * twamp_report_init(const sa_family_t family, const char * const host)
 {
     struct twamp_report_private *rp = NULL;
     TWAMPResult *tr = NULL;
