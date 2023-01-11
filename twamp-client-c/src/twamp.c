@@ -781,6 +781,7 @@ static int twamp_test(TestParameters * const test_param) {
     unsigned int counter = 0;
     unsigned int error_counter = 0;
     void *thread_retval = NULL;
+    int thread_started = 0;
     int rc = SEXIT_SUCCESS;
     int ret;
 
@@ -817,6 +818,7 @@ static int twamp_test(TestParameters * const test_param) {
        }
        goto err_out;
     }
+    thread_started = 1;
 
     print_msg(MSG_DEBUG, "sending test packets...");
 
@@ -850,17 +852,23 @@ static int twamp_test(TestParameters * const test_param) {
 
     test_param->report->result->packets_sent = counter;
 
-    /* we expect to wait here on pthread_join */
-    if (pthread_join(receiver_thread, &thread_retval) == 0) {
-        rc = (thread_retval) ? *(int *)thread_retval : SEXIT_SUCCESS;
-        if (rc == SEXIT_SUCCESS)
-           print_msg(MSG_DEBUG, "[THREAD] twamp_callback_thread ended OK!");
-    } else {
-        print_warn("[THREAD] twamp_callback_thread ended with problem!");
-        rc = SEXIT_INTERNALERR;
+err_out:
+    if (thread_started) {
+        int trc = SEXIT_INTERNALERR;
+
+        if (pthread_join(receiver_thread, &thread_retval) == 0) {
+            trc = (thread_retval) ? *(int *)thread_retval : SEXIT_SUCCESS;
+            if (trc == SEXIT_SUCCESS) {
+               print_msg(MSG_DEBUG, "[THREAD] twamp_callback_thread finished successfully");
+            }
+        } else {
+            print_err("[THREAD] failed to join twamp_callback_thread");
+        }
+        if (rc == SEXIT_SUCCESS && trc != SEXIT_SUCCESS) {
+            rc = trc;
+        }
     }
 
-err_out:
     free(packet);
     return rc;
 }
