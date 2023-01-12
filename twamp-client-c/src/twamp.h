@@ -63,6 +63,7 @@ typedef struct twamp_parameters {
 /* Context */
 /* Pointers are *not* owned by this struct */
 typedef struct twamp_test_context {
+    volatile int abort_test; /* NZ = stop test */
     int test_socket;
     struct timespec clock_offset;
     int cookie_enabled;

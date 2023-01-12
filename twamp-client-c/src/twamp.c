@@ -688,10 +688,9 @@ MEM_FREE:
     return rc;
 }
 
-// twamp_callback_thread receive the reflected packets and return the result array
-// non-reentrant due to static return_result
+/* twamp_callback_thread receive the reflected packets and return the result array
+   non-reentrant due to static return_result */
 static void *twamp_callback_thread(void *p) {
-    TWAMPContext *t_ctx = (TWAMPContext *)p;
     size_t bytes_recv = 0;
     int ret;
     unsigned int pkg_count = 0;
@@ -701,6 +700,14 @@ static void *twamp_callback_thread(void *p) {
     struct timespec ts_recv;
 
     static int return_result; /* must be static! */
+
+    if (!p) {
+        /* better than a segfault, at least... */
+        return_result = SEXIT_INTERNALERR;
+        return &return_result;
+    }
+
+    TWAMPContext * const t_ctx = (TWAMPContext *)p;
 
     /* what we need to add to CLOCK_MONOTONIC to get absolute time */
     const struct timespec ts_offset = t_ctx->clock_offset;
@@ -729,7 +736,7 @@ static void *twamp_callback_thread(void *p) {
     gettimeofday(&tv_cur, NULL);
     timeradd(&tv_cur, &to, &tv_stop);
 
-    while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_ctx->param.packets_max)) {
+    while (!t_ctx->abort_test && timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
         ret = receive_reflected_packet(t_ctx->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
 
@@ -758,6 +765,9 @@ static void *twamp_callback_thread(void *p) {
 
     ret = SEXIT_SUCCESS;
 
+    if (t_ctx->abort_test)
+        print_msg(MSG_DEBUG, "[THREAD] receiving thread stopping early due to abort_test flag");
+
 error_out:
     // Store total received packets
     t_ctx->report->result->packets_received = pkg_count;
@@ -769,6 +779,11 @@ error_out:
             print_err("all received packets were dropped for being incorrect, assuming software error");
             ret = SEXIT_CTRLPROT_ERR;
         }
+    }
+
+    if (ret != SEXIT_SUCCESS) {
+        /* signal sending thread that it can stop early */
+        t_ctx->abort_test = 1;
     }
 
     free(reflectedPacket);
@@ -792,6 +807,10 @@ static int twamp_test(TWAMPContext * const test_ctx) {
        print_err("Error allocating memory for test packet to send");
        return SEXIT_OUTOFRESOURCE;
     }
+
+    /* right now it is one fresh context per test... */
+    if (test_ctx->abort_test)
+        return SEXIT_FAILURE;
 
     if (test_ctx->cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
@@ -823,7 +842,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     print_msg(MSG_DEBUG, "sending test packets...");
 
     // Sending test packets
-    while (counter < test_ctx->param.packets_count) {
+    while (!test_ctx->abort_test && counter < test_ctx->param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter);
 
@@ -846,15 +865,24 @@ static int twamp_test(TWAMPContext * const test_ctx) {
                 goto err_out;
             }
         }
+
         /* FIXME: switch to clock_nanosleep with absolute time -- but check musl/openwrt */
-        usleep(test_ctx->param.packets_interval_us);
+        if (!test_ctx->abort_test)
+            usleep(test_ctx->param.packets_interval_us);
     }
 
     test_ctx->report->result->packets_sent = counter;
 
+    if (test_ctx->abort_test)
+        print_msg(MSG_DEBUG, "[THREAD] sending thread stopping early due to abort_test flag");
+
 err_out:
     if (thread_started) {
         int trc = SEXIT_INTERNALERR;
+
+        /* signal other thread to exit */
+        if (rc != SEXIT_SUCCESS)
+            test_ctx->abort_test = 1;
 
         if (pthread_join(receiver_thread, &thread_retval) == 0) {
             trc = (thread_retval) ? *(int *)thread_retval : SEXIT_SUCCESS;
@@ -870,7 +898,8 @@ err_out:
     }
 
     free(packet);
-    return rc;
+
+    return (rc != SEXIT_SUCCESS)? rc : ((test_ctx->abort_test)? SEXIT_FAILURE : SEXIT_SUCCESS);
 }
 
 static int receive_reflected_packet(int socket, struct timeval *timeout,
