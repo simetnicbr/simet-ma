@@ -33,10 +33,14 @@
 
 #include <fcntl.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "simet_err.h"
 #include "logger.h"
 
+/* We depend on these */
+static_assert(sizeof(int) >= 4, "code assumes (int) is at least 32 bits");
+static_assert(sizeof(long long) >= 8, "code assumes (long long) is at least 64 bits");
 
 int log_level = 2;
 const char* progname = PACKAGE_NAME;
@@ -391,8 +395,8 @@ int main(int argc, char **argv)
         .packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count),
         .payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE),
         .packets_max = param.packets_count * 2,
-        .packets_interval_us = (packet_interval_us > 0) ? (unsigned long int) packet_interval_us : 30000U,
-        .packets_timeout_us = (packet_timeout_us > 0) ? (unsigned long int) packet_timeout_us : 100000U,
+        .packets_interval_us = (packet_interval_us > 0) ? (unsigned int) packet_interval_us : 30000U,
+        .packets_timeout_us = (packet_timeout_us > 0) ? (unsigned int) packet_timeout_us : 100000U,
     };
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");

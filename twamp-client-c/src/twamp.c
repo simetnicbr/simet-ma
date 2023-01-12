@@ -41,6 +41,10 @@
 
 #include "libubox/usock.h"
 
+/* Ensure some invariants the code assumes */
+static_assert(sizeof(int) >= 4, "code assumes (int) is at least 32 bits");
+static_assert(sizeof(long long) >= 8, "code assumes (long long int) is at least 64 bits");
+
 static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
 static int twamp_test(TWAMPContext * const);
