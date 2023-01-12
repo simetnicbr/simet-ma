@@ -62,14 +62,14 @@ typedef struct twamp_parameters {
 
 /* Context */
 /* Pointers are *not* owned by this struct */
-typedef struct twamp_test_parameters {
+typedef struct twamp_test_context {
     int test_socket;
     struct timespec clock_offset;
     int cookie_enabled;
     struct simet_cookie cookie;
     TWAMPParameters param;
     TWAMPReport * report;
-} TestParameters;
+} TWAMPContext;
 
 int twamp_run_client(TWAMPParameters * const param);
 int twamp_run_light_client(TWAMPParameters * const param);

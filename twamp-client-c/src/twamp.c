@@ -43,7 +43,7 @@
 
 static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
-static int twamp_test(TestParameters * const);
+static int twamp_test(TWAMPContext * const);
 
 static int usock_convert_family(sa_family_t family) {
     if (family == AF_INET) {
@@ -132,12 +132,12 @@ static int twamp_rawdata_init(unsigned int num_packets, TWAMPRawData **pbuffer)
     return 0;
 }
 
-static int twamp_run_prepare(TestParameters *t_param, TWAMPParameters *param)
+static int twamp_run_prepare(TWAMPContext *t_ctx, TWAMPParameters *param)
 {
-    if (!t_param || !param)
+    if (!t_ctx || !param)
         return SEXIT_INTERNALERR;
 
-    memset(t_param, 0, sizeof(*t_param));
+    memset(t_ctx, 0, sizeof(*t_ctx));
 
     if (param->packets_count > param->packets_max) {
         print_err("Configuration error: packet train length (%u) too big (max %u)", param->packets_count, param->packets_max);
@@ -173,8 +173,8 @@ static int twamp_run_prepare(TestParameters *t_param, TWAMPParameters *param)
     if (rc)
         return rc;
 
-    memcpy(&t_param->param, param, sizeof(t_param->param));
-    t_param->report = report;
+    memcpy(&t_ctx->param, param, sizeof(t_ctx->param));
+    t_ctx->report = report;
     return 0;
 }
 
@@ -267,8 +267,8 @@ int twamp_run_light_client(TWAMPParameters * const param)
     int fd_test = -1;
     int do_report = 0;
 
-    TestParameters t_param;
-    int rc = twamp_run_prepare(&t_param, param);
+    TWAMPContext t_ctx;
+    int rc = twamp_run_prepare(&t_ctx, param);
     if (rc != 0)
         return rc;
 
@@ -296,23 +296,23 @@ int twamp_run_light_client(TWAMPParameters * const param)
     if (get_ip_str(&remote_addr_measure, hostAddr, INET6_ADDRSTRLEN) == NULL) {
         print_warn("get_ip_str problem");
     }
-    t_param.report->address = hostAddr;
+    t_ctx.report->address = hostAddr;
 
-    if (report_socket_metrics(t_param.report, fd_test, IPPROTO_UDP)) {
+    if (report_socket_metrics(t_ctx.report, fd_test, IPPROTO_UDP)) {
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     } else {
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
     }
 
     print_msg(MSG_NORMAL, "measurement starting...");
-    t_param.test_socket = fd_test;
+    t_ctx.test_socket = fd_test;
 
-    rc = twamp_test(&t_param);
-    do_report = (rc == SEXIT_SUCCESS || (rc == SEXIT_MP_TIMEOUT && t_param.report->result->packets_received > 0));
+    rc = twamp_test(&t_ctx);
+    do_report = (rc == SEXIT_SUCCESS || (rc == SEXIT_MP_TIMEOUT && t_ctx.report->result->packets_received > 0));
 
     /* Change to SEXIT_OUTOFRESOURCE if we got way too many duplicates */
     if (rc == SEXIT_SUCCESS &&
-            t_param.report->result->packets_received >= t_param.param.packets_max) {
+            t_ctx.report->result->packets_received >= t_ctx.param.packets_max) {
         rc = SEXIT_OUTOFRESOURCE;
         print_warn("Received too many packets, test aborted with partial results");
     }
@@ -322,8 +322,8 @@ int twamp_run_light_client(TWAMPParameters * const param)
 
     /* FIXME: remove or repurpose packets_dropped_timeout */
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
-            t_param.report->result->packets_sent, t_param.report->result->packets_received,
-            t_param.report->result->packets_dropped_timeout);
+            t_ctx.report->result->packets_sent, t_ctx.report->result->packets_received,
+            t_ctx.report->result->packets_dropped_timeout);
 
 TEST_EXIT:
     if (fd_test >= 0) {
@@ -340,9 +340,9 @@ TEST_EXIT:
     }
 
     if (do_report)
-        twamp_report(t_param.report, param);
-    twamp_report_done(t_param.report);
-    t_param.report = NULL;
+        twamp_report(t_ctx.report, param);
+    twamp_report_done(t_ctx.report);
+    t_ctx.report = NULL;
 
     return rc;
 }
@@ -355,8 +355,8 @@ int twamp_run_client(TWAMPParameters * const param)
     char * testPort = NULL;
     int do_report = 0;
 
-    TestParameters t_param;
-    rc = twamp_run_prepare(&t_param, param);
+    TWAMPContext t_ctx;
+    rc = twamp_run_prepare(&t_ctx, param);
     if (rc)
         return rc;
 
@@ -427,7 +427,7 @@ int twamp_run_client(TWAMPParameters * const param)
     if (get_ip_str(&remote_addr_control, hostAddr, INET6_ADDRSTRLEN) == NULL) {
         print_warn("get_ip_str problem");
     }
-    t_param.report->address = hostAddr;
+    t_ctx.report->address = hostAddr;
 
     /* Update possibly AF_UNSPEC to real family */
     param->family = remote_addr_control.ss_family;
@@ -561,11 +561,11 @@ int twamp_run_client(TWAMPParameters * const param)
         goto TEST_CLOSE;
     }
 
-    t_param.cookie_enabled = simet_generate_cookie(&t_param.cookie, actSession->SID, sizeof(actSession->SID));
+    t_ctx.cookie_enabled = simet_generate_cookie(&t_ctx.cookie, actSession->SID, sizeof(actSession->SID));
 
     /* FIXME: log this better */
     uint16_t receiver_port = actSession->Port;
-    t_param.report->serverPort = (unsigned int)receiver_port;
+    t_ctx.report->serverPort = (unsigned int)receiver_port;
     print_msg(MSG_DEBUG, "session port: %" PRIu16, receiver_port);
 
     testPort = malloc(sizeof(char) * 6);
@@ -591,7 +591,7 @@ int twamp_run_client(TWAMPParameters * const param)
         goto TEST_CLOSE;
     }
 
-    if (report_socket_metrics(t_param.report, fd_test, IPPROTO_UDP))
+    if (report_socket_metrics(t_ctx.report, fd_test, IPPROTO_UDP))
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     else
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
@@ -621,15 +621,15 @@ int twamp_run_client(TWAMPParameters * const param)
     do_report = 1;
 
     print_msg(MSG_NORMAL, "measurement starting...");
-    t_param.test_socket = fd_test;
+    t_ctx.test_socket = fd_test;
 
-    rc = twamp_test(&t_param);
+    rc = twamp_test(&t_ctx);
     if (rc == SEXIT_OUTOFRESOURCE)
         goto TEST_CLOSE;
 
     /* Change to SEXIT_OUTOFRESOURCE if we got way too many duplicates */
     if (rc == SEXIT_SUCCESS &&
-            t_param.report->result->packets_received >= t_param.param.packets_max) {
+            t_ctx.report->result->packets_received >= t_ctx.param.packets_max) {
         rc = SEXIT_OUTOFRESOURCE;
         print_warn("Received too many packets, test aborted with partial results");
     }
@@ -646,8 +646,8 @@ int twamp_run_client(TWAMPParameters * const param)
 
     /* FIXME: remove or repurpose packets_dropped_timeout */
     print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
-            t_param.report->result->packets_sent, t_param.report->result->packets_received,
-            t_param.report->result->packets_dropped_timeout);
+            t_ctx.report->result->packets_sent, t_ctx.report->result->packets_received,
+            t_ctx.report->result->packets_dropped_timeout);
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
@@ -681,9 +681,9 @@ MEM_FREE:
     free(testPort);
 
     if (do_report)
-        twamp_report(t_param.report, param);
-    twamp_report_done(t_param.report);
-    t_param.report = NULL;
+        twamp_report(t_ctx.report, param);
+    twamp_report_done(t_ctx.report);
+    t_ctx.report = NULL;
 
     return rc;
 }
@@ -691,7 +691,7 @@ MEM_FREE:
 // twamp_callback_thread receive the reflected packets and return the result array
 // non-reentrant due to static return_result
 static void *twamp_callback_thread(void *p) {
-    TestParameters *t_param = (TestParameters *)p;
+    TWAMPContext *t_ctx = (TWAMPContext *)p;
     size_t bytes_recv = 0;
     int ret;
     unsigned int pkg_count = 0;
@@ -703,9 +703,9 @@ static void *twamp_callback_thread(void *p) {
     static int return_result; /* must be static! */
 
     /* what we need to add to CLOCK_MONOTONIC to get absolute time */
-    const struct timespec ts_offset = t_param->clock_offset;
+    const struct timespec ts_offset = t_ctx->clock_offset;
 
-    const unsigned int expected_pktsize = t_param->param.payload_size;
+    const unsigned int expected_pktsize = t_ctx->param.payload_size;
     assert(expected_pktsize >= sizeof(UnauthReflectedPacket));
     // FIXME: drop this double copying
     UnauthReflectedPacket *reflectedPacket = calloc(1, expected_pktsize);
@@ -718,8 +718,8 @@ static void *twamp_callback_thread(void *p) {
     print_msg(MSG_NORMAL, "reflected packet receiving thread started");
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
-    unsigned long long int tt_us = t_param->param.packets_count * t_param->param.packets_interval_us
-                                   + t_param->param.packets_timeout_us;
+    unsigned long long int tt_us = t_ctx->param.packets_count * t_ctx->param.packets_interval_us
+                                   + t_ctx->param.packets_timeout_us;
     /* clamp to 10 minutes */
     if (tt_us > 600000000UL)
         tt_us = 600000000UL;
@@ -729,9 +729,9 @@ static void *twamp_callback_thread(void *p) {
     gettimeofday(&tv_cur, NULL);
     timeradd(&tv_cur, &to, &tv_stop);
 
-    while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_param->param.packets_max)) {
+    while (timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
-        ret = receive_reflected_packet(t_param->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
+        ret = receive_reflected_packet(t_ctx->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
 
         if (clock_gettime(CLOCK_MONOTONIC, &ts_recv)) {
             ret = SEXIT_INTERNALERR;
@@ -745,9 +745,9 @@ static void *twamp_callback_thread(void *p) {
 
         if (bytes_recv == expected_pktsize) {
             // Save result
-            t_param->report->result->raw_data[pkg_count].time = relative_timespec_to_timestamp(&ts_recv, &ts_offset);
+            t_ctx->report->result->raw_data[pkg_count].time = relative_timespec_to_timestamp(&ts_recv, &ts_offset);
             /* FIXME: zero-copy this! */
-            memcpy(&(t_param->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
+            memcpy(&(t_ctx->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
             pkg_count++;
         } else {
             // Something is wrong
@@ -760,7 +760,7 @@ static void *twamp_callback_thread(void *p) {
 
 error_out:
     // Store total received packets
-    t_param->report->result->packets_received = pkg_count;
+    t_ctx->report->result->packets_received = pkg_count;
 
     if (pkg_corrupt > 0) {
         print_warn("received and dropped %u incorrecly sized packets", pkg_corrupt);
@@ -776,7 +776,7 @@ error_out:
     return &return_result;
 }
 
-static int twamp_test(TestParameters * const test_param) {
+static int twamp_test(TWAMPContext * const test_ctx) {
     struct timespec ts_offset, ts_cur;
     unsigned int counter = 0;
     unsigned int error_counter = 0;
@@ -785,7 +785,7 @@ static int twamp_test(TestParameters * const test_param) {
     int rc = SEXIT_SUCCESS;
     int ret;
 
-    const unsigned int pktsize = test_param->param.payload_size;
+    const unsigned int pktsize = test_ctx->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
     UnauthPacket *packet = calloc(1, pktsize);
     if (!packet) {
@@ -793,9 +793,9 @@ static int twamp_test(TestParameters * const test_param) {
        return SEXIT_OUTOFRESOURCE;
     }
 
-    if (test_param->cookie_enabled) {
+    if (test_ctx->cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
-        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &(test_param->cookie));
+        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &(test_ctx->cookie));
     }
 
     if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
@@ -804,10 +804,10 @@ static int twamp_test(TestParameters * const test_param) {
     }
     timespec_to_offset(&ts_offset, &ts_cur);
 
-    test_param->clock_offset = ts_offset;
+    test_ctx->clock_offset = ts_offset;
 
     pthread_t receiver_thread;
-    ret = pthread_create(&receiver_thread, NULL, twamp_callback_thread, test_param);
+    ret = pthread_create(&receiver_thread, NULL, twamp_callback_thread, test_ctx);
     if (ret) {
        if (ret == EAGAIN) {
           print_err("No resources to create reflected packets receiving thread");
@@ -823,7 +823,7 @@ static int twamp_test(TestParameters * const test_param) {
     print_msg(MSG_DEBUG, "sending test packets...");
 
     // Sending test packets
-    while (counter < test_param->param.packets_count) {
+    while (counter < test_ctx->param.packets_count) {
         // Set packet counter
         packet->SeqNumber = htonl(counter);
 
@@ -835,7 +835,7 @@ static int twamp_test(TestParameters * const test_param) {
         packet->Time = hton_timestamp(relative_timespec_to_timestamp(&ts_cur, &ts_offset));
 
         /* TODO: send directly? */
-        if (message_send(test_param->test_socket, 5, packet, test_param->param.payload_size) >= 0) {
+        if (message_send(test_ctx->test_socket, 5, packet, test_ctx->param.payload_size) >= 0) {
             counter++;
         } else {
             error_counter++;
@@ -847,10 +847,10 @@ static int twamp_test(TestParameters * const test_param) {
             }
         }
         /* FIXME: switch to clock_nanosleep with absolute time -- but check musl/openwrt */
-        usleep(test_param->param.packets_interval_us);
+        usleep(test_ctx->param.packets_interval_us);
     }
 
-    test_param->report->result->packets_sent = counter;
+    test_ctx->report->result->packets_sent = counter;
 
 err_out:
     if (thread_started) {
