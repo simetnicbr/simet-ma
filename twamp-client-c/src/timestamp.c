@@ -37,7 +37,8 @@ Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, c
     nsec = ts_now->tv_nsec + ts_offset->tv_nsec;
 
     /* our two input timespecs are assumed to be normalized already,
-     * but we MUST normalize the result or Bad Things Will Happen */
+     * but we MUST normalize the result or Bad Things Will Happen.
+     * Note that POSIX forbids nsec < 0 */
     while (nsec > 1000000000L) {
 	sec++;
 	nsec -= 1000000000L;

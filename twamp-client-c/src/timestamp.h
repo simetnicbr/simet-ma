@@ -15,8 +15,8 @@
  * for details.
  */
 
-#ifndef NTP_TIMESTAMP_H_
-#define NTP_TIMESTAMP_H_
+#ifndef TWAMP_NTP_TIMESTAMP_H_
+#define TWAMP_NTP_TIMESTAMP_H_
 
 #include <inttypes.h>
 
@@ -78,4 +78,10 @@ static inline void timespec_to_offset(struct timespec * const ts_target, const s
     ts_target->tv_nsec -= ts_reference->tv_nsec;
 }
 
-#endif /* NTP_TIMESTAMP_H_ */
+/* ts1, ts2 must be normalized */
+static inline int timespec_lt(const struct timespec ts1, const struct timespec ts2)
+{
+    return (ts1.tv_sec < ts2.tv_sec || (ts1.tv_sec == ts2.tv_sec && ts1.tv_nsec < ts2.tv_nsec));
+}
+
+#endif /* TWAMP_NTP_TIMESTAMP_H_ */
