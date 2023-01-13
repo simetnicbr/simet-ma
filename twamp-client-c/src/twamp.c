@@ -700,8 +700,8 @@ static void *twamp_callback_thread(void *p) {
     unsigned int pkg_count = 0;
     unsigned int pkg_corrupt = 0;
 
-    struct timeval tv_cur, tv_stop, to;
-    struct timespec ts_recv;
+    struct timespec ts_cur, ts_stop, ts_recv;
+    struct timeval to;
 
     static int return_result; /* must be static! */
 
@@ -729,18 +729,24 @@ static void *twamp_callback_thread(void *p) {
     print_msg(MSG_NORMAL, "reflected packet receiving thread started");
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
-    unsigned long long int tt_us = t_ctx->param.packets_count * t_ctx->param.packets_interval_us
-                                   + t_ctx->param.packets_timeout_us;
+    uint64_t tt_us = t_ctx->param.packets_count * t_ctx->param.packets_interval_us
+                     + t_ctx->param.packets_timeout_us;
     /* clamp to 10 minutes */
-    if (tt_us > 600000000UL)
-        tt_us = 600000000UL;
-    to.tv_sec = tt_us / 1000000U;
-    to.tv_usec = tt_us - (to.tv_sec * 1000000U);
+    if (tt_us > 600000000)
+        tt_us = 600000000;
 
-    gettimeofday(&tv_cur, NULL);
-    timeradd(&tv_cur, &to, &tv_stop);
+    to.tv_sec  = (time_t)(tt_us / 1000000);
+    to.tv_usec = (suseconds_t)(tt_us % 1000000);
 
-    while (!t_ctx->abort_test && timercmp(&tv_cur, &tv_stop, <) && (pkg_count < t_ctx->param.packets_max)) {
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+        ret = SEXIT_INTERNALERR;
+        goto error_out;
+    }
+    ts_stop = ts_cur;
+    ts_stop.tv_sec  += to.tv_sec;
+    ts_stop.tv_nsec += to.tv_usec * 1000;
+
+    while (!t_ctx->abort_test && timespec_lt(ts_cur, ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
         ret = receive_reflected_packet(t_ctx->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
 
@@ -764,7 +770,13 @@ static void *twamp_callback_thread(void *p) {
             // Something is wrong
             pkg_corrupt++;
         }
-        gettimeofday(&tv_cur, NULL);
+
+        if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+            ret = SEXIT_INTERNALERR;
+            goto error_out;
+        }
+
+        /* FIXME: recalculate timespec "to" every so often, to avoid sistemic error */
     }
 
     ret = SEXIT_SUCCESS;
