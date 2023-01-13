@@ -816,6 +816,10 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     int rc = SEXIT_SUCCESS;
     int ret;
 
+#ifdef HAVE_CLOCK_NANOSLEEP
+    struct timespec ts_sleep = { 0 };
+#endif
+
     const unsigned int pktsize = test_ctx->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
     UnauthPacket *packet = calloc(1, pktsize);
@@ -882,9 +886,27 @@ static int twamp_test(TWAMPContext * const test_ctx) {
             }
         }
 
-        /* FIXME: switch to clock_nanosleep with absolute time -- but check musl/openwrt */
+#ifdef HAVE_CLOCK_NANOSLEEP
+        if (!ts_sleep.tv_sec && !ts_sleep.tv_nsec)
+            ts_sleep = ts_cur;
+
+        ts_sleep.tv_nsec += test_ctx->param.packets_interval_us * 1000;
+        while (ts_sleep.tv_nsec > 1000000000) {
+            ts_sleep.tv_sec++;
+            ts_sleep.tv_nsec -= 1000000000;
+        }
+
+        if (!test_ctx->abort_test) {
+            if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_sleep, NULL)) {
+                /* We abort on EINTR... */
+                rc = (errno == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
+                goto err_out;
+            }
+        }
+#else
         if (!test_ctx->abort_test)
             usleep(test_ctx->param.packets_interval_us);
+#endif
     }
 
     test_ctx->report->result->packets_sent = counter;
