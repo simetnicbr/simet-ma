@@ -23,8 +23,8 @@
 #include "message.h"
 
 typedef struct twamp_raw_data {
-    UnauthReflectedPacket data;
     Timestamp time;
+    UnauthReflectedPacket data;
 } TWAMPRawData;
 
 typedef struct twamp_result {
