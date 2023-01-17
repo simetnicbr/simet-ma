@@ -692,6 +692,19 @@ MEM_FREE:
     return rc;
 }
 
+static inline int twamp_check_pkt(const UnauthReflectedPacket * const pkt, const uint32_t max_pkt)
+{
+    /* fast-detect badly corrupted packets, such as what a recursive
+     * DNS resolver would send in reply to a twamp-test packet, etc.
+     *
+     * Not needed in authenticated modes.
+     *
+     * Returns 0 if invalid.
+     */
+    return (pkt->SenderTime.integer != 0 && pkt->SenderTime.fractional != 0
+            && pkt->SeqNumber < max_pkt && pkt->SenderSeqNumber < max_pkt);
+}
+
 /* twamp_callback_thread receive the reflected packets and return the result array
    non-reentrant due to static return_result */
 static void *twamp_callback_thread(void *p) {
@@ -760,7 +773,7 @@ static void *twamp_callback_thread(void *p) {
         if (ret != SEXIT_SUCCESS)
             goto error_out;
 
-        if (bytes_recv == expected_pktsize) {
+        if (bytes_recv == expected_pktsize && twamp_check_pkt(reflectedPacket, t_ctx->param.packets_max)) {
             // Save result
             t_ctx->report->result->raw_data[pkg_count].time = relative_timespec_to_timestamp(&ts_recv, &ts_offset);
             /* FIXME: zero-copy this! */
@@ -769,6 +782,12 @@ static void *twamp_callback_thread(void *p) {
         } else {
             // Something is wrong
             pkg_corrupt++;
+
+            if (pkg_corrupt >= 3 && pkg_count == 0) {
+                /* abort early if all we get are corrupt packets */
+                ret = SEXIT_CTRLPROT_ERR; /* just in case, error_out can change it */
+                goto error_out;
+            }
         }
 
         if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
@@ -789,7 +808,7 @@ error_out:
     t_ctx->report->result->packets_received = pkg_count;
 
     if (pkg_corrupt > 0) {
-        print_warn("received and dropped %u incorrecly sized packets", pkg_corrupt);
+        print_warn("received and dropped %u incorrecly reflected packets", pkg_corrupt);
         /* if every packet received was corrupt, abort the test !*/
         if (!pkg_count) {
             print_err("all received packets were dropped for being incorrect, assuming software error");
