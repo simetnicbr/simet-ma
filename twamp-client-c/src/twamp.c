@@ -701,7 +701,7 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
         /* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
         fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
         if (fd_ready > 0 && FD_ISSET(socket, &rset)) {
-            recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC || MSG_DONTWAIT);
+            recv_size = recv(socket, reflectedPacket, sizeof(UnauthReflectedPacket), MSG_TRUNC | MSG_DONTWAIT);
 
             // Caso recv apresente algum erro
             if (recv_size < 0) {
