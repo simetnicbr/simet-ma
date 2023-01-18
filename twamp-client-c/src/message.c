@@ -161,7 +161,7 @@ ssize_t message_send(const int socket, const int timeout, void * const message, 
     }
 
     FD_ZERO(&wset_master);
-    FD_SET((unsigned long)socket, &wset_master);
+    FD_SET(socket, &wset_master);
 
     tv_timeo.tv_sec = timeout;
     tv_timeo.tv_usec = 0;
