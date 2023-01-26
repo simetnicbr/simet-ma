@@ -343,12 +343,12 @@ static const char *str_ipv46(int ai_family)
     do { \
         if (log_level >= aloglevel) { \
             fflush(stdout); \
-            fprintf(stderr, "%s: trace@%lds: %s(%u)@%lds: " format "\n", progname, \
-                    (long int)reltime() - client_start_timestamp, \
-                    str_ipv46(protocol_stream->conn.ai_family), protocol_stream->connection_id, \
+            fprintf(stderr, "%s: trace@%llds: %s(%u)@%llds: " format "\n", progname, \
+                    (long long)reltime() - client_start_timestamp, \
+                    str_ipv46(protocol_stream->conn.ai_family), (unsigned int) protocol_stream->connection_id, \
                     (protocol_stream->connect_timestamp) ? \
-                        (long int)reltime() - protocol_stream->connect_timestamp : \
-                        0, \
+                        (long long)reltime() - protocol_stream->connect_timestamp : \
+                        0LL, \
                     ## arg); \
         } \
     } while (0)
