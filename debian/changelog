@@ -1,3 +1,12 @@
+simet-ma (0.17.9.3) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.3
+  * inetup: fix double-free on error path
+  * inetup: avoid SIGSEGV with 64-bit time_t on 32-bit
+  * simet-api: simetbox: reload lmapd through lmapctl, instead of initscript
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 26 Jan 2023 15:40:39 -0300
+
 simet-ma (0.17.9.2) unstable; urgency=medium
 
   * simet-ma version 0.17.9.2
