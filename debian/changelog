@@ -1,3 +1,10 @@
+simet-ma (0.17.9.4) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.4
+  * simetbox: fix vlabel generation for some devices with UBIFS
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 03 Feb 2023 13:59:27 -0300
+
 simet-ma (0.17.9.3) unstable; urgency=medium
 
   * simet-ma version 0.17.9.3
