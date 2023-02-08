@@ -112,7 +112,7 @@ static int message_send(int socket, int timeout, void *message, size_t len)
     struct timeval tv_timeo;
 
     FD_ZERO(&wset_master);
-    FD_SET((unsigned long)socket, &wset_master);
+    FD_SET(socket, &wset_master);
 
     tv_timeo.tv_sec = timeout;
     tv_timeo.tv_usec = 0;
@@ -125,7 +125,7 @@ static int message_send(int socket, int timeout, void *message, size_t len)
         if (fd_ready <= 0) {
             print_warn("select: %i", fd_ready);
 	} else {
-            if (FD_ISSET((unsigned long)socket, &wset)) {
+            if (FD_ISSET(socket, &wset)) {
                 send_size = send(socket, message + send_total, len - (unsigned long)send_total, 0);
                 send_total += send_size;
 
