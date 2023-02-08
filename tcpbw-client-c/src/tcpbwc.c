@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
 	}
 	srandom((long int)(now.tv_nsec + now.tv_sec) & INT_MAX);
 	snprintf(token, 64, "TCPC%lx%lx%lxCPCT",
-		(long int)now.tv_nsec, (long int)now.tv_sec, random());
+		(unsigned long) now.tv_nsec, (unsigned long) now.tv_sec, (unsigned long) random());
 	print_msg(MSG_DEBUG, "generated session id: %s", token);
     }
 
@@ -216,9 +216,9 @@ int main(int argc, char **argv) {
 	.token = token,
 	.family = family,
 	.report_mode = report_mode,
-	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : timeout_test,
-	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : numstreams,
-	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : test_lenght,
+	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test,
+	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams,
+	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght,
 	.sessionid = NULL,
 	.sample_period_ms = 500U,
     };

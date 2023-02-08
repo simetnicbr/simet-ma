@@ -45,6 +45,6 @@ struct MemoryStruct {
 
 int tcp_client_run(MeasureContext);
 
-#define MAX_CONCURRENT_SESSIONS 50U
+#define MAX_CONCURRENT_SESSIONS 50
 
 #endif /* TCP_H_ */
