@@ -106,40 +106,55 @@ static size_t new_tcp_buffer(int sockfd, void **p)
     return buf ? buflen : 0;
 }
 
-static int message_send(const int socket, const int timeout, const void * const message, size_t len)
+/* sends full message with a timeout, returns -1 on error */
+static ssize_t message_send(const int socket, const int timeout, const void * const message, size_t len)
 {
-    int send_size = 0, send_total = 0;
-    int fd_ready = 0;
     fd_set wset, wset_master;
-    struct timeval tv_timeo;
+    int fd_ready = 0;
+
+    struct timespec ts_cur, ts_stop;
 
     FD_ZERO(&wset_master);
     FD_SET(socket, &wset_master);
 
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	return -1;
+    }
+    ts_stop = ts_cur;
+    ts_stop.tv_sec += timeout;
+
+    const uint8_t *buf = message;
 
     do {
+	if (len <= 0) {
+	    return 0;
+	}
+
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_stop, &ts_cur, 1000);
+
         memcpy(&wset, &wset_master, sizeof(wset_master));
+        fd_ready = pselect(socket + 1, NULL, &wset, NULL, &ts_timeo, NULL);
+	if (fd_ready < 0 && errno != EINTR) {
+	    print_warn("select error: %s", strerror(errno));
+	    return -1;
+	} else if (fd_ready > 0 && FD_ISSET(socket, &wset)) {
+	    ssize_t rc = send(socket, buf, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+	    if (rc < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+		print_warn("error sending data: %s", strerror(errno));
+		return -1;
+	    } else if (rc > 0) {
+		if ((size_t)rc > len)
+		    rc = (ssize_t)len; /* should never happen */
 
-        fd_ready = select(socket + 1, NULL, &wset, NULL, &tv_timeo);
+		buf += (size_t) rc; /* rc > 0 */
+		len -= (size_t) rc; /* rc > 0 */
+	    }
+	}
 
-        if (fd_ready <= 0) {
-            print_warn("select: %i", fd_ready);
-	} else {
-            if (FD_ISSET(socket, &wset)) {
-                send_size = send(socket, message + send_total, len - (unsigned long)send_total, 0);
-                send_total += send_size;
-
-                if ((unsigned long)send_total == len)
-                    return send_size;
-
-                print_warn("send_total different then expected!");
-            } else {
-                print_warn("socket not in wset!");
-            }
-        }
-    } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	    return -1;
+	}
+    } while (timespec_lt(&ts_cur, &ts_stop));
 
     return -1;
 }
