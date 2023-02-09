@@ -46,11 +46,11 @@
 
 #include "timespec.h"
 
-#define TIMEVAL_MICROSECONDS(tv) ((tv.tv_sec * 1000000L) + tv.tv_usec)
-
 #define MAX_URL_SIZE 1024
 #define TCP_MAX_BUFSIZE 1048576U
 #define TCP_MIN_BUFSIZE 1480U
+
+#define TCPBW_MAX_SAMPLES 10000
 
 static fd_set sockListFDs;
 int sockList[MAX_CONCURRENT_SESSIONS];
@@ -541,18 +541,23 @@ static int sendUploadPackets(const MeasureContext ctx)
 static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const res, unsigned int *numres)
 {
     ssize_t bytes_recv = 0;
-    struct timeval tv_cur, tv_start, tv_stop_test, tv_select, tv_sampleperiod;
+    struct timespec ts_last, ts_cur, ts_sample, ts_stop;
     fd_set rset, masterset;
     uint64_t total = 0;
     unsigned int rCounter = 0;
-    long elapsed;
-    long interval = ctx.sample_period_ms * 1000L;
-    unsigned int maxResults = ((unsigned long)ctx.test_duration * 1000U) / ctx.sample_period_ms + 1;
 
     assert(res && numres && sockBufferSz > 0);
     const size_t io_size = sockBufferSz;
 
-    DownResult *downloadResults = calloc(maxResults, sizeof(DownResult));
+    if (ctx.test_duration > 1000 || ctx.sample_period_ms <= 0)
+	return -EINVAL;
+    unsigned int max_samples = (ctx.test_duration * 1000U) / ctx.sample_period_ms;
+
+    /* clamp, just in case */
+    if (max_samples > TCPBW_MAX_SAMPLES)
+	max_samples = TCPBW_MAX_SAMPLES;
+
+    DownResult *downloadResults = calloc(max_samples, sizeof(DownResult));
     *res = downloadResults;
     *numres = 0;
     if (!downloadResults)
@@ -560,21 +565,26 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
 
-    tv_sampleperiod.tv_sec = ctx.sample_period_ms / 1000U;
-    tv_sampleperiod.tv_usec = (ctx.sample_period_ms % 1000U) * 1000U;
+    const struct timespec ts_samplingperiod = {
+	.tv_sec = ctx.sample_period_ms / 1000,
+	.tv_nsec = (ctx.sample_period_ms % 1000) * 1000000,
+    };
 
-    gettimeofday(&tv_cur, NULL);
-    tv_start = tv_cur;
-    tv_stop_test.tv_usec = tv_cur.tv_usec;
-    tv_stop_test.tv_sec = tv_cur.tv_sec + ctx.test_duration;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	return -EINVAL;
+    ts_stop = ts_cur;
+    ts_stop.tv_sec += ctx.test_duration;
 
-    while (timercmp(&tv_cur, &tv_stop_test, <) && (rCounter < maxResults)) {
-	timersub(&tv_stop_test, &tv_cur, &tv_select);
-	if (timercmp(&tv_select, &tv_sampleperiod, >))
-	    tv_select = tv_sampleperiod;
+    ts_sample = timespec_add(&ts_cur, &ts_samplingperiod);
+    ts_last = ts_cur;
+
+    while (rCounter < max_samples) {
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_sample, &ts_cur, 0);
 
 	memcpy(&rset, &masterset, sizeof(fd_set));
-	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
+
+	int rc_select = pselect(sockListLastFD + 1, &rset, NULL, NULL, &ts_timeo, NULL);
+	if (rc_select > 0) {
 	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &rset)) {
 		    /* drain stream buffer before switching to next,
@@ -582,27 +592,42 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 		    do {
 			bytes_recv = recv(sockList[i], sockBuffer, io_size, MSG_DONTWAIT | MSG_TRUNC);
 			if (bytes_recv > 0)
-			    total += bytes_recv;
-		    } while (bytes_recv == io_size);
+			    total += (size_t)bytes_recv; /* bytes_rcv > 0 */
+		    } while (bytes_recv == (ssize_t) io_size);
 		    if (!bytes_recv) {
 			/* EOF */
 			FD_CLR(sockList[i], &masterset);
 		    }
 		}
 	    }
+	} else if (rc_select < 0 && errno != EINTR) {
+	    return -errno;
 	}
 
-	elapsed = TIMEVAL_MICROSECONDS(tv_cur) - TIMEVAL_MICROSECONDS(tv_start);
-	if (elapsed >= interval) {
+	/* doing it here seems to work better than right after pselect() */
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	   return -EINVAL;
+
+	if (timespec_le(&ts_sample, &ts_cur)) {
 	    downloadResults[rCounter].nstreams = ctx.numstreams;
 	    downloadResults[rCounter].bytes = total;
-	    downloadResults[rCounter].interval = elapsed;
+	    downloadResults[rCounter].interval_ns = (uint64_t)timespec_sub_nanoseconds(&ts_cur, &ts_last); /* ts_last <= ts_cur */
+
+	    while (timespec_le(&ts_sample, &ts_cur)) {
+		/* if this runs more than once, we were too slow and lost one sampling window */
+		ts_sample = timespec_add(&ts_sample, &ts_samplingperiod);
+	    }
+	    ts_last = ts_cur;
 
 	    rCounter++;
 	    total = 0;
-	    tv_start = tv_cur;
 	}
-	gettimeofday(&tv_cur, NULL);
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	    return -EINVAL;
+
+	if (timespec_lt(&ts_stop, &ts_cur)) /* lt, not le ! */
+	    break;
     }
 
     *numres = rCounter;
@@ -744,7 +769,11 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting download measurement (receive)");
-    receiveDownloadPackets(ctx, &rcv, &rcvcounter);
+    if (receiveDownloadPackets(ctx, &rcv, &rcvcounter) < 0) {
+	print_warn("failed while receiving packets");
+	rc = SEXIT_FAILURE;
+	goto err_exit;
+    }
 
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/finish-download", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;

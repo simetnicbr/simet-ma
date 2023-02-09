@@ -287,7 +287,8 @@ static json_object *createReport(json_object *jresults,
         xx_json_object_array_add_uint64_as_str(jrow, i + 1);
         xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].bytes * 8U);
         xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].nstreams);
-        xx_json_object_array_add_uint64_as_str(jrow, (uint64_t)downloadRes[i].interval / 1000UL);
+	/* round to nearest millisecond. this is important.  do it like lround() would. */
+        xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].interval_ns / 1000000UL + ((downloadRes[i].interval_ns % 1000000UL >= 500000UL)? 1 : 0));
         json_object_array_add(jrow, json_object_new_string("download"));
 
         /* add row to list of rows */
