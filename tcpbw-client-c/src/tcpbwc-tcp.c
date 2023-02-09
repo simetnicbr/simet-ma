@@ -104,7 +104,7 @@ static size_t new_tcp_buffer(int sockfd, void **p)
     return buf ? buflen : 0;
 }
 
-static int message_send(int socket, int timeout, void *message, size_t len)
+static int message_send(const int socket, const int timeout, const void * const message, size_t len)
 {
     int send_size = 0, send_total = 0;
     int fd_ready = 0;
@@ -142,10 +142,19 @@ static int message_send(int socket, int timeout, void *message, size_t len)
     return -1;
 }
 
-static int create_measure_socket(char *host, char *port, char *sessionid)
+static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid)
 {
     const int one = 1;
     int fd_measure;
+
+    if (!sessionid || !port || !host)
+	return -1;
+
+    const size_t sessionid_len = strlen(sessionid);
+    if (sessionid_len > UINT_MAX) {
+	print_warn("session-id length too large");
+	return -1;
+    }
 
     struct sockaddr_storage remote_addr_control;
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
@@ -161,32 +170,29 @@ static int create_measure_socket(char *host, char *port, char *sessionid)
         return -1;
     }
 
-	/* stream start:
-	 * 32 bits, protocol version, network order (número 1)
-	 * tamanho do session-id, 32bits unsigned
-	 * sessionId, PASCAL-style
-	 * <stream de teste>, MSS 1400 bytes - olhar simetbox
-	 *
-	 * FIXME: tcp_nodelay, tcp_maxseg (+cli), setar tamanho do socket buffer, tcp_user_timeout(?)
-	 *
-	 */
+    /* stream start:
+     * 32 bits, protocol version (1), network order
+     * session-id length, 32bits unsigned, network order
+     * session-id, PASCAL-style string (no NUL at end)
+     * <test stream>, MSS 1400 bytes ?
+     *
+     * FIXME: tcp_maxseg (+cli), tcp_user_timeout(?)
+     *
+     */
+    struct {
+	uint32_t version;
+	uint32_t session_id_len;
+    } __attribute__((__packed__)) tcpbw_hello_msg;
+    tcpbw_hello_msg.version = htonl(1);
+    tcpbw_hello_msg.session_id_len = htonl((uint32_t)sessionid_len);
 
-    uint32_t u32buf = htonl(1);
-    if (message_send(fd_measure, 10, &u32buf, sizeof(uint32_t)) <= 0) {
+    if (message_send(fd_measure, 10, &tcpbw_hello_msg, sizeof(tcpbw_hello_msg)) < 0 ||
+	message_send(fd_measure, 10, sessionid, sessionid_len) < 0) {
         print_warn("message_send problem");
         return -1;
     }
-    uint32_t ss = htonl(strlen(sessionid));
-    int ret_socket = message_send(fd_measure, 10, &ss, sizeof(uint32_t));
-    if (ret_socket <= 0) {
-        print_warn("message_send problem");
-        return -1;
-    }
-    ret_socket = message_send(fd_measure, 10, sessionid, strlen(sessionid));
-    if (ret_socket <= 0) {
-        print_warn("message_send problem");
-        return -1;
-    }
+
+    /* Flush header, and set TCP_NODELAY mode from now on */
     if (setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one))) {
 	print_warn("failed to set TCP_NODELAY");
 	return -1;
