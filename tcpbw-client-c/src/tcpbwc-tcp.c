@@ -482,8 +482,8 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 static int sendUploadPackets(const MeasureContext ctx)
 {
-    int upTimeout = ctx.test_duration;
-    struct timeval tv_cur, tv_stop_test, tv_select;
+    const long upTimeout = ctx.test_duration;
+    struct timespec ts_cur, ts_stop;
     fd_set wset, masterset;
     unsigned int i;
 
@@ -494,22 +494,32 @@ static int sendUploadPackets(const MeasureContext ctx)
 
     /* FIXME: fill buffer with uncompressible pseudo-random, it is all-zeros right now */
 
-    /* FIXME: if possible, switch to CLOCK_MONOTONIC, which is also in the VDSO */
-
     /* FIXME: switch to blocking IO, using one thread per socket, so that it will sleep without blocking the others?
      *        right now, we return from select to write a bit to large socket buffers that are still far from empty...
      *        this is Not Ok.
      *
      *        Consider vmsplice and ring buffers if absolutely required.
      */
-    gettimeofday(&tv_cur, NULL);
-    tv_stop_test.tv_usec = tv_cur.tv_usec;
-    tv_stop_test.tv_sec = tv_cur.tv_sec + (long)upTimeout;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	return -1;
+    }
+    ts_stop = ts_cur;
+    ts_stop.tv_sec += upTimeout;
 
-    while (timercmp(&tv_cur, &tv_stop_test, <)) {
-        timersub(&tv_stop_test, &tv_cur, &tv_select);
+    /*
+     * we fill TCP buffers for the whole test time window, and they will
+     * take some time to empty even after we stop queing data to be
+     * transmitted, here.
+     *
+     * Thus we actually ensure enough dataflow for the last sample.  On
+     * a future version of the protocol that does a shutdown(), it may
+     * be necessary to revisit this
+     */
+    while (timespec_lt(&ts_cur, &ts_stop)) {
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_stop, &ts_cur, 1000);
+
         memcpy(&wset, &masterset, sizeof(fd_set));
-        if (select(sockListLastFD + 1, NULL, &wset, NULL, &tv_select) > 0) {
+        if (pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL) > 0) {
 	    for (i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &wset)) {
 		    if (send(sockList[i], sockBuffer, sockBufferSz, MSG_DONTWAIT | MSG_NOSIGNAL) == -1 &&
@@ -519,8 +529,11 @@ static int sendUploadPackets(const MeasureContext ctx)
 		}
 	    }
         }
-        gettimeofday(&tv_cur, NULL);
-    };
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	    return -1;
+	}
+    }
 
     return 0;
 }
@@ -695,7 +708,11 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting upload measurement (send)");
-    sendUploadPackets(ctx);
+    if (sendUploadPackets(ctx) < 0) {
+	print_warn("failed while sending packets");
+	rc = SEXIT_FAILURE;
+	goto err_exit;
+    }
 
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/finish-upload", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
