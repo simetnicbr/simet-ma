@@ -80,15 +80,15 @@ static size_t new_tcp_buffer(int sockfd, void **p)
     optvalsz = sizeof(optval);
     if (!getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &optval, &optvalsz)) {
 	print_msg(MSG_DEBUG, "Socket TCP send buffer size: %d bytes", optval);
-	if (optval > 0 && optval > buflen)
-	    buflen = optval;
+	if (optval > 0 && (size_t) optval > buflen)
+	    buflen = (size_t) optval;
     }
 
     optvalsz = sizeof(optval);
     if (!getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &optval, &optvalsz)) {
 	print_msg(MSG_DEBUG, "Socket TCP receive buffer size: %d bytes", optval);
-	if (optval > 0 && optval > buflen)
-	    buflen = optval;
+	if (optval > 0 && (size_t) optval > buflen)
+	    buflen = (size_t) optval;
     }
 
     if (buflen < TCP_MIN_BUFSIZE) {
@@ -406,7 +406,9 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 	/* enforce at least 4 samples */
 	if ((unsigned long long)period_ms >= (unsigned long long)ctx->test_duration * 250U)
 	    period_ms = ctx->test_duration * 250U;
-	ctx->sample_period_ms = period_ms;
+	if (period_ms > UINT_MAX)
+	    goto err_exit;
+	ctx->sample_period_ms = (unsigned int) period_ms;
     }
 
     json_object_put(j_obj);
