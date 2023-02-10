@@ -44,6 +44,8 @@
 #include "curl/curl.h"
 #include "libubox/usock.h"
 
+#include "timespec.h"
+
 #define TIMEVAL_MICROSECONDS(tv) ((tv.tv_sec * 1000000L) + tv.tv_usec)
 
 #define MAX_URL_SIZE 1024
