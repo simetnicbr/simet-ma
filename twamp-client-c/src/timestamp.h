@@ -44,7 +44,7 @@ Timestamp timeval_to_timestamp(const struct timeval *tv);
 static inline struct timeval timestamp_to_timeval(const Timestamp ts) {
     struct timeval ret_tv;
     ret_tv.tv_sec = ts.integer - 2208988800L;
-    ret_tv.tv_usec = (uint32_t)( (double)ts.fractional * ((double)1e6 / (double)(1uLL<<32)) );
+    ret_tv.tv_usec = (suseconds_t)((double)ts.fractional * ((double)1e6 / (double)(1uLL<<32)) + 0.5); /* lround(n), n>=0 */
     return ret_tv;
 }
 

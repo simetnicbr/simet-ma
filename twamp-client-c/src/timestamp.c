@@ -53,8 +53,8 @@ Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, c
 	return ret_timestamp;
 
     ret_timestamp.integer = (uint32_t)sec;
-    /* NTP fraction has base 2^32 */
-    ret_timestamp.fractional = (uint32_t) ( (double)(nsec) * ( (double)(1uLL<<32) / (double)1e9 ) );
+    /* NTP fraction has base 2^32. round to nearest */
+    ret_timestamp.fractional = (uint32_t)((double)(nsec) * ( (double)(1uLL<<32) / (double)1e9 ) + 0.5);
 
     return ret_timestamp;
 }
@@ -69,8 +69,8 @@ Timestamp timeval_to_timestamp(const struct timeval *tv) {
     // 70 years = 2208988800 seconds
     ret_timestamp.integer = (uint32_t)tv->tv_sec + 2208988800L;
 
-    // Convert 10^6 base to 2^32 base
-    ret_timestamp.fractional = (uint32_t) ( (double)tv->tv_usec * ( (double)(1uLL<<32) / (double)1e6 ) );
+    /* Convert 10^6 base to 2^32 base, round to nearest */
+    ret_timestamp.fractional = (uint32_t)((double)tv->tv_usec * ( (double)(1uLL<<32) / (double)1e6 ) + 0.5);
 
     return ret_timestamp;
 }
