@@ -1,7 +1,68 @@
+simet-ma (0.18.0) unstable; urgency=medium
+
+  * simet-ma version 0.18.0
+  * twamp: code cleanups and minor refactoring
+  * twamp: restore MSG_TRUNC for recv() to better detect invalid packets
+  * twamp: implement configurable payload size
+    Add the -s option to configure the payload size.  We accept payload
+    sizes 128 to 65400 in the client, however the server will impose its
+    own limits
+  * twamp: implement RFC6038 symmetric mode
+    Request symmetric mode from the server (if it offers that option).
+    This client has always required it, and both perfSonar and SIMET2
+    TWAMP servers/reflectors always operate in symmetric mode.  If the
+    server ignores the twamp option, output an warning but try the
+    measurement anyway, as it will likely succeed.
+  * twamp: add twamp-light mode (experimental).
+  * twamp: implement source address binding for twamp-light.
+  * twamp: abort measurement on too many message_send() errors
+  * twamp: finish measurement early when a fatal error happens
+  * twamp: finish measurement early when only corrupt packets are received
+    This is important for twamp-light in unauthenticated mode.
+  * twamp: change systematic send error into jitter
+    Switch to (where available) clock_nanosleep() with TIMER_ABSTIME, which
+    changes some of the the systematic error we had on the packet send
+    schedule (always a bit more than the desired interval, thus further
+    deviating from the desired packet train) into sending jitter.
+    With this change, it is possible for the interpacket delay in the packet
+    train to be a bit less than the desired target, instead of always being
+    a bit more than the desired target.
+  * twamp: round to nearest when converting to/from ntp-v3 timestamps
+  * tcpbw: code cleanups and minor refactoring
+  * tcpbw: LFN support
+    + use highest socket buffer size as a hint for send()/recv() size
+    + try to request very large socket buffers (on non-SIMETBox builds)
+      Ask for 32MiB worth of send and receive socket buffers before connect,
+      so that TCP window scale can handle LFNs (think 100Mbps @ 500ms RTT).
+      Otherwise, the number of concurrent connections required to saturate
+      a LFN (high-bandwidth, high-delay network) is too high.  Also helps
+      with large-throughput low-delay networks.
+  * tcpbw: increase the limit for concurrent connections in the client.
+    The server will impose its own limits, though.
+  * tcpbw: properly detect recv() errors during download measurement
+    Abort download measurement on recv() errors, instead of generating an
+    erroneus report with spurious *very* large spikes.  Note that this
+    kind of misbehavior is detected by the SIMET2 data pipeline, so such
+    measurements have always been discarded by SIMET2.
+  * tcpbw: during download measurement, fully drain stream before going for
+    the next one.  This improves throughput on LFNs.
+  * tcpbw: address several warnings, fixing a few potential issues
+  * tcpbw: refactor sampling loops
+    + Improve receive sampling control, it is now far more stable and
+      accurate
+    + Avoid a pontential sampling error related to very low reception
+      rates and data arriving *only* just at the beginning of the sampling
+      window.
+    + Use CLOCK_MONOTONIC instead of CLOCK_REALTIME for sampling control
+  * simet-runner: tcpbw: enable very verbose output in --debug mode
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 14 Feb 2023 15:03:22 -0300
+
 simet-ma (0.17.9.4) unstable; urgency=medium
 
   * simet-ma version 0.17.9.4
-  * simetbox: fix vlabel generation for some devices with UBIFS
+  * simetbox: fix vlabel generation for some devices with UBIFS, and also
+    ignore the "factory" partition on Ubiquiti devices (needed on ubnt-erx).
 
  -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 03 Feb 2023 13:59:27 -0300
 
