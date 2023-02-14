@@ -25,7 +25,7 @@
 Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, const struct timespec * const ts_offset)
 {
     Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
-    long sec;
+    int64_t sec;
     long nsec;
 
     if (!ts_now || !ts_offset)
@@ -33,19 +33,19 @@ Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, c
 
     /* Realtime is based on UNIX epoch (1970), timestamps are NTP epoch (1900) */
     /* 70 years = 2208988800 seconds */
-    sec = ts_now->tv_sec + ts_offset->tv_sec + 2208988800L;
+    sec = ts_now->tv_sec + ts_offset->tv_sec + 2208988800;
     nsec = ts_now->tv_nsec + ts_offset->tv_nsec;
 
     /* our two input timespecs are assumed to be normalized already,
      * but we MUST normalize the result or Bad Things Will Happen.
      * Note that POSIX forbids nsec < 0 */
-    while (nsec > 1000000000L) {
+    while (nsec > 1000000000) {
 	sec++;
-	nsec -= 1000000000L;
+	nsec -= 1000000000;
     }
     while (nsec < 0) {
 	sec--;
-	nsec += 1000000000L;
+	nsec += 1000000000;
     }
 
     /* should never happen */
@@ -67,7 +67,7 @@ Timestamp timeval_to_timestamp(const struct timeval *tv) {
 
     // Convert UNIX epoch (1970) seconds to NTP epoch (1900) seconds
     // 70 years = 2208988800 seconds
-    ret_timestamp.integer = (uint32_t)tv->tv_sec + 2208988800L;
+    ret_timestamp.integer = (uint32_t)tv->tv_sec + 2208988800U;
 
     /* Convert 10^6 base to 2^32 base, round to nearest */
     ret_timestamp.fractional = (uint32_t)((double)tv->tv_usec * ( (double)(1uLL<<32) / (double)1e6 ) + 0.5);

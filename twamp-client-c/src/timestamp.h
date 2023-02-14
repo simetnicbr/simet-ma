@@ -43,7 +43,7 @@ Timestamp timeval_to_timestamp(const struct timeval *tv);
 /* timestamp_to_timeval converts Timestamp to struct timeval */
 static inline struct timeval timestamp_to_timeval(const Timestamp ts) {
     struct timeval ret_tv;
-    ret_tv.tv_sec = ts.integer - 2208988800L;
+    ret_tv.tv_sec = ts.integer - 2208988800U;
     ret_tv.tv_usec = (suseconds_t)((double)ts.fractional * ((double)1e6 / (double)(1uLL<<32)) + 0.5); /* lround(n), n>=0 */
     return ret_tv;
 }
@@ -63,7 +63,7 @@ static inline Timestamp ntoh_timestamp(Timestamp ts) {
 }
 
 static inline uint64_t timeval_to_microsec(const struct timeval tv) {
-    int64_t ret_microsec = tv.tv_sec * 1000000U;
+    int64_t ret_microsec = (int64_t)tv.tv_sec * 1000000;
     ret_microsec += tv.tv_usec;
     return (ret_microsec >= 0) ? (uint64_t)ret_microsec : 0;
 }
