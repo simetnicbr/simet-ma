@@ -53,6 +53,7 @@ const char* progname = PACKAGE_NAME;
 static inline void free_constchar(const char *p) { free((void *)p); }
 
 /* strcmp with proper semanthics for NULL */
+static inline int xstrcmp(const char * const s1, const char * const s2)__attribute__((__unused__));
 static inline int xstrcmp(const char * const s1, const char * const s2)
 {
     if (s1 && s2)
