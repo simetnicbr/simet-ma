@@ -110,7 +110,7 @@ int report_socket_metrics(struct tcpbw_report *report, int sockfd, int proto)
 
     if (!report)
         return EINVAL;
-    struct tcpbw_report_private *rp = (struct tcpbw_report_private *)report;
+    struct tcpbw_report_private *rp = (struct tcpbw_report_private *)((void *)report);
     if (!rp->root)
         return EINVAL;
 
@@ -312,7 +312,7 @@ int tcpbw_report(struct tcpbw_report *report,
     struct tcpbw_report_private *rp;
     assert(report && ctx);
 
-    rp = (struct tcpbw_report_private *)report;
+    rp = (struct tcpbw_report_private *)((void *)report);
 
     json_object *j_obj_upload = upload_results_json ? json_tokener_parse(upload_results_json) : NULL;
     json_object *report_obj = createReport(j_obj_upload, downloadRes, counter, ctx);
@@ -377,7 +377,7 @@ void tcpbw_report_done(struct tcpbw_report *r)
 {
     struct tcpbw_report_private *rp;
     if (r) {
-        rp = (struct tcpbw_report_private *)r;
+        rp = (struct tcpbw_report_private *)((void *)r);
 	if (rp->sockrows)
             json_object_put(rp->sockrows);
 	if (rp->root)
