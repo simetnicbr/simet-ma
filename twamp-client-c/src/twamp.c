@@ -981,10 +981,12 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
             /* any extra data (recv_size > bufsize) is discarded */
             recv_size = recv(socket, reflectedPacket, expected_size, MSG_TRUNC | MSG_DONTWAIT);
 
-            // Caso recv apresente algum erro
             if (recv_size < 0) {
-                // Se o erro for EAGAIN e EWOULDBLOCK, tentar novamente
+#if defined(EAGAIN) && defined (EWOULDBLOCK) && (EAGAIN == EWOULDBLOCK)
+                if (errno == EAGAIN ) {
+#else
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#endif
                     continue;
                 } else {
                     print_err("recv message problem receiving reflected packet: %s", strerror(errno));
