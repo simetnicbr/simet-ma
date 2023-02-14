@@ -30,6 +30,7 @@
 #include <getopt.h>
 #include <assert.h>
 
+#include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/poll.h>
 #include <sys/time.h>
@@ -99,6 +100,9 @@ static const unsigned int backoff_times[BACKOFF_LEVEL_MAX] =
 
 /* maximum payload size of a Uptime2 message */
 #define SIMET_UPTIME2_MAXDATASIZE (SIMET_TCPAQ_QUEUESIZE - sizeof(struct simet_inetup_msghdr))
+
+/* sanity for agent-ids, currently they are UUIDs */
+#define SIMET_AGENTID_MAX_LEN 40
 
 /*
  * helpers
@@ -2022,23 +2026,34 @@ static struct simet_inetup_server_cluster * server_cluster_create(const char * c
 static int fread_agent_str(const char *path, const char ** const p)
 {
     FILE *fp;
+    struct stat st;
     char *b;
     int n, e;
 
     assert(path && p);
+    static_assert(SIMET_AGENTID_MAX_LEN < 262144, "you must increase the file size allowed in fread_agent_str()");
 
     fp = fopen(path, "r");
     if (!fp)
         return -1;
 
+    /* clamp maximum amount of RAM it could cost us to 256KiB */
+    if (fstat(fileno(fp), &st)) {
+        return -1;
+    }
+    if (st.st_size > 262144) {
+        errno = EINVAL;
+        return -1;
+    }
+
     do {
-        n = fscanf(fp, " %256000ms ", &b);
+        n = fscanf(fp, " %ms ", &b); /* ENOMEM is relevant */
     } while (n == EOF && errno == EINTR);
 
     e = (errno)? errno : EINVAL;
     fclose(fp);
 
-    if (n == 1) {
+    if (n == 1 && e != ENOMEM) {
         *p = b;
         return 0;
     } else {
@@ -2065,7 +2080,7 @@ static int load_agent_data(const char * const aid_path, const char * const atoke
         if (fread_agent_str(aid_path, &new_aid)) {
             print_err("failed to read agent-id from %s: %s", aid_path, strerror(errno));
             return -1;
-        } else if (validate_nonempty("agent-id", new_aid)) {
+        } else if (validate_nonempty("agent-id", new_aid) || strlen(new_aid) > SIMET_AGENTID_MAX_LEN) {
             return -1;
         }
     }
