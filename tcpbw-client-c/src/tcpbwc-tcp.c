@@ -44,11 +44,13 @@
 #include "curl/curl.h"
 #include "libubox/usock.h"
 
-#define TIMEVAL_MICROSECONDS(tv) ((tv.tv_sec * 1000000L) + tv.tv_usec)
+#include "timespec.h"
 
 #define MAX_URL_SIZE 1024
 #define TCP_MAX_BUFSIZE 1048576U
 #define TCP_MIN_BUFSIZE 1480U
+
+#define TCPBW_MAX_SAMPLES 10000
 
 static fd_set sockListFDs;
 int sockList[MAX_CONCURRENT_SESSIONS];
@@ -73,13 +75,22 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 {
     size_t buflen = 128*1024; /* default */
     int optval = 0;
-    socklen_t optvalsz = sizeof(optval);
+    socklen_t optvalsz;
 
     assert(p);
 
+    optvalsz = sizeof(optval);
+    if (!getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &optval, &optvalsz)) {
+	print_msg(MSG_DEBUG, "Socket TCP send buffer size: %d bytes", optval);
+	if (optval > 0 && (size_t) optval > buflen)
+	    buflen = (size_t) optval;
+    }
+
+    optvalsz = sizeof(optval);
     if (!getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &optval, &optvalsz)) {
-	if (optval > 0)
-	    buflen = optval;
+	print_msg(MSG_DEBUG, "Socket TCP receive buffer size: %d bytes", optval);
+	if (optval > 0 && (size_t) optval > buflen)
+	    buflen = (size_t) optval;
     }
 
     if (buflen < TCP_MIN_BUFSIZE) {
@@ -88,55 +99,79 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 	buflen = TCP_MAX_BUFSIZE;
     }
 
-    print_msg(MSG_DEBUG, "will use a TCP buffer of length %zu", buflen);
+    print_msg(MSG_DEBUG, "will send/receive using a buffer of %zu bytes", buflen);
 
     void *buf = calloc(1, buflen);
     *p = buf;
     return buf ? buflen : 0;
 }
 
-static int message_send(int socket, int timeout, void *message, size_t len)
+/* sends full message with a timeout, returns -1 on error */
+static ssize_t message_send(const int socket, const int timeout, const void * const message, size_t len)
 {
-    int send_size = 0, send_total = 0;
-    int fd_ready = 0;
     fd_set wset, wset_master;
-    struct timeval tv_timeo;
+    int fd_ready = 0;
+
+    struct timespec ts_cur, ts_stop;
 
     FD_ZERO(&wset_master);
-    FD_SET((unsigned long)socket, &wset_master);
+    FD_SET(socket, &wset_master);
 
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	return -1;
+    }
+    ts_stop = ts_cur;
+    ts_stop.tv_sec += timeout;
+
+    const uint8_t *buf = message;
 
     do {
+	if (len <= 0) {
+	    return 0;
+	}
+
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_stop, &ts_cur, 1000);
+
         memcpy(&wset, &wset_master, sizeof(wset_master));
+        fd_ready = pselect(socket + 1, NULL, &wset, NULL, &ts_timeo, NULL);
+	if (fd_ready < 0 && errno != EINTR) {
+	    print_warn("select error: %s", strerror(errno));
+	    return -1;
+	} else if (fd_ready > 0 && FD_ISSET(socket, &wset)) {
+	    ssize_t rc = send(socket, buf, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+	    if (rc < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+		print_warn("error sending data: %s", strerror(errno));
+		return -1;
+	    } else if (rc > 0) {
+		if ((size_t)rc > len)
+		    rc = (ssize_t)len; /* should never happen */
 
-        fd_ready = select(socket + 1, NULL, &wset, NULL, &tv_timeo);
+		buf += (size_t) rc; /* rc > 0 */
+		len -= (size_t) rc; /* rc > 0 */
+	    }
+	}
 
-        if (fd_ready <= 0) {
-            print_warn("select: %i", fd_ready);
-	} else {
-            if (FD_ISSET((unsigned long)socket, &wset)) {
-                send_size = send(socket, message + send_total, len - (unsigned long)send_total, 0);
-                send_total += send_size;
-
-                if ((unsigned long)send_total == len)
-                    return send_size;
-
-                print_warn("send_total different then expected!");
-            } else {
-                print_warn("socket not in wset!");
-            }
-        }
-    } while ((tv_timeo.tv_sec > 0) && (tv_timeo.tv_usec > 0));
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	    return -1;
+	}
+    } while (timespec_lt(&ts_cur, &ts_stop));
 
     return -1;
 }
 
-static int create_measure_socket(char *host, char *port, char *sessionid)
+static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid)
 {
     const int one = 1;
     int fd_measure;
+
+    if (!sessionid || !port || !host)
+	return -1;
+
+    const size_t sessionid_len = strlen(sessionid);
+    if (sessionid_len > UINT_MAX) {
+	print_warn("session-id length too large");
+	return -1;
+    }
 
     struct sockaddr_storage remote_addr_control;
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
@@ -152,32 +187,29 @@ static int create_measure_socket(char *host, char *port, char *sessionid)
         return -1;
     }
 
-	/* stream start:
-	 * 32 bits, protocol version, network order (número 1)
-	 * tamanho do session-id, 32bits unsigned
-	 * sessionId, PASCAL-style
-	 * <stream de teste>, MSS 1400 bytes - olhar simetbox
-	 *
-	 * FIXME: tcp_nodelay, tcp_maxseg (+cli), setar tamanho do socket buffer, tcp_user_timeout(?)
-	 *
-	 */
+    /* stream start:
+     * 32 bits, protocol version (1), network order
+     * session-id length, 32bits unsigned, network order
+     * session-id, PASCAL-style string (no NUL at end)
+     * <test stream>, MSS 1400 bytes ?
+     *
+     * FIXME: tcp_maxseg (+cli), tcp_user_timeout(?)
+     *
+     */
+    struct {
+	uint32_t version;
+	uint32_t session_id_len;
+    } __attribute__((__packed__)) tcpbw_hello_msg;
+    tcpbw_hello_msg.version = htonl(1);
+    tcpbw_hello_msg.session_id_len = htonl((uint32_t)sessionid_len);
 
-    uint32_t u32buf = htonl(1);
-    if (message_send(fd_measure, 10, &u32buf, sizeof(uint32_t)) <= 0) {
+    if (message_send(fd_measure, 10, &tcpbw_hello_msg, sizeof(tcpbw_hello_msg)) < 0 ||
+	message_send(fd_measure, 10, sessionid, sessionid_len) < 0) {
         print_warn("message_send problem");
         return -1;
     }
-    uint32_t ss = htonl(strlen(sessionid));
-    int ret_socket = message_send(fd_measure, 10, &ss, sizeof(uint32_t));
-    if (ret_socket <= 0) {
-        print_warn("message_send problem");
-        return -1;
-    }
-    ret_socket = message_send(fd_measure, 10, sessionid, strlen(sessionid));
-    if (ret_socket <= 0) {
-        print_warn("message_send problem");
-        return -1;
-    }
+
+    /* Flush header, and set TCP_NODELAY mode from now on */
     if (setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one))) {
 	print_warn("failed to set TCP_NODELAY");
 	return -1;
@@ -391,7 +423,9 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 	/* enforce at least 4 samples */
 	if ((unsigned long long)period_ms >= (unsigned long long)ctx->test_duration * 250U)
 	    period_ms = ctx->test_duration * 250U;
-	ctx->sample_period_ms = period_ms;
+	if (period_ms > UINT_MAX)
+	    goto err_exit;
+	ctx->sample_period_ms = (unsigned int) period_ms;
     }
 
     json_object_put(j_obj);
@@ -448,9 +482,8 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 static int sendUploadPackets(const MeasureContext ctx)
 {
-    int upTimeout = ctx.test_duration;
-    struct timeval tv_cur, tv_stop_test, tv_select;
-    uint64_t counter = 0;
+    const long upTimeout = ctx.test_duration;
+    struct timespec ts_cur, ts_stop;
     fd_set wset, masterset;
     unsigned int i;
 
@@ -461,52 +494,70 @@ static int sendUploadPackets(const MeasureContext ctx)
 
     /* FIXME: fill buffer with uncompressible pseudo-random, it is all-zeros right now */
 
-    /* FIXME: if possible, switch to CLOCK_MONOTONIC, which is also in the VDSO */
-
     /* FIXME: switch to blocking IO, using one thread per socket, so that it will sleep without blocking the others?
      *        right now, we return from select to write a bit to large socket buffers that are still far from empty...
      *        this is Not Ok.
      *
      *        Consider vmsplice and ring buffers if absolutely required.
      */
-    gettimeofday(&tv_cur, NULL);
-    tv_stop_test.tv_usec = tv_cur.tv_usec;
-    tv_stop_test.tv_sec = tv_cur.tv_sec + (long)upTimeout;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	return -1;
+    }
+    ts_stop = ts_cur;
+    ts_stop.tv_sec += upTimeout;
 
-    while (timercmp(&tv_cur, &tv_stop_test, <)) {
-        timersub(&tv_stop_test, &tv_cur, &tv_select);
+    /*
+     * we fill TCP buffers for the whole test time window, and they will
+     * take some time to empty even after we stop queing data to be
+     * transmitted, here.
+     *
+     * Thus we actually ensure enough dataflow for the last sample.  On
+     * a future version of the protocol that does a shutdown(), it may
+     * be necessary to revisit this
+     */
+    while (timespec_lt(&ts_cur, &ts_stop)) {
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_stop, &ts_cur, 1000);
+
         memcpy(&wset, &masterset, sizeof(fd_set));
-        if (select(sockListLastFD + 1, NULL, &wset, NULL, &tv_select) > 0) {
+        if (pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL) > 0) {
 	    for (i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &wset)) {
 		    if (send(sockList[i], sockBuffer, sockBufferSz, MSG_DONTWAIT | MSG_NOSIGNAL) == -1 &&
 			(errno == EPIPE || errno == ECONNRESET)) {
 			    FD_CLR(sockList[i], &masterset);
 		    }
-		    counter++;
 		}
 	    }
         }
-        gettimeofday(&tv_cur, NULL);
-    };
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+	    return -1;
+	}
+    }
 
     return 0;
 }
 
 static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const res, unsigned int *numres)
 {
-    size_t bytes_recv = 0;
-    struct timeval tv_cur, tv_start, tv_stop_test, tv_select, tv_sampleperiod;
+    ssize_t bytes_recv = 0;
+    struct timespec ts_last, ts_cur, ts_sample, ts_stop;
     fd_set rset, masterset;
     uint64_t total = 0;
     unsigned int rCounter = 0;
-    long elapsed;
-    long interval = ctx.sample_period_ms * 1000L;
-    unsigned int maxResults = ((unsigned long)ctx.test_duration * 1000U) / ctx.sample_period_ms + 1;
 
-    assert(res && numres);
+    assert(res && numres && sockBufferSz > 0);
+    const size_t io_size = sockBufferSz;
 
-    DownResult *downloadResults = calloc(maxResults, sizeof(DownResult));
+    if (ctx.test_duration > 1000 || ctx.sample_period_ms <= 0)
+	return -EINVAL;
+    unsigned int max_samples = (ctx.test_duration * 1000U) / ctx.sample_period_ms;
+
+    /* clamp, just in case */
+    if (max_samples > TCPBW_MAX_SAMPLES)
+	max_samples = TCPBW_MAX_SAMPLES;
+
+    DownResult *downloadResults = calloc(max_samples, sizeof(DownResult));
     *res = downloadResults;
     *numres = 0;
     if (!downloadResults)
@@ -514,44 +565,69 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
 
-    tv_sampleperiod.tv_sec = ctx.sample_period_ms / 1000U;
-    tv_sampleperiod.tv_usec = (ctx.sample_period_ms % 1000U) * 1000U;
+    const struct timespec ts_samplingperiod = {
+	.tv_sec = ctx.sample_period_ms / 1000,
+	.tv_nsec = (ctx.sample_period_ms % 1000) * 1000000,
+    };
 
-    gettimeofday(&tv_cur, NULL);
-    tv_start = tv_cur;
-    tv_stop_test.tv_usec = tv_cur.tv_usec;
-    tv_stop_test.tv_sec = tv_cur.tv_sec + ctx.test_duration;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	return -EINVAL;
+    ts_stop = ts_cur;
+    ts_stop.tv_sec += ctx.test_duration;
 
-    while (timercmp(&tv_cur, &tv_stop_test, <) && (rCounter < maxResults)) {
-	timersub(&tv_stop_test, &tv_cur, &tv_select);
-	if (timercmp(&tv_select, &tv_sampleperiod, >))
-	    tv_select = tv_sampleperiod;
+    ts_sample = timespec_add(&ts_cur, &ts_samplingperiod);
+    ts_last = ts_cur;
+
+    while (rCounter < max_samples) {
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_sample, &ts_cur, 0);
 
 	memcpy(&rset, &masterset, sizeof(fd_set));
-	if (select(sockListLastFD + 1, &rset, NULL, NULL, &tv_select) > 0) {
+
+	int rc_select = pselect(sockListLastFD + 1, &rset, NULL, NULL, &ts_timeo, NULL);
+	if (rc_select > 0) {
 	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &rset)) {
-		    bytes_recv = recv(sockList[i], sockBuffer, sockBufferSz-1, MSG_DONTWAIT | MSG_TRUNC);
-		    if (bytes_recv > 0) {
-			total += bytes_recv;
-		    } else if (!bytes_recv) {
+		    /* drain stream buffer before switching to next,
+		     * try to avoid the recv() that would result in EAGAIN */
+		    do {
+			bytes_recv = recv(sockList[i], sockBuffer, io_size, MSG_DONTWAIT | MSG_TRUNC);
+			if (bytes_recv > 0)
+			    total += (size_t)bytes_recv; /* bytes_rcv > 0 */
+		    } while (bytes_recv == (ssize_t) io_size);
+		    if (!bytes_recv) {
+			/* EOF */
 			FD_CLR(sockList[i], &masterset);
 		    }
 		}
 	    }
+	} else if (rc_select < 0 && errno != EINTR) {
+	    return -errno;
 	}
 
-	elapsed = TIMEVAL_MICROSECONDS(tv_cur) - TIMEVAL_MICROSECONDS(tv_start);
-	if (elapsed >= interval) {
+	/* doing it here seems to work better than right after pselect() */
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	   return -EINVAL;
+
+	if (timespec_le(&ts_sample, &ts_cur)) {
 	    downloadResults[rCounter].nstreams = ctx.numstreams;
 	    downloadResults[rCounter].bytes = total;
-	    downloadResults[rCounter].interval = elapsed;
+	    downloadResults[rCounter].interval_ns = (uint64_t)timespec_sub_nanoseconds(&ts_cur, &ts_last); /* ts_last <= ts_cur */
+
+	    while (timespec_le(&ts_sample, &ts_cur)) {
+		/* if this runs more than once, we were too slow and lost one sampling window */
+		ts_sample = timespec_add(&ts_sample, &ts_samplingperiod);
+	    }
+	    ts_last = ts_cur;
 
 	    rCounter++;
 	    total = 0;
-	    tv_start = tv_cur;
 	}
-	gettimeofday(&tv_cur, NULL);
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	    return -EINVAL;
+
+	if (timespec_lt(&ts_stop, &ts_cur)) /* lt, not le ! */
+	    break;
     }
 
     *numres = rCounter;
@@ -657,7 +733,11 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting upload measurement (send)");
-    sendUploadPackets(ctx);
+    if (sendUploadPackets(ctx) < 0) {
+	print_warn("failed while sending packets");
+	rc = SEXIT_FAILURE;
+	goto err_exit;
+    }
 
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/finish-upload", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
@@ -689,7 +769,11 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting download measurement (receive)");
-    receiveDownloadPackets(ctx, &rcv, &rcvcounter);
+    if (receiveDownloadPackets(ctx, &rcv, &rcvcounter) < 0) {
+	print_warn("failed while receiving packets");
+	rc = SEXIT_FAILURE;
+	goto err_exit;
+    }
 
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/finish-download", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;

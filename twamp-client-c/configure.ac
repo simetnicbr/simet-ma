@@ -91,6 +91,7 @@ AC_TYPE_UINT8_T
 
 # Checks for library functions.
 AC_FUNC_MALLOC
+AC_CHECK_FUNCS([clock_nanosleep])
 dnl AC_FUNC_REALLOC
 dnl AC_FUNC_STAT
 dnl AC_CHECK_FUNCS([memset strcasecmp strdup strerror strrchr strtoul timegm])

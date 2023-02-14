@@ -71,7 +71,7 @@ static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
     json_object_array_add(j, json_object_new_string(buf));
 }
 
-static const char *str_ip46(int ai_family)
+static const char *str_ip46(sa_family_t ai_family)
 {
     switch (ai_family) {
     case AF_INET:
@@ -232,10 +232,10 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
     snprintf(metric_name, sizeof(metric_name),
         "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
-        "LossThresholdUs%lu-IntervalDurationUs%lu-"
+        "LossThresholdUs%u-IntervalDurationUs%u-"
         "PacketCount%u-PacketSizeBytes%u__Multiple_Raw",
         param->packets_timeout_us, param->packets_interval_us,
-        param->packets_count, TST_PKT_SIZE);
+        param->packets_count, param->payload_size);
 
     json_object *jo, *jo1, *jo2;  /* Used when we will transfer ownership via *_add */
 
@@ -279,17 +279,10 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     for (unsigned int it = 0; it < np; it++) {
         ReportPacket pkg;
 
-        struct timeval tv_sender = timestamp_to_timeval(&(report->result->raw_data[it].data.SenderTime));
-        uint64_t sendTime = timeval_to_microsec(&tv_sender);
-
-        struct timeval tv_reflector_recv = timestamp_to_timeval(&(report->result->raw_data[it].data.RecvTime));
-        uint64_t reflRecvTime = timeval_to_microsec(&tv_reflector_recv);
-
-        struct timeval tv_reflector_ret = timestamp_to_timeval(&(report->result->raw_data[it].data.Time));
-        uint64_t reflReturnTime = timeval_to_microsec(&tv_reflector_ret);
-
-        struct timeval tv_ret = timestamp_to_timeval(&(report->result->raw_data[it].time));
-        uint64_t returnTime = timeval_to_microsec(&tv_ret);
+        uint64_t sendTime = timestamp_to_microsec(report->result->raw_data[it].data.SenderTime);
+        uint64_t reflRecvTime = timestamp_to_microsec(report->result->raw_data[it].data.RecvTime);
+        uint64_t reflReturnTime = timestamp_to_microsec(report->result->raw_data[it].data.Time);
+        uint64_t returnTime = timestamp_to_microsec(report->result->raw_data[it].time);
 
         uint64_t processTime = reflReturnTime - reflRecvTime;
 
@@ -375,7 +368,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
  *
  * Returns NULL on ENOMEM.
  */
-TWAMPReport * twamp_report_init(void)
+TWAMPReport * twamp_report_init(const sa_family_t family, const char * const host)
 {
     struct twamp_report_private *rp = NULL;
     TWAMPResult *tr = NULL;
@@ -404,6 +397,9 @@ TWAMPReport * twamp_report_init(void)
 
     r->result = tr;
     r->privdata = rp;
+
+    r->family = family;
+    r->host = host;
 
     return r;
 

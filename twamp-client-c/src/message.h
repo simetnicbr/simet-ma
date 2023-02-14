@@ -120,25 +120,28 @@ typedef struct twamp_stop {
 /* TEST MESSAGES */
 /*****************/
 
-#define TST_PKT_SIZE 128U
+#define MAX_TSTPKT_SIZE 65400
+#define MIN_TSTPKT_SIZE 128     /* large enough for twamp, stamp, twamp light, all modes */
+#define DFL_TSTPKT_SIZE 128     /* packet size for the SIMET2 basic measurement */
+#define OWAMP_PAD_OFFSET 14     /* where the "padding" in OWAMP-based messages start */
 
 /* RFC-6038, RFC-7750, symmetric-mode, reflect-octets-compatible packet */
-typedef struct test_packet {
+typedef struct __attribute__((__packed__)) test_packet {
     uint32_t SeqNumber;
     Timestamp Time;
     uint16_t ErrorEstimate;
     uint8_t MBZ1[27]; /* RFC-6038 symmetric mode. RFC-7750 has data in offset 2 */
     union {
-        uint8_t Padding[TST_PKT_SIZE-14-27-3]; /* start of padding */
         struct {
             /* SIMET Extension to match TWAMP_CONTROL and TWAMP_TEST server-side */
             uint8_t Padding_align[3]; /* padding alignment */
             uint8_t Cookie[24];       /* SIMET cookie, refer to twamp.h */
         };
     };
+    uint8_t ExtraPadding[];
 } UnauthPacket;
 
-typedef struct reflected_packet {
+typedef struct __attribute__((__packed__)) reflected_packet {
     uint32_t SeqNumber;
     Timestamp Time;
     uint16_t ErrorEstimate;
@@ -149,7 +152,7 @@ typedef struct reflected_packet {
     uint16_t SenderErrorEstimate;
     uint8_t MBZ2[2];
     uint8_t SenderTTL;
-    uint8_t Padding[TST_PKT_SIZE-41];
+    uint8_t Padding[];
 } UnauthReflectedPacket;
 
 /***********/
@@ -192,7 +195,7 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings);
 /***********************/
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse);
-int message_format_request_session(int ipvn, uint16_t sender_port, RequestSession *rqtSession);
+int message_format_request_session(int ipvn, size_t padding_size, uint16_t sender_port, RequestSession *rqtSession);
 
 int message_format_stop_sessions(StopSessions *stpSessions);
 

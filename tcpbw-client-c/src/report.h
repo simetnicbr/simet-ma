@@ -24,7 +24,7 @@
 typedef struct tcpbw_download_result
 {
     uint64_t bytes;
-    uint64_t interval; /* microseconds */
+    uint64_t interval_ns; /* nanoseconds */
     unsigned int nstreams;
 } DownResult;
 

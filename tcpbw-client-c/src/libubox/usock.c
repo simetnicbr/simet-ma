@@ -52,6 +52,22 @@ static int usock_connect(int type, struct sockaddr *sa, int sa_len, int family, 
 
 	usock_set_flags(sock, type);
 
+	/*
+	 * TCP buffer sizes:
+	 *
+	 * These must be set before TCP connect in order to be reflected in the
+	 * TCP Window Scaling.  Changing them later is not useful: window scaling
+	 * is set only during the initial TCP handshake.
+	 *
+	 * We try to set a very large buffer size, to get the maximum allowed
+	 * by the O.S. limits.  This *really* helps measuring LFNs, which require
+	 * very large TCP windows when you want to avoid the need for hundreds of
+	 * concurrent connections.
+	 */
+	const int bufsize = 32*1024*1024;
+	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize));
+	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
+
 	if (server) {
 		const int one = 1;
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));

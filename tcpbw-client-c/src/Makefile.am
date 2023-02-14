@@ -16,6 +16,7 @@
 bin_PROGRAMS = tcpbwc
 
 tcpbwc_SOURCES = libubox/usock.h libubox/usock.c\
+		timespec.h \
 	        tcpbwc.h simet_err.h \
 		logger.h \
 		report.h report.c \
