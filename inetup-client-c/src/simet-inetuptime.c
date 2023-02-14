@@ -505,6 +505,8 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
 {
     struct simet_inetup_msghdr hdr;
 
+    static_assert(SIMET_UPTIME2_MAXDATASIZE < UINT32_MAX, "SIMET_UPTIME2_MAXDATASIZE cannot be larger than UINT32_MAX");
+
     if (msgsize > SIMET_UPTIME2_MAXDATASIZE) {
         protocol_msg(MSG_IMPORTANT, s, "internal error: tried to send too large a message, discarded it instead");
         return 0; /* or abort the program, which would be worse */
@@ -516,7 +518,7 @@ static int xx_simet_uptime2_sndmsg(struct simet_inetup_server * const s,
 
     memset(&hdr, 0, sizeof(hdr));
     hdr.message_type = htons(msgtype);
-    hdr.message_size = htonl(msgsize); /* safe, < SIMET_UPTIME2_MAXDATASIZE */
+    hdr.message_size = htonl((uint32_t)msgsize); /* safe, < SIMET_UPTIME2_MAXDATASIZE */
 
     if (tcpaq_queue(&s->conn, &hdr, sizeof(hdr), 1) || tcpaq_queue(&s->conn, (void *)msgdata, msgsize, 1)) {
         /* should not happen, but if it does, try to recover */
