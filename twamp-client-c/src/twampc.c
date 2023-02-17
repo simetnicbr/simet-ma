@@ -398,6 +398,7 @@ int main(int argc, char **argv)
         .packets_max = param.packets_count * 2,
         .packets_interval_us = (packet_interval_us > 0) ? (unsigned int) packet_interval_us : 30000U,
         .packets_timeout_us = (packet_timeout_us > 0) ? (unsigned int) packet_timeout_us : 100000U,
+        .ttl = 255,
     };
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");

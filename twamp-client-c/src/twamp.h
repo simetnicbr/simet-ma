@@ -58,6 +58,7 @@ typedef struct twamp_parameters {
     unsigned int packets_max;
     unsigned int packets_interval_us;
     unsigned int packets_timeout_us;
+    unsigned int ttl;
 } TWAMPParameters;
 
 /* Context */
