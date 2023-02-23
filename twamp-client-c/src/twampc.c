@@ -37,6 +37,7 @@
 
 #include "simet_err.h"
 #include "logger.h"
+#include "base64.h"
 
 /* We depend on these */
 static_assert(sizeof(int) >= 4, "code assumes (int) is at least 32 bits");
@@ -268,6 +269,7 @@ static void print_usage(const char * const p, int mode)
             "\t-4\tuse IPv4, instead of system default\n"
             "\t-6\tuse IPv6, instead of system default\n"
             "\t-m\toperating mode: twamp (default), light\n"
+            "\t-k\tauthentication key, base64 (SIMET extension, not auth mode)\n"
             "\t-t\tconnection timeout in seconds\n"
             "\t-c\tnumber of packets to transmit per session\n"
             "\t-s\tsize of the packet payload (UDP/IP headers not included)\n"
@@ -296,13 +298,14 @@ int main(int argc, char **argv)
     int twamp_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
+    TWAMPKey key = { 0 };
 
     progname = argv[0];
     sanitize_std_fds();
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:o:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:o:k:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -370,6 +373,22 @@ int main(int argc, char **argv)
                 print_usage(argv[0], 1);
             }
             break;
+        case 'k': {
+                char *key_base64 = strdup_trim(optarg);
+                ssize_t b64len = base64_decode(key_base64, strlen(key_base64), key.data, sizeof(key.data));
+                if (b64len < 0) {
+                    print_err("authentication key: base64 decoding error: %s", strerror(-(int)b64len));
+                    exit(SEXIT_FAILURE);
+                } else if (b64len < SIMET_TWAMP_AUTH_MINKEYSIZE) {
+                    print_err("authentication key: too short (must be at least %u bytes)", (unsigned int)SIMET_TWAMP_AUTH_MINKEYSIZE);
+                    exit(SEXIT_FAILURE);
+                }
+                key.len = (size_t)b64len; /* verified, b64len >= 0 */
+
+                free(key_base64);
+                key_base64 = NULL;
+            }
+            break;
         case 'h':
             print_usage(argv[0], 1);
             /* fall-through */ /* silence bogus warning */
@@ -399,6 +418,7 @@ int main(int argc, char **argv)
         .packets_interval_us = (packet_interval_us > 0) ? (unsigned int) packet_interval_us : 30000U,
         .packets_timeout_us = (packet_timeout_us > 0) ? (unsigned int) packet_timeout_us : 100000U,
         .ttl = 255,
+        .key = key,
     };
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");

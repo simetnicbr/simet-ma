@@ -124,6 +124,25 @@ static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struc
 static_assert(sizeof(struct simet_cookie) < MIN_TSTPKT_SIZE - offsetof(UnauthPacket, Padding),
               "struct simet_cookie must fit inside the padding of the smallest acceptable TEST packet");
 
+static void simet_auth_as_padding(void * const dst, size_t dst_sz, const TWAMPKey *key)
+{
+    if (key && key->len > 0 && dst_sz > sizeof(struct stamp_private_tlv) + key->len) {
+        struct stamp_private_tlv * const a = (struct stamp_private_tlv *)dst;
+        const size_t len = key->len + (offsetof(struct stamp_private_tlv, data) - sizeof(struct stamp_tlv_header));
+        if (len <= 0xffff) {
+            a->hdr.flags  = 0x80; /* U=1 */
+            a->hdr.type   = SIMET_STAMP_AUTHTLV_TYPE;
+            a->hdr.length = htons((uint16_t)len);
+            a->private_enterprise_number = htonl(SIMET_STAMP_TLV_PEN);
+            a->simet_tlv_sub_type = htons(SIMET_STAMP_TLV_AUTHCOOKIE);
+            memcpy(&a->data, key->data, key->len);
+        }
+    }
+}
+static_assert(offsetof(struct stamp_private_tlv, data) > sizeof(struct stamp_tlv_header), "code incompatible with struct stamp_private_tlv, refactor it!");
+static_assert(sizeof(struct stamp_private_tlv) + SIMET_TWAMP_AUTH_MAXKEYSIZE < MIN_TSTPKT_SIZE - offsetof(UnauthPacket, Padding),
+              "struct stamp_private_tlv + SIMET_TWAMP_AUTH_MAXKEYSIZE must fit inside the padding of the smallest acceptable TEST packet");
+
 static int twamp_rawdata_init(unsigned int num_packets, TWAMPRawData **pbuffer)
 {
     if (!pbuffer)
@@ -857,6 +876,8 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     if (test_ctx->cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
         simet_cookie_as_padding(&packet->Padding, padsize, &(test_ctx->cookie));
+    } else {
+        simet_auth_as_padding(&packet->Padding, padsize, &(test_ctx->param.key));
     }
 
     const int ttl = (test_ctx->param.ttl > 0 && test_ctx->param.ttl < 256)? (int)test_ctx->param.ttl : 255;

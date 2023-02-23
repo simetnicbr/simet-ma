@@ -20,6 +20,7 @@
 #define TWAMP_H_
 
 #include "report.h"
+#include <assert.h>
 
 #ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
@@ -31,18 +32,45 @@
 
 #define TWAMP_DEFAULT_PORT "862"
 
+#define SIMET_TWAMP_AUTH_MINKEYSIZE 16
+#define SIMET_TWAMP_AUTH_MAXKEYSIZE 64
+
 #define SIMET_TWAMP_IDCOOKIE_V1LEN 16
 #define SIMET_TWAMP_IDCOOKIE_V1SIG 0x83b8c493
-struct simet_cookie { /* max 24 bytes, refer to messages.h */
+
+struct __attribute__((__packed__)) simet_cookie {
     /* SIMET cookie v1 */
     uint32_t sig; /* SIMET_TWAMP_IDCOOKIE_V1SIG, network byte order */
     uint8_t data[SIMET_TWAMP_IDCOOKIE_V1LEN]; /* SID from Accept-TW-Session */
+};
+
+#define SIMET_STAMP_AUTHTLV_TYPE    252
+#define SIMET_STAMP_TLV_PEN         60267    /* IANA-assigned Private Enterprise Number, CEPTRO.br */
+#define SIMET_STAMP_TLV_AUTHCOOKIE  0x0100   /* simet_tlv_sub_type */
+
+struct __attribute__((__packed__)) stamp_tlv_header {
+    uint8_t  flags;
+    uint8_t  type;
+    uint16_t length; /* Network byte order */
+};
+
+struct __attribute__((__packed__)) stamp_private_tlv {
+    struct   stamp_tlv_header hdr; /* hdr.type must be 252, 253 or 254 */
+    uint32_t private_enterprise_number; /* Network byte order */
+    uint16_t simet_tlv_sub_type;        /* Network byte order */
+    uint8_t  data[]; /* data[hdr.length - 8] */
 };
 
 enum {
     TWAMP_MODE_TWAMP = 0,
     TWAMP_MODE_TWAMPLIGHT,
 };
+
+/* TWAMP authentication key */
+typedef struct twamp_key {
+    uint8_t data[SIMET_TWAMP_AUTH_MAXKEYSIZE];
+    size_t  len; /* 0 for no key */
+} TWAMPKey;
 
 /* TWAMP parameters struct */
 /* all pointers are *not* owned by the struct */
@@ -59,6 +87,7 @@ typedef struct twamp_parameters {
     unsigned int packets_interval_us;
     unsigned int packets_timeout_us;
     unsigned int ttl;
+    TWAMPKey key;
 } TWAMPParameters;
 
 /* Context */
