@@ -16,3 +16,4 @@ doc
 notes
 *.orig
 *.rej
+*.swp
