@@ -121,6 +121,8 @@ static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struc
     if (dst && dst_sz && cookie)
         memcpy(dst, cookie, sizeof(struct simet_cookie) <= dst_sz ? sizeof(struct simet_cookie) : dst_sz);
 }
+static_assert(sizeof(struct simet_cookie) < MIN_TSTPKT_SIZE - offsetof(UnauthPacket, Padding),
+              "struct simet_cookie must fit inside the padding of the smallest acceptable TEST packet");
 
 static int twamp_rawdata_init(unsigned int num_packets, TWAMPRawData **pbuffer)
 {
@@ -841,6 +843,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
 
     const unsigned int pktsize = test_ctx->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
+    const size_t padsize = pktsize - offsetof(UnauthReflectedPacket, Padding);
     UnauthPacket *packet = calloc(1, pktsize);
     if (!packet) {
        print_err("Error allocating memory for test packet to send");
@@ -853,7 +856,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
 
     if (test_ctx->cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
-        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &(test_ctx->cookie));
+        simet_cookie_as_padding(&packet->Padding, padsize, &(test_ctx->cookie));
     }
 
     const int ttl = (test_ctx->param.ttl > 0 && test_ctx->param.ttl < 256)? (int)test_ctx->param.ttl : 255;
