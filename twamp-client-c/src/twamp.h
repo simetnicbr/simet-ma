@@ -121,6 +121,7 @@ TWAMPReport * twamp_report_init(const sa_family_t family, const char * const hos
 void twamp_report_done(TWAMPReport *);
 
 int twamp_report_testsession_connection(TWAMPReport *, int sockfd);
+int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param);
 int twamp_report_render_lmap(TWAMPReport*, TWAMPParameters*);
 
 #endif /* TWAMP_H_ */

@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <errno.h>
 
+#include <limits.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -428,6 +429,209 @@ int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
 
     return xx_serialize_partial_report("LMAP report", param->lmap_report_mode,
             param->lmap_report_path, param->lmap_report_output, jo);
+}
+
+/* updates report->result */
+int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param)
+{
+    struct twpktstat {
+        uint64_t rtt;
+        int seen; /* 0b00 = not seen, 0b01 = seen, 0b11 = valid */
+    };
+    struct twpktstat * pktstat_storage = NULL;
+
+    unsigned int packet_valid_count = 0; /* valid for statistics */
+    unsigned int packet_invalid_count = 0;
+    unsigned int packet_dupe_count = 0;
+    unsigned int packet_late_count = 0;
+
+    assert(param);
+
+    unsigned int np = (report && report->result) ? report->result->packets_received : 0;
+    /* skip guard packet, it is never reported or used */
+    if (np == param->packets_max && np > 0)
+        np--;
+
+    if (!np) {
+        report->result->packets_lost = report->result->packets_sent;
+        print_msg(MSG_IMPORTANT, "stats: no packets were received");
+        return 0;
+    }
+
+    const unsigned int maxseq = report->result->packets_sent; /* note: seq starts on zero */
+    print_msg(MSG_DEBUG, "stats: inspecting %u received packets (%u sent)", np, maxseq);
+
+    /* pktstat_storage holds the statistics indexed by sender sequence number */
+    pktstat_storage = calloc(sizeof(struct twpktstat), maxseq);
+    if (!pktstat_storage)
+        return ENOMEM;
+
+    int err = 0;
+
+    for (unsigned int it = 0; it < np; it++) {
+        unsigned int sender_seq    = report->result->raw_data[it].data.SenderSeqNumber;
+        unsigned int reflector_seq = report->result->raw_data[it].data.SeqNumber;
+
+        /* sender_seq MUST NOT index into pktstat_storage[maxseq] if out-of-bounds */
+        if (sender_seq >= maxseq || reflector_seq >= maxseq) {
+            packet_invalid_count++;
+            continue;
+        }
+
+        pktstat_storage[sender_seq].seen |= 1; /* for lost-packet tracking */
+
+        uint64_t send_time = timestamp_to_microsec(report->result->raw_data[it].data.SenderTime);
+        uint64_t refl_RecvTime = timestamp_to_microsec(report->result->raw_data[it].data.RecvTime);
+        uint64_t refl_ReturnTime = timestamp_to_microsec(report->result->raw_data[it].data.Time);
+        uint64_t receive_time = timestamp_to_microsec(report->result->raw_data[it].time);
+        if (refl_RecvTime > refl_ReturnTime || send_time > receive_time) {
+            packet_invalid_count++;
+            continue;
+        }
+
+        uint64_t reflector_time = refl_ReturnTime - refl_RecvTime;
+        uint64_t rtt_us = receive_time - send_time;
+        if (reflector_time > rtt_us) {
+            packet_invalid_count++;
+            continue;
+        }
+        rtt_us -= reflector_time;
+
+        if (pktstat_storage[sender_seq].seen & 2) {
+            /* duplicate: count and skip */
+            packet_dupe_count++;
+            continue;
+        }
+
+        if (rtt_us > param->packets_timeout_us) {
+            /* arrived late and not a duplicate: count and proceed */
+            packet_late_count++;
+        }
+
+        pktstat_storage[sender_seq].seen = 3; /* valid for statistics */
+        pktstat_storage[sender_seq].rtt = rtt_us;
+        packet_valid_count++;
+    }
+
+    print_msg(MSG_DEBUG, "stats: received packets breakdown: %u valid (%u late), %u duplicate(s), %u invalid",
+              packet_valid_count, packet_late_count, packet_dupe_count, packet_invalid_count);
+
+    if (np != packet_invalid_count + packet_dupe_count + packet_valid_count) {
+        print_err("stats: internal error: inconsistent packet counts, aborting...");
+        err = EFAULT;
+        goto err_exit;
+    }
+
+    report->result->packets_valid = packet_valid_count;
+    report->result->packets_duplicated = packet_dupe_count;
+    report->result->packets_invalid = packet_invalid_count;
+    report->result->packets_late = packet_late_count;
+
+    unsigned int packet_lost_count;
+    uint64_t rtt_min_us = UINT_MAX;
+    uint64_t rtt_max_us = 0;
+    uint64_t rtt_median_us = 0;
+    if (packet_valid_count > 0) {
+        packet_lost_count = 0;
+        for (unsigned int is = 0; is < maxseq; is++) {
+            packet_lost_count += (pktstat_storage[is].seen == 0) ? 1 : 0;
+            if (pktstat_storage[is].seen & 2) {
+                /* valid for statistics... */
+                if (pktstat_storage[is].rtt > rtt_max_us)
+                    rtt_max_us = pktstat_storage[is].rtt;
+                if (pktstat_storage[is].rtt < rtt_min_us)
+                    rtt_min_us = pktstat_storage[is].rtt;
+            }
+        }
+
+        /* Median, algorithm by Torben Mogensen, original code by N. Devillard
+         *
+         * needs the min/max pass above. Not the fastest: does multiple
+         * passes over the array, but it doesn't modify the array and it
+         * does not need any extra memory.
+         */
+        const unsigned int n  = packet_valid_count;
+        const unsigned int hn = (n+1)/2;
+        uint64_t pmin = rtt_min_us;
+        uint64_t pmax = rtt_max_us;
+        uint64_t guess, gmaxl, gming;
+        unsigned int lcnt, gcnt, ecnt; /* element counters */
+        unsigned int passes = 0; /* for debugging */
+        while (1) {
+            passes++;
+
+            lcnt = 0, gcnt = 0, ecnt = 0;
+            gmaxl = pmin;
+            gming = pmax;
+            guess = (pmin + pmax)/2; /* FIXME: should we round to nearest ? */
+
+            /* we could iterate through report->result instead and get the seqnum
+             * to index pktstat_storage, but that'd be better only when there's a
+             * large packet loss, on a large sample, and not many duplicates.
+             * Instead, do what is simpler, less error-prone, and likely to be
+             * more cache-friendly */
+            for (unsigned int is = 0; is < maxseq; is++) {
+                if (!(pktstat_storage[is].seen & 2))
+                    continue; /* invalid entry for statistics */
+
+                if (pktstat_storage[is].rtt < guess) {
+                    if (pktstat_storage[is].rtt > gmaxl)
+                        gmaxl = pktstat_storage[is].rtt;
+                    lcnt++;
+                } else if (pktstat_storage[is].rtt > guess) {
+                    if (pktstat_storage[is].rtt < gming)
+                        gming = pktstat_storage[is].rtt;
+                    gcnt++;
+                } else {
+                    ecnt++;
+                }
+            }
+            if (lcnt <= hn && gcnt <= hn) {
+                break; /* no need to further partition */
+            } else if (lcnt > gcnt) {
+                pmax = gmaxl;
+            } else {
+                pmin = gming;
+            }
+        }
+        if (lcnt >= hn) {
+            pmin = gmaxl;
+        } else if (lcnt + ecnt >= hn) {
+            pmin = guess;
+        } else {
+            pmin = gming;
+        }
+        if (n & 1) {
+            /* n odd: pmin is our median */
+            rtt_median_us = pmin;
+        } else {
+            /* n even: calculate the pmax, and average */
+            if (gcnt >= hn) {
+                pmax = gming;
+            } else if (gcnt + ecnt >= hn) {
+                pmax = guess;
+            } else {
+                pmax = gmaxl;
+            }
+            rtt_median_us = (pmin + pmax + 1)/2; /* round(a/b) == trunc(a + (b/2)/b) for sign(a)=sign(b) */
+        }
+        print_msg(MSG_DEBUG, "stats: needed %u passes to find median for %u points", passes, n);
+
+        report->result->rtt_min = rtt_min_us;
+        report->result->rtt_max = rtt_max_us;
+        report->result->rtt_median = rtt_median_us;
+    } else {
+        packet_lost_count = report->result->packets_sent - packet_invalid_count - packet_dupe_count;
+        print_msg(MSG_IMPORTANT, "stats: no valid packets were received");
+    }
+    report->result->packets_lost = packet_lost_count;
+
+    print_msg(MSG_NORMAL, "stats: %u packets sent, %u packets lost (not including packets arriving too late)", report->result->packets_sent, packet_lost_count);
+    print_msg(MSG_NORMAL, "stats: RTT (microseconds): min=%" PRIu64 ", max=%" PRIu64 ", median=%" PRIu64, rtt_min_us, rtt_max_us, rtt_median_us);
+
+err_exit:
+    free(pktstat_storage);
+    return err;
 }
 
 /**

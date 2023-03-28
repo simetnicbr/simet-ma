@@ -345,10 +345,9 @@ int twamp_run_light_client(TWAMPParameters * const param)
     print_msg(MSG_IMPORTANT, "measurement finished %s",
             (rc == SEXIT_SUCCESS) ? "successfully" : "unsuccessfully");
 
-    /* FIXME: remove or repurpose packets_dropped_timeout */
-    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u received too late)",
             t_ctx.report->result->packets_sent, t_ctx.report->result->packets_received,
-            t_ctx.report->result->packets_dropped_timeout);
+            t_ctx.report->result->packets_late);
 
 TEST_EXIT:
     if (fd_test >= 0) {
@@ -364,8 +363,10 @@ TEST_EXIT:
         fd_test = -1;
     }
 
-    if (do_report)
+    if (do_report) {
+        twamp_report_statistics(t_ctx.report, param);
         twamp_report_render_lmap(t_ctx.report, param);
+    }
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
 
@@ -669,10 +670,9 @@ int twamp_run_client(TWAMPParameters * const param)
     print_msg(MSG_IMPORTANT, "measurement finished %s",
             (rc == SEXIT_SUCCESS) ? "successfully" : "unsuccessfully");
 
-    /* FIXME: remove or repurpose packets_dropped_timeout */
-    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u received too late)",
             t_ctx.report->result->packets_sent, t_ctx.report->result->packets_received,
-            t_ctx.report->result->packets_dropped_timeout);
+            t_ctx.report->result->packets_late);
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
@@ -705,8 +705,10 @@ MEM_FREE:
     free(stpSessions);
     free(testPort);
 
-    if (do_report)
+    if (do_report) {
+        twamp_report_statistics(t_ctx.report, param);
         twamp_report_render_lmap(t_ctx.report, param);
+    }
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
 
@@ -955,8 +957,6 @@ static int twamp_test(TWAMPContext * const test_ctx) {
 #endif
     }
 
-    test_ctx->report->result->packets_sent = counter;
-
     if (test_ctx->abort_test)
         print_msg(MSG_DEBUG, "[THREAD] sending thread stopping early due to abort_test flag");
 
@@ -980,6 +980,9 @@ err_out:
             rc = trc;
         }
     }
+
+    /* update this after threads have been quiesced, just in case */
+    test_ctx->report->result->packets_sent = counter;
 
     free(packet);
 
