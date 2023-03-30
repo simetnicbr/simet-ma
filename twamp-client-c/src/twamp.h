@@ -21,6 +21,7 @@
 
 #include "report.h"
 #include <assert.h>
+#include <stdio.h>
 
 #ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
@@ -72,6 +73,13 @@ typedef struct twamp_key {
     size_t  len; /* 0 for no key */
 } TWAMPKey;
 
+enum report_mode {
+    TWAMP_REPORT_MODE_FRAGMENT = 0, /* Array contents */
+    TWAMP_REPORT_MODE_OBJECT   = 1, /* array or object */
+    TWAMP_REPORT_MODE_NONE     = 2, /* No report */
+    TWAMP_REPORT_MODE_EOL
+};
+
 /* TWAMP parameters struct */
 /* all pointers are *not* owned by the struct */
 typedef struct twamp_parameters {
@@ -80,7 +88,11 @@ typedef struct twamp_parameters {
     const struct sockaddr_storage * const source_ss;
     sa_family_t family;
     int connect_timeout;
-    int lmap_report_mode;
+
+    enum report_mode lmap_report_mode;
+    const char *lmap_report_path;  /* when not NULL, causes fopen/reopen of lmap_report_output */
+    FILE *lmap_report_output;      /* will be used if non-NULL and lmap_report_path is NULL */
+
     unsigned int packets_count;
     unsigned int payload_size;
     unsigned int packets_max;

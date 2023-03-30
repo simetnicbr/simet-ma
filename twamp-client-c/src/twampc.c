@@ -277,8 +277,8 @@ static void print_usage(const char * const p, int mode)
             "\t-T\ttime in microseconds to wait for the last packet\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\t-I\tsource IP address and/or :port for TWAMP-Light TEST stream, use [] for ipv6 literals\n"
-            "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
-            "\t-o\tredirect report output to <path>\n"
+            "\t-r\tLMAP report mode: 0 = comma-separated, 1 = json array, 2 = none\n"
+            "\t-o\tredirect LMAP report output to <path>, stdout if <path> is - or empty\n"
             "\nserver: hostname or IP address of the TWAMP server\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -295,6 +295,7 @@ int main(int argc, char **argv)
     int packet_count = 200;
     int payload_size = DFL_TSTPKT_SIZE;
     int lmap_report_mode = 0;
+    const char* lmap_report_path = NULL;
     int twamp_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
@@ -320,9 +321,12 @@ int main(int argc, char **argv)
                 log_level = 0;
             break;
         case 'o':
-            if (freopen(optarg, "w", stdout) == NULL) {
-                print_err("could not redirect output to %s: %s", optarg, strerror(errno));
-                exit(SEXIT_FAILURE);
+            if (lmap_report_path)
+                free_constchar(lmap_report_path);
+            if (optarg && (optarg[0] != '\0') && !(optarg[0] == '-' && optarg[1] == '\0')) {
+                lmap_report_path = strdup_trim(optarg);
+            } else {
+                lmap_report_path = NULL;
             }
             break;
         case '4':
@@ -363,6 +367,10 @@ int main(int argc, char **argv)
             break;
         case 'r':
             lmap_report_mode = atoi(optarg);
+            if (lmap_report_mode < 0 || lmap_report_mode >= TWAMP_REPORT_MODE_EOL) {
+                print_err("unknown report mode: %s", optarg);
+                exit(SEXIT_FAILURE);
+            }
             break;
         case 'm':
             if (optarg && !strcasecmp("twamp", optarg)) {
@@ -411,6 +419,8 @@ int main(int argc, char **argv)
         .source_ss = ss_source,
         .family = family,
         .lmap_report_mode = lmap_report_mode,
+        .lmap_report_path = lmap_report_path,
+        .lmap_report_output = (!lmap_report_path) ? stdout : NULL,
         .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,
         .packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count),
         .payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE),

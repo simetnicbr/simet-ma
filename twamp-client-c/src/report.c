@@ -61,7 +61,7 @@ const char * const socket_report_col_names[SOCK_TBL_COL_MAX] = {
 };
 
 struct twamp_report_private {
-    json_object *lmap_root;
+    json_object *lmap_root; /* json array */
 }; /* TWAMPReport->privdata */
 
 static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
@@ -223,12 +223,83 @@ int twamp_report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
     return 0;
 }
 
+static int xx_serialize_partial_report(const char * const what, const enum report_mode mode,
+                                const char * const path, FILE * const output,
+                                json_object * const jo)
+{
+    FILE *outstream = output;
+    if (path) {
+        outstream = fopen(path, "w");
+        if (!outstream) {
+            print_err("%s: could not open output '%s': %s", what, path, strerror(errno));
+            return EIO;
+        }
+    }
+    if (outstream) {
+        switch (mode) {
+        case TWAMP_REPORT_MODE_FRAGMENT:
+            /* we need to serialize the root array, but we don't want to output its delimiters [ ],
+             * and we need to omit the "," after the last member of the array */
+            if (json_object_get_type(jo) == json_type_array) {
+                const size_t al = json_object_array_length(jo);
+                for (size_t i = 0; i < al ; i++) {
+                    if (fprintf(outstream, "%s%s",
+                              json_object_to_json_string_ext(json_object_array_get_idx(jo, i),
+                                                  JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
+                              (i + 1 < al) ? ",\n" : "\n") < 0) {
+                        errno = EIO;
+                        goto ioerr_exit;
+                    }
+                }
+                break;
+            }
+            /* fallthrough */
+        case TWAMP_REPORT_MODE_OBJECT:
+            if (fprintf(outstream, "%s\n", json_object_to_json_string_ext(jo,
+                                    JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED)) < 0) {
+                errno = EIO;
+                goto ioerr_exit;
+            }
+            break;
+        case TWAMP_REPORT_MODE_NONE:
+            break;
+        default:
+            break;
+        }
+
+        if (fflush(outstream) == EOF) {
+            goto ioerr_exit;
+        }
+
+        if (outstream != output && fclose(outstream) == EOF) {
+            print_err("%s: failed to close output: %s", what, strerror(errno));
+            goto ioerr_exit2;
+        }
+    }
+
+    return 0;
+
+ioerr_exit:
+    print_err("could not write LMAP report to output: %s", strerror(errno));
+    if (outstream != output) {
+       fclose(outstream);
+    }
+ioerr_exit2:
+    return EIO;
+}
+
 int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
 {
     char metric_name[256];
 
-    print_msg(MSG_DEBUG, "Printing raw data Table");
     assert(param);
+
+    if (param->lmap_report_mode >= 2) {
+        print_msg(MSG_DEBUG, "LMAP report generation disabled by LMAP report mode");
+        return 0;
+    }
+
+    print_msg(MSG_DEBUG, "generating LMAP report");
 
     snprintf(metric_name, sizeof(metric_name),
         "urn:ietf:metrics:perf:Priv_MPMonitor_Active_UDP-Periodic-"
@@ -341,23 +412,11 @@ int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
 
     json_object_array_add(jo, jres_tbl_content);
 
-    if (!param->lmap_report_mode) {
-        /* we need to serialize the root array, but we don't want to output its delimiters [ ],
-         * and we need to omit the "," after the last member of the array */
-        size_t al = json_object_array_length(jo);
-        for (size_t i = 0; i < al ; i++) {
-            fprintf(stdout, "%s%s",
-                      json_object_to_json_string_ext(json_object_array_get_idx(jo, i),
-                                          JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
-                      (i + 1 < al) ? ",\n" : "\n");
-        }
-    } else {
-        fprintf(stdout, "%s\n", json_object_to_json_string_ext(jo,
-                                JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
-    }
-    fflush(stdout);
+    if (report && report->privdata)
+        ((struct twamp_report_private *)(report->privdata))->lmap_root = jo;
 
-    return 0;
+    return xx_serialize_partial_report("LMAP report", param->lmap_report_mode,
+            param->lmap_report_path, param->lmap_report_output, jo);
 }
 
 /**
