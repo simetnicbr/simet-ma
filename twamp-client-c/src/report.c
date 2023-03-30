@@ -61,7 +61,7 @@ const char * const socket_report_col_names[SOCK_TBL_COL_MAX] = {
 };
 
 struct twamp_report_private {
-    json_object *root;
+    json_object *lmap_root;
 }; /* TWAMPReport->privdata */
 
 static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
@@ -210,16 +210,16 @@ int report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
     if (!report->privdata)
         return EINVAL;
     rp = (struct twamp_report_private *)report->privdata;
-    if (!rp->root)
-        rp->root = json_object_new_array();
-    if (!rp->root)
+    if (!rp->lmap_root)
+        rp->lmap_root = json_object_new_array();
+    if (!rp->lmap_root)
         return ENOMEM;
 
     jor = xx_report_socket_metric(sockfd, proto);
     if (!jor)
         return ENOMEM;
 
-    json_object_array_add(rp->root, jor);
+    json_object_array_add(rp->lmap_root, jor);
     return 0;
 }
 
@@ -331,7 +331,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
     jarray_res_tbl_rows = NULL;
 
     if (report && report->privdata) {
-        jo = ((struct twamp_report_private *)(report->privdata))->root;
+        jo = ((struct twamp_report_private *)(report->privdata))->lmap_root;
     } else {
         jo = NULL;
     }
@@ -341,7 +341,7 @@ int twamp_report(TWAMPReport *report, TWAMPParameters *param)
 
     json_object_array_add(jo, jres_tbl_content);
 
-    if (!param->report_mode) {
+    if (!param->lmap_report_mode) {
         /* we need to serialize the root array, but we don't want to output its delimiters [ ],
          * and we need to omit the "," after the last member of the array */
         size_t al = json_object_array_length(jo);
@@ -423,8 +423,8 @@ void twamp_report_done(TWAMPReport *r)
     if (r) {
         p = (struct twamp_report_private *)(r->privdata);
         if (p) {
-            if (p->root)
-                json_object_put(p->root);
+            if (p->lmap_root)
+                json_object_put(p->lmap_root);
             free(p);
             }
         if (r->result) {

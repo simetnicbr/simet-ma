@@ -294,7 +294,7 @@ int main(int argc, char **argv)
     int connect_timeout = 15;
     int packet_count = 200;
     int payload_size = DFL_TSTPKT_SIZE;
-    int report_mode = 0;
+    int lmap_report_mode = 0;
     int twamp_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
@@ -362,7 +362,7 @@ int main(int argc, char **argv)
             packet_timeout_us = atol(optarg);
             break;
         case 'r':
-            report_mode = atoi(optarg);
+            lmap_report_mode = atoi(optarg);
             break;
         case 'm':
             if (optarg && !strcasecmp("twamp", optarg)) {
@@ -410,7 +410,7 @@ int main(int argc, char **argv)
         .port = port,
         .source_ss = ss_source,
         .family = family,
-        .report_mode = report_mode,
+        .lmap_report_mode = lmap_report_mode,
         .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,
         .packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count),
         .payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE),

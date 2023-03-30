@@ -80,7 +80,7 @@ typedef struct twamp_parameters {
     const struct sockaddr_storage * const source_ss;
     sa_family_t family;
     int connect_timeout;
-    int report_mode;
+    int lmap_report_mode;
     unsigned int packets_count;
     unsigned int payload_size;
     unsigned int packets_max;
