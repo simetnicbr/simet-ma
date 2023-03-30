@@ -20,6 +20,8 @@
 #include "message.h"
 #include "logger.h"
 
+#include <stdbool.h>
+
 #include <json-c/json.h>
 #include <assert.h>
 #include <errno.h>
@@ -62,7 +64,8 @@ const char * const socket_report_col_names[SOCK_TBL_COL_MAX] = {
 };
 
 struct twamp_report_private {
-    json_object *lmap_root; /* json array */
+    json_object *lmap_root;     /* json array */
+    json_object *summary_root;  /* json object */
 }; /* TWAMPReport->privdata */
 
 static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
@@ -634,6 +637,118 @@ err_exit:
     return err;
 }
 
+/*
+ * { "metadata": {
+ *      "ip_family": "ip4"|"ip6",
+ *      "server": "<hostname or ip, same as command line>",
+ *      "server_port": "<port or service, same as command line",
+ *      "test_session_connection": {
+ *        "ip_family": "ip4"|"ip6",
+ *        "sender_addr": "<ip address>"
+ *        "sender_port": "<numeric port>"
+ *        "reflector_addr": "<ip address>",
+ *        "reflector_port": "<numeric port",
+ *      }
+ *   },
+ *   "parameters": {
+ *      "packet_delay_us": <int64>,
+ *      "packet_timeout_us": <int64>,
+ *      "packet_count": <int64>,
+ *      "packet_payload_size": <uint16>,  // UDP payload size, no UDP+IP headers
+ *      "discard_on_timeout": <bool>,
+ *   },
+ *   "results": {
+ *      "packets_sent": <int64>,
+ *      "packets_received_valid": <int64>,
+ *      "packets_received_invalid": <int64>,
+ *      "packets_received_late": <int64>,     // discard_on_timeout false
+ *      "packets_discarded_timeout": <int64>, // discard_on_timeout true
+ *      "packets_received_duplicates": <int64>,
+ *      "packets_lost": <int64>,
+ *      // only if packets_received_valid > 0:
+ *      "rtt": {
+ *         "rtt_min_us": <int64>,
+ *         "rtt_max_us": <int64>,
+ *         "rtt_median_us": <int64>
+ *      }
+ *   }
+ * }
+ */
+int twamp_report_render_summary(TWAMPReport *report, TWAMPParameters *param)
+{
+    json_object *jo, *jo1;
+
+    assert(param);
+
+    if (!report || !report->result)
+        return ENODATA;
+    if (!report->privdata)
+        return EINVAL;
+
+    if (!param->summary_report_enabled)
+        return 0; /* report disabled */
+
+    /* FIXME: not implemented (yet?) */
+    const bool param_discard_on_timeout = false;
+
+    json_object *jsummary = NULL;
+    if (report && report->privdata) {
+        jsummary = ((struct twamp_report_private *)(report->privdata))->summary_root;
+    }
+    if (!jsummary)
+        jsummary = json_object_new_object();
+    assert(jsummary);
+
+    const struct twamp_result * const r = report->result;
+
+    /* metadata, FIXME: socket metrics refactoring */
+    jo = json_object_new_object();
+    json_object_object_add(jo, "ip_family", json_object_new_string(str_ip46(param->family)));
+    json_object_object_add(jo, "server", json_object_new_string(param->host));
+    json_object_object_add(jo, "server_port", json_object_new_string(param->port));
+    jo1 = json_object_new_object();
+
+    const struct twamp_connection_info * const rtse = &(r->test_session_endpoints);
+    json_object_object_add(jo1, "ip_family", json_object_new_string(rtse->local_endpoint.family));
+    json_object_object_add(jo1, "sender_addr", json_object_new_string(rtse->local_endpoint.addr));
+    json_object_object_add(jo1, "sender_port", json_object_new_string(rtse->local_endpoint.port));
+    json_object_object_add(jo1, "reflector_addr", json_object_new_string(rtse->remote_endpoint.addr));
+    json_object_object_add(jo1, "reflector_port", json_object_new_string(rtse->remote_endpoint.port));
+    json_object_object_add(jo, "test_session_connection", jo1); jo1 = NULL;
+
+    json_object_object_add(jsummary, "metadata", jo); jo = NULL;
+
+    /* parameters */
+    jo = json_object_new_object();
+    json_object_object_add(jo, "packet_count", json_object_new_int64(param->packets_count));
+    json_object_object_add(jo, "packet_payload_size", json_object_new_int64(param->payload_size));
+    json_object_object_add(jo, "packet_timeout_us", json_object_new_int64(param->packets_timeout_us));
+    json_object_object_add(jo, "packet_delay_us", json_object_new_int64(param->packets_interval_us));
+    json_object_object_add(jo, "discard_on_timeout", json_object_new_boolean(param_discard_on_timeout));
+    json_object_object_add(jsummary, "parameters", jo); jo = NULL;
+
+    /* summary */
+    jo = json_object_new_object();
+    json_object_object_add(jo, "packets_sent", json_object_new_int64(r->packets_sent));
+    json_object_object_add(jo, "packets_received_valid", json_object_new_int64(r->packets_valid));
+    json_object_object_add(jo, (param_discard_on_timeout) ? "packets_discarded_timeout" : "packets_received_late", json_object_new_int64(r->packets_late));
+    json_object_object_add(jo, "packets_received_invalid", json_object_new_int64(r->packets_invalid));
+    json_object_object_add(jo, "packets_received_duplicates", json_object_new_int64(r->packets_duplicated));
+    json_object_object_add(jo, "packets_lost", json_object_new_int64(r->packets_lost));
+
+    if (r->packets_valid > 0) {
+        json_object *jrtt = json_object_new_object();
+        json_object_object_add(jrtt, "rtt_min_us", json_object_new_int64((int64_t)r->rtt_min));
+        json_object_object_add(jrtt, "rtt_max_us", json_object_new_int64((int64_t)r->rtt_max));
+        json_object_object_add(jrtt, "rtt_median_us", json_object_new_int64((int64_t)r->rtt_median));
+        json_object_object_add(jo, "rtt", jrtt);
+    }
+    json_object_object_add(jsummary, "results_summary", jo); jo = NULL;
+
+    return xx_serialize_partial_report("summary report", TWAMP_REPORT_MODE_OBJECT,
+            param->summary_report_path, param->summary_report_output, jsummary);
+}
+
 /**
  * twamp_report_init() - allocates and initializes a TWAMPReport struct
  *
@@ -699,6 +814,8 @@ void twamp_report_done(TWAMPReport *r)
         if (p) {
             if (p->lmap_root)
                 json_object_put(p->lmap_root);
+            if (p->summary_root)
+                json_object_put(p->summary_root);
             free(p);
             }
         if (r->result) {

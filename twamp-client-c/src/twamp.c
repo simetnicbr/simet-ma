@@ -366,6 +366,7 @@ TEST_EXIT:
     if (do_report) {
         twamp_report_statistics(t_ctx.report, param);
         twamp_report_render_lmap(t_ctx.report, param);
+        twamp_report_render_summary(t_ctx.report, param);
     }
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
@@ -708,6 +709,7 @@ MEM_FREE:
     if (do_report) {
         twamp_report_statistics(t_ctx.report, param);
         twamp_report_render_lmap(t_ctx.report, param);
+        twamp_report_render_summary(t_ctx.report, param);
     }
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;

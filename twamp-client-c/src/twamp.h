@@ -93,6 +93,10 @@ typedef struct twamp_parameters {
     const char *lmap_report_path;  /* when not NULL, causes fopen/reopen of lmap_report_output */
     FILE *lmap_report_output;      /* will be used if non-NULL and lmap_report_path is NULL */
 
+    int summary_report_enabled;
+    const char *summary_report_path;  /* when not NULL, causes fopen/reopen of summary_report_output */
+    FILE *summary_report_output;      /* will be used if non-NULL and summary_report_path is NULL */
+
     unsigned int packets_count;
     unsigned int payload_size;
     unsigned int packets_max;
@@ -123,5 +127,6 @@ void twamp_report_done(TWAMPReport *);
 int twamp_report_testsession_connection(TWAMPReport *, int sockfd);
 int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param);
 int twamp_report_render_lmap(TWAMPReport*, TWAMPParameters*);
+int twamp_report_render_summary(TWAMPReport *report, TWAMPParameters *param);
 
 #endif /* TWAMP_H_ */

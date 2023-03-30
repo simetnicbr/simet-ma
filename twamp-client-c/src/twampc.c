@@ -279,6 +279,8 @@ static void print_usage(const char * const p, int mode)
             "\t-I\tsource IP address and/or :port for TWAMP-Light TEST stream, use [] for ipv6 literals\n"
             "\t-r\tLMAP report mode: 0 = comma-separated, 1 = json array, 2 = none\n"
             "\t-o\tredirect LMAP report output to <path>, stdout if <path> is - or empty\n"
+            "\t-R\tsummary report mode: 0 = none (default), 1 = json object\n"
+            "\t-O\tredirect summary report output to <path>, stdout if <path> is - or empty\n"
             "\nserver: hostname or IP address of the TWAMP server\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -296,6 +298,8 @@ int main(int argc, char **argv)
     int payload_size = DFL_TSTPKT_SIZE;
     int lmap_report_mode = 0;
     const char* lmap_report_path = NULL;
+    int summary_report_mode = 0;
+    const char* summary_report_path = NULL;
     int twamp_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
@@ -306,7 +310,7 @@ int main(int argc, char **argv)
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:o:k:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:R:o:O:k:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -327,6 +331,15 @@ int main(int argc, char **argv)
                 lmap_report_path = strdup_trim(optarg);
             } else {
                 lmap_report_path = NULL;
+            }
+            break;
+        case 'O':
+            if (summary_report_path)
+                free_constchar(summary_report_path);
+            if (optarg && (*optarg != '\0')) {
+                summary_report_path = strdup_trim(optarg);
+            } else {
+                summary_report_path = NULL;
             }
             break;
         case '4':
@@ -369,6 +382,13 @@ int main(int argc, char **argv)
             lmap_report_mode = atoi(optarg);
             if (lmap_report_mode < 0 || lmap_report_mode >= TWAMP_REPORT_MODE_EOL) {
                 print_err("unknown report mode: %s", optarg);
+                exit(SEXIT_FAILURE);
+            }
+            break;
+        case 'R':
+            summary_report_mode = atoi(optarg);
+            if (summary_report_mode < 0 || summary_report_mode > 1) {
+                print_err("unknown summary report mode: %s", optarg);
                 exit(SEXIT_FAILURE);
             }
             break;
@@ -421,6 +441,9 @@ int main(int argc, char **argv)
         .lmap_report_mode = lmap_report_mode,
         .lmap_report_path = lmap_report_path,
         .lmap_report_output = (!lmap_report_path) ? stdout : NULL,
+        .summary_report_enabled = summary_report_mode,
+        .summary_report_path = summary_report_path,
+        .summary_report_output = (!summary_report_path) ? stdout : NULL,
         .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,
         .packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count),
         .payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE),
