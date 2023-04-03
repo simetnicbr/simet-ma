@@ -200,7 +200,7 @@ err_exit:
     return jres_tbl_content;
 }
 
-int report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
+int twamp_report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
 {
     struct twamp_report_private *rp;
     json_object *jor;
@@ -223,7 +223,7 @@ int report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
     return 0;
 }
 
-int twamp_report(TWAMPReport *report, TWAMPParameters *param)
+int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
 {
     char metric_name[256];
 

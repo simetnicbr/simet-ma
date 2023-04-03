@@ -104,9 +104,11 @@ typedef struct twamp_test_context {
 
 int twamp_run_client(TWAMPParameters * const param);
 int twamp_run_light_client(TWAMPParameters * const param);
-int twamp_report(TWAMPReport*, TWAMPParameters*);
+
 TWAMPReport * twamp_report_init(const sa_family_t family, const char * const host);
 void twamp_report_done(TWAMPReport *);
-int report_socket_metrics(TWAMPReport *, int sockfd, int sock_protocol);
+
+int twamp_report_socket_metrics(TWAMPReport *, int sockfd, int sock_protocol);
+int twamp_report_render_lmap(TWAMPReport*, TWAMPParameters*);
 
 #endif /* TWAMP_H_ */
