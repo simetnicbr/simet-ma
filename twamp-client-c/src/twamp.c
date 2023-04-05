@@ -323,7 +323,7 @@ int twamp_run_light_client(TWAMPParameters * const param)
     }
     t_ctx.report->address = hostAddr;
 
-    if (twamp_report_socket_metrics(t_ctx.report, fd_test, IPPROTO_UDP)) {
+    if (twamp_report_testsession_connection(t_ctx.report, fd_test)) {
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     } else {
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
@@ -616,7 +616,7 @@ int twamp_run_client(TWAMPParameters * const param)
         goto TEST_CLOSE;
     }
 
-    if (twamp_report_socket_metrics(t_ctx.report, fd_test, IPPROTO_UDP))
+    if (twamp_report_testsession_connection(t_ctx.report, fd_test))
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     else
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");

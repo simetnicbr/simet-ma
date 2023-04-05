@@ -112,7 +112,7 @@ static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
     return 0;
 }
 
-static json_object* xx_report_socket_metric(int sockfd, int proto)
+static json_object* xx_report_connection_metric(int sockfd, int proto, struct twamp_connection_info *report_conn_info)
 {
     char metric_name[256];
     const char *t_row[SOCK_TBL_COL_MAX];
@@ -193,6 +193,17 @@ static json_object* xx_report_socket_metric(int sockfd, int proto)
     json_object_object_add(jres_tbl_content, "row", jo1);
     jo1 = NULL;
 
+    if (report_conn_info) {
+        report_conn_info->protocol = proto;
+        /* transfer ownership */
+        report_conn_info->local_endpoint.family = t_row[socket_tbl_col_local_af];   t_row[socket_tbl_col_local_af] = NULL;
+        report_conn_info->local_endpoint.addr = t_row[socket_tbl_col_local_addr];   t_row[socket_tbl_col_local_addr] = NULL;
+        report_conn_info->local_endpoint.port = t_row[socket_tbl_col_local_port];   t_row[socket_tbl_col_local_port] = NULL;
+        report_conn_info->remote_endpoint.family = t_row[socket_tbl_col_remote_af]; t_row[socket_tbl_col_remote_af] = NULL;
+        report_conn_info->remote_endpoint.addr = t_row[socket_tbl_col_remote_addr]; t_row[socket_tbl_col_remote_addr] = NULL;
+        report_conn_info->remote_endpoint.port = t_row[socket_tbl_col_remote_port]; t_row[socket_tbl_col_remote_port] = NULL;
+    }
+
 err_exit:
     for (unsigned int i = 0; i < SOCK_TBL_COL_MAX; i++)
         free((void *)t_row[i]);
@@ -200,7 +211,7 @@ err_exit:
     return jres_tbl_content;
 }
 
-int twamp_report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
+int twamp_report_testsession_connection(TWAMPReport *report, int sockfd)
 {
     struct twamp_report_private *rp;
     json_object *jor;
@@ -215,7 +226,7 @@ int twamp_report_socket_metrics(TWAMPReport *report, int sockfd, int proto)
     if (!rp->lmap_root)
         return ENOMEM;
 
-    jor = xx_report_socket_metric(sockfd, proto);
+    jor = xx_report_connection_metric(sockfd, IPPROTO_UDP, (report->result) ? &(report->result->test_session_endpoints) : NULL);
     if (!jor)
         return ENOMEM;
 

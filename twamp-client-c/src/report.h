@@ -27,11 +27,27 @@ typedef struct twamp_raw_data {
     UnauthReflectedPacket data;
 } TWAMPRawData;
 
+struct twamp_socket_info {
+    const char *family;
+    const char *addr;
+    const char *port;
+};
+
+struct twamp_connection_info {
+    int protocol; /* IPPROTO_* */
+    struct twamp_socket_info local_endpoint;
+    struct twamp_socket_info remote_endpoint;
+};
+
 typedef struct twamp_result {
     unsigned int packets_sent;
     unsigned int packets_received;
     unsigned int packets_dropped_timeout; /* FIXME: remove or repurpose */
     /* FIXME: duplicates, out-of-sequence */
+
+    /* updated through twamp_report_socket_metrics() */
+    struct twamp_connection_info test_session_endpoints;
+
     TWAMPRawData * raw_data;
 } TWAMPResult;
 
