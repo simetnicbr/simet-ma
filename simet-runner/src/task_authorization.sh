@@ -37,6 +37,8 @@ authorization() {
     --show-error \
     --fail \
     --location \
+    --connect-timeout 15 \
+    --max-time 30 \
     --url "$_endpoint" > $BASEDIR/auth_response.json
   
   if [ "$?" -ne 0 ]; then
