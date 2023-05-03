@@ -66,6 +66,9 @@ _report_servicelist_output() {
 
 discover_init() {
   GLOBAL_STATE_CURRENT_PEER=-1
+  # GLOBAL_STATE_PEER_IDXMAP should be either empty, or space-separated list of indexes
+  # a negative value or invalid number must signal the end of the IDXMAP
+  GLOBAL_STATE_PEER_IDXMAP=
   if [ -n "$SIMET_SERVICELIST_OVERRIDE" ] ; then
     cp "$SIMET_SERVICELIST_OVERRIDE" "$BASEDIR/services.json" || {
       log_error "Failed when trying to override services.json from --services command line option"
@@ -79,7 +82,16 @@ discover_init() {
 
 discover_next_peer() {
   local _peer="undefined"
-  GLOBAL_STATE_CURRENT_PEER=$(( $GLOBAL_STATE_CURRENT_PEER + 1 ))
+  if [ -n "$GLOBAL_STATE_PEER_IDXMAP" ] ; then
+    log_debug "current server-selection map: $GLOBAL_STATE_PEER_IDXMAP"
+    GLOBAL_STATE_CURRENT_PEER="${GLOBAL_STATE_PEER_IDXMAP%% *}"
+    GLOBAL_STATE_PEER_IDXMAP="${GLOBAL_STATE_PEER_IDXMAP#* }"
+    # end of list? negative or empty, note that empty is not supposed to be possible
+    [ -n "$GLOBAL_STATE_CURRENT_PEER" ] && [ "$GLOBAL_STATE_CURRENT_PEER" -ge 0 ] \
+      || return 1
+  else
+    GLOBAL_STATE_CURRENT_PEER=$(( GLOBAL_STATE_CURRENT_PEER + 1 ))
+  fi
   log_debug "Probing for peer at list position: $GLOBAL_STATE_CURRENT_PEER"
   _peer=$($JSONFILTER -i "$BASEDIR/services.json" -t "@[$GLOBAL_STATE_CURRENT_PEER]")
   if [ "$_peer" != "" ]; then
