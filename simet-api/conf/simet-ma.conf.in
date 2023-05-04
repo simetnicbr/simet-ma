@@ -41,6 +41,7 @@ GEOLOC_CACHE="$SIMET_CACHE_DIR/geoloc-cache.txt"
 
 LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
+API_SERVER_SELECTION="https://api.simet.nic.br/server_selection_measurement"
 LMAP_SCHEDULE="anatel-resolution-574"
 LMAP_TASK_NAME_PREFIX="simet.nic.br_"
 GEOLOCATE=@BINDIR@/simet_geolocation.sh
