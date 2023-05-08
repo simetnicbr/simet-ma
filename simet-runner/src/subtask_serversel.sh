@@ -101,19 +101,24 @@ subtask_serverselection() {
   local SCNT
   local S_PUBPEER
   local S_HOST
+  local S_LEVEL
 
   local PEERPIDLIST=
   local PEERIDXLIST=
   local FBIDXLIST=
   SCNT=0
   while "$JSONFILTER" -i "$_services" -t "@[$SCNT]" >/dev/null 2>&1 ; do
-    j=$("$JSONFILTER" -i "$_services" -e "S_PUBPEER=@[$SCNT].isPublicPeer" -e "S_HOST=@[$SCNT].twamp[0].hostname") || j=
+    j=$("$JSONFILTER" -i "$_services" \
+	    -e "S_PUBPEER=@[$SCNT].isPublicPeer" \
+	    -e "S_LEVEL=@[$SCNT].localityListIndex" \
+	    -e "S_HOST=@[$SCNT].twamp[0].hostname" )\
+      || j=
     [ -n "$j" ] && {
       eval "$j" || return
       if [ "$S_PUBPEER" -eq 0 ] && [ -n "$S_HOST" ] ; then
 	_twquick "$SCNT" "$S_HOST" 2>/dev/null & TWLPID=$!
 	PEERPIDLIST=$(append_list "$PEERPIDLIST" "$TWLPID")
-	PEERIDXLIST=$(append_list "$PEERIDXLIST" "$SCNT")
+	PEERIDXLIST=$(append_list "$PEERIDXLIST" "$S_LEVEL:$SCNT")
       elif [ -n "$S_HOST" ] ;  then
 	log_verbose "server selection: peer #$SCNT: $S_HOST, global last-choice peer"
 	FBIDXLIST=$(append_list "$FBIDXLIST" "$SCNT")
@@ -135,8 +140,9 @@ subtask_serverselection() {
   for i in $PEERPIDLIST ; do
     WIDX="${WIDXLIST%% *}"
     WIDXLIST="${WIDXLIST#* }"
-    if _twquick_wait "$i" "$WIDX" ; then
-      log_verbose "server selection: peer #$WIDX: network RTT is approximately $MEDIANRTT microseconds"
+    WPEERID="${WIDX##*:}"
+    if _twquick_wait "$i" "$WPEERID" ; then
+      log_verbose "server selection: peer #$PEERID: network RTT is approximately $MEDIANRTT microseconds"
       RESIDX=$(append_list "$RESIDX" "$WIDX")
       RESRTT=$(append_list "$RESRTT" "$MEDIANRTT")
       PCNT=$(( PCNT + 1 ))
@@ -148,14 +154,18 @@ subtask_serverselection() {
     return
   }
 
-  # order by latency. note: do not reverse service-list ordering
+  # order by (rtt, service-list tier, service-list array index)
+  # note that each entry in RESIDX has two keys separated by :
   #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX'"
   i=$(while [ "$PCNT" -gt 0 ] ; do
-	printf "%s :%d\n" "${RESRTT%% *}" "${RESIDX%% *}"
+	printf "%s:%s\n" "${RESRTT%% *}" "${RESIDX%% *}"
 	RESRTT="${RESRTT#* }"
 	RESIDX="${RESIDX#* }"
 	PCNT=$(( PCNT - 1 ))
-      done | LC_ALL=C sort -n | cut -d ':' -f 2 | tr -s '\n\r' ' ' | sed -e 's/^[ \t\n]*//' -e 's/[ \t\n]*$//') || {
+      done \
+      | LC_ALL=C sort -t: -k1n -k2n -k3n \
+      | cut -d ':' -f 3 | tr -s '\n\r' ' ' \
+      | sed -e 's/^[ \t\n]*//' -e 's/[ \t\n]*$//') || {
     log_debug "server selection: failed to sort by latency."
     return
   }
