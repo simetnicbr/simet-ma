@@ -21,15 +21,53 @@
 _twquick() {
   local tw_tag="$1"
   local tw_host="$2"
+  shift 2
 
+  local tw_ip4pid
+  local tw_ip6pid
   log_verbose "server selection: peer #$tw_tag: $tw_host, TWAMP light measurement"
-  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/twlight_result_${tw_tag}.json" \
+  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/twlight_result_${tw_tag}_ip4.json" \
       -c "$TWQUICK_PKTCOUNT" \
       -i "$TWQUICK_PKTDELAY" \
       -T "$TWQUICK_PKTTIMEOUT" \
       -p "$TWQUICK_REMOTEPORT" \
       -k "$TWQUICK_KEY" \
-      "$tw_host"
+      -4 "$tw_host" \
+    & tw_ip4pid=$!
+  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/twlight_result_${tw_tag}_ip6.json" \
+      -c "$TWQUICK_PKTCOUNT" \
+      -i "$TWQUICK_PKTDELAY" \
+      -T "$TWQUICK_PKTTIMEOUT" \
+      -p "$TWQUICK_REMOTEPORT" \
+      -k "$TWQUICK_KEY" \
+      -6 "$tw_host" \
+    & tw_ip6pid=$!
+
+  local tw_ip4res=0
+  local tw_ip6res=0
+  wait "$tw_ip4pid" || {
+    tw_ip4res=$?
+    rm "$BASEDIR/twlight_result_${tw_tag}_ip4.json"
+  }
+  wait "$tw_ip6pid" || {
+    tw_ip6res=$?
+    rm "$BASEDIR/twlight_result_${tw_tag}_ip6.json"
+  }
+
+  # both failed
+  [ $tw_ip4res -ne 0 ] && [ $tw_ip6res -ne 0 ] && return 1
+
+  # prefer ipv6 latency for ordering when we have both
+  local i
+  for i in ip6 ip4 ; do
+    [ -s "$BASEDIR/twlight_result_${tw_tag}_$i.json" ] && {
+      mv "$BASEDIR/twlight_result_${tw_tag}_$i.json" "$BASEDIR/twlight_result_${tw_tag}.json"
+      return 0
+    }
+  done
+
+  # twampc returned zero status with empty summary files, should never happen
+  return 1
 }
 
 _twquick_wait() {
