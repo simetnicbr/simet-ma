@@ -63,6 +63,12 @@ _twquick_wait() {
     log_debug "server selection: peer #$_peer_id missing or invalid median RTT, discarded"
     return 1
   }
+  [ "$TWQUICK_PRECISION" -gt 1 ] && {
+    NMEDIANRTT=$(( ( (MEDIANRTT + (TWQUICK_PRECISION / 2)) / TWQUICK_PRECISION ) * TWQUICK_PRECISION )) 2>/dev/null && {
+      log_debug "server selection: peer #$_peer_id: latency $MEDIANRTT rounded to $NMEDIANRTT"
+      MEDIANRTT="$NMEDIANRTT"
+    }
+  }
   :
 }
 
@@ -84,9 +90,13 @@ subtask_serverselection() {
   eval "$j" || return
   TWQUICK_DROPLIMIT=$("$JSONFILTER" -i "$BASEDIR/twampquick_parameters.json" \
     -e '@.twamp_packet_drop_limit') || TWQUICK_DROPLIMIT=1
+  TWQUICK_PRECISION=$("$JSONFILTER" -i "$BASEDIR/twampquick_parameters.json" \
+    -e '@.twamp_desired_precision_us') || TWQUICK_PRECISION=0
 
   log_info "server selection: measuring network roundtrip time to the available servers..."
   log_debug "server selection: latency-based: send and receive $TWQUICK_PKTCOUNT packets in $TWQUICK_PKTTIMEOUT microseconds"
+  [ "$TWQUICK_PRECISION" -gt 1 ] 2>/dev/null && \
+    log_verbose "server selection: RTT will be rounded to a precision of $TWQUICK_PRECISION microseconds"
 
   local SCNT
   local S_PUBPEER
@@ -138,14 +148,14 @@ subtask_serverselection() {
     return
   }
 
-  # order by latency
+  # order by latency. note: do not reverse service-list ordering
   #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX'"
   i=$(while [ "$PCNT" -gt 0 ] ; do
 	printf "%s :%d\n" "${RESRTT%% *}" "${RESIDX%% *}"
 	RESRTT="${RESRTT#* }"
 	RESIDX="${RESIDX#* }"
 	PCNT=$(( PCNT - 1 ))
-      done | sort -n | cut -d ':' -f 2 | tr -s '\n\r' ' ' | sed -e 's/^[ \t\n]*//' -e 's/[ \t\n]*$//') || {
+      done | LC_ALL=C sort -n | cut -d ':' -f 2 | tr -s '\n\r' ' ' | sed -e 's/^[ \t\n]*//' -e 's/[ \t\n]*$//') || {
     log_debug "server selection: failed to sort by latency."
     return
   }
