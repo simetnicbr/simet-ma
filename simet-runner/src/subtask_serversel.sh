@@ -110,6 +110,26 @@ _twquick_wait() {
   :
 }
 
+_serversel_getresults() {
+  local WPIDLIST="$1"
+  local WIDXLIST="$2"
+  local MEDIANRTT
+  local i
+  #log_debug "waiting for twamp client PIDs $WPIDLIST"
+
+  for i in $WPIDLIST ; do
+    WIDX="${WIDXLIST%% *}"
+    WIDXLIST="${WIDXLIST#* }"
+    WPEERID="${WIDX##*:}"
+    if _twquick_wait "$i" "$WPEERID" ; then
+      log_verbose "server selection: peer #$WPEERID: network RTT is approximately $MEDIANRTT microseconds"
+      RESIDX=$(append_list "$RESIDX" "$WIDX")
+      RESRTT=$(append_list "$RESRTT" "$MEDIANRTT")
+      PCNT=$(( PCNT + 1 ))
+    fi
+  done
+}
+
 subtask_serverselection() {
   local _services="$BASEDIR/services.json"
 
@@ -136,7 +156,10 @@ subtask_serverselection() {
   [ "$TWQUICK_PRECISION" -gt 1 ] 2>/dev/null && \
     log_verbose "server selection: RTT will be rounded to a precision of $TWQUICK_PRECISION microseconds"
 
-  local SCNT
+  [ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && \
+    log_info "server selection: limiting memory usage during selection, this will be slow!"
+
+  local SCNT=0
   local S_PUBPEER
   local S_HOST
   local S_LEVEL
@@ -144,7 +167,10 @@ subtask_serverselection() {
   local PEERPIDLIST=
   local PEERIDXLIST=
   local FBIDXLIST=
-  SCNT=0
+  local RESIDX=
+  local RESRTT=
+  local PCNT=0
+
   while "$JSONFILTER" -i "$_services" -t "@[$SCNT]" >/dev/null 2>&1 ; do
     j=$("$JSONFILTER" -i "$_services" \
 	    -e "S_PUBPEER=@[$SCNT].isPublicPeer" \
@@ -157,6 +183,14 @@ subtask_serverselection() {
 	_twquick "$SCNT" "$S_HOST" 2>/dev/null & TWLPID=$!
 	PEERPIDLIST=$(append_list "$PEERPIDLIST" "$TWLPID")
 	PEERIDXLIST=$(append_list "$PEERIDXLIST" "$S_LEVEL:$SCNT")
+
+	# sync wait on low-memory hosts
+	[ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && {
+	  # Updates RESIDX, RESRTT, PCNT
+	  _serversel_getresults "$PEERPIDLIST" "$PEERIDXLIST"
+	  PEERPIDLIST=
+	  PEERIDXLIST=
+	}
       elif [ -n "$S_HOST" ] ;  then
 	log_verbose "server selection: peer #$SCNT: $S_HOST, global last-choice peer"
 	FBIDXLIST=$(append_list "$FBIDXLIST" "$SCNT")
@@ -165,27 +199,8 @@ subtask_serverselection() {
     SCNT=$(( SCNT + 1 ))
   done
 
-  # do we even have any work to do?
-  [ -z "$PEERPIDLIST" ] && return
-
-  local i
-  local RESIDX=
-  local RESRTT=
-  local WIDXLIST="$PEERIDXLIST"
-  local PCNT
-  PCNT=0
-  #log_debug "waiting for twamp client PIDs $PEERPIDLIST"
-  for i in $PEERPIDLIST ; do
-    WIDX="${WIDXLIST%% *}"
-    WIDXLIST="${WIDXLIST#* }"
-    WPEERID="${WIDX##*:}"
-    if _twquick_wait "$i" "$WPEERID" ; then
-      log_verbose "server selection: peer #$PEERID: network RTT is approximately $MEDIANRTT microseconds"
-      RESIDX=$(append_list "$RESIDX" "$WIDX")
-      RESRTT=$(append_list "$RESRTT" "$MEDIANRTT")
-      PCNT=$(( PCNT + 1 ))
-    fi
-  done
+  # Updates RESIDX, RESRTT, PCNT
+  _serversel_getresults "$PEERPIDLIST" "$PEERIDXLIST"
 
   [ -z "$RESIDX" ] || [ -z "$RESRTT" ] || [ "$PCNT" -eq 0 ] && {
     log_info "server selection: latency-based selection failed, using alternative selection method"
@@ -195,6 +210,7 @@ subtask_serverselection() {
   # order by (rtt, service-list tier, service-list array index)
   # note that each entry in RESIDX has two keys separated by :
   #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX'"
+  local i
   i=$(while [ "$PCNT" -gt 0 ] ; do
 	printf "%s:%s\n" "${RESRTT%% *}" "${RESIDX%% *}"
 	RESRTT="${RESRTT#* }"

@@ -78,6 +78,16 @@ discover_init() {
     return    
   fi
 
+  # Do we have the memory budget to run many twampc in parallel ?
+  [ -z "$GLOBAL_SERIALIZE_SERVERSEL" ] && {
+    GLOBAL_SERIALIZE_SERVERSEL=$(awk \
+      'BEGIN                 { NOTENOUGH=0 ; MAV=0 } ;
+       /^MemAvailable:.*kB$/ { MAV=$2 } ;
+       END                   { if (MAV < 25000) NOTENOUGH=1 ; print NOTENOUGH }' \
+      /proc/meminfo) \
+    || GLOBAL_SERIALIZE_SERVERSEL=0
+  }
+
   local _curl1_pid
   curl \
     --request GET \
