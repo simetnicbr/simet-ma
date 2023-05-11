@@ -1,3 +1,13 @@
+simet-ma (0.17.9.2.1) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.2.1
+  * debian: update the APT repository keys
+    The old set of keys will expire in 2023-11, add two more keys that
+    expire in 2033.  The old keys remain valid and in use, and will be
+    removed after they expired.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 11 May 2023 12:24:45 -0300
+
 simet-ma (0.17.9.2) unstable; urgency=medium
 
   * simet-ma version 0.17.9.2
