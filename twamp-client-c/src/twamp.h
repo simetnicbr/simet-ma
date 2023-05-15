@@ -76,9 +76,15 @@ typedef struct twamp_key {
 enum report_mode {
     TWAMP_REPORT_MODE_FRAGMENT = 0, /* Array contents */
     TWAMP_REPORT_MODE_OBJECT   = 1, /* array or object */
-    TWAMP_REPORT_MODE_NONE     = 2, /* No report */
     TWAMP_REPORT_MODE_EOL
 };
+
+#define TWAMP_REPORT_ENABLED_LMAP         0x0001U /* LMAP metrics (all), -R lmap */
+#define TWAMP_REPORT_ENABLED_TPARAMETERS  0x0002U /* TWAMP parameters, -R summary, -R parameters */
+#define TWAMP_REPORT_ENABLED_TMETADATA    0x0004U /* TWAMP metadata, -R summary, -R metadata */
+#define TWAMP_REPORT_ENABLED_RSTATS       0x0008U /* TWAMP result statistics, -R summary, -R result_stats */
+#define TWAMP_REPORT_ENABLED_SUMMARY      (TWAMP_REPORT_ENABLED_TPARAMETERS | TWAMP_REPORT_ENABLED_TMETADATA | TWAMP_REPORT_ENABLED_RSTATS)
+typedef uint32_t twampc_report_flags_t; /* TWAMP_REPORT_ENABLED_* */
 
 /* TWAMP parameters struct */
 /* all pointers are *not* owned by the struct */
@@ -93,7 +99,7 @@ typedef struct twamp_parameters {
     const char *lmap_report_path;  /* when not NULL, causes fopen/reopen of lmap_report_output */
     FILE *lmap_report_output;      /* will be used if non-NULL and lmap_report_path is NULL */
 
-    int summary_report_enabled;
+    twampc_report_flags_t reports_enabled;
     const char *summary_report_path;  /* when not NULL, causes fopen/reopen of summary_report_output */
     FILE *summary_report_output;      /* will be used if non-NULL and summary_report_path is NULL */
 

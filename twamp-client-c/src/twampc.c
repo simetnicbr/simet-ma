@@ -255,11 +255,38 @@ static void print_version(void)
     exit(SEXIT_SUCCESS);
 }
 
+static int cmdline_parse_reportenabled(const char *arg, twampc_report_flags_t * const e)
+{
+    const char *delim = ";, \t";
+
+    assert(e);
+
+    *e = 0;
+    char *tokens = strdup(arg); /* no trim because " " is in our strtok delimiters */
+    if (!tokens)
+        return 0;
+
+    for (char *tok = strtok(tokens, delim); tok && *tok; tok = strtok(NULL, delim)) {
+        if (!strcmp(tok, "lmap") || !strcmp(tok, "LMAP")) { *e |= TWAMP_REPORT_ENABLED_LMAP; }
+        else if (!strcmp(tok, "summary"))         { *e |= TWAMP_REPORT_ENABLED_SUMMARY; }
+        else if (!strcmp(tok, "metadata"))        { *e |= TWAMP_REPORT_ENABLED_TMETADATA; }
+        else if (!strcmp(tok, "parameters"))      { *e |= TWAMP_REPORT_ENABLED_TPARAMETERS; }
+        else if (!strcmp(tok, "results_summary")) { *e |= TWAMP_REPORT_ENABLED_RSTATS; }
+        else {
+            print_err("unknown report mode: %s", tok);
+            return 1;
+        }
+    }
+
+    free(tokens);
+    return 0;
+}
+
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-m twamp|light] [-p <service port>] [-t <timeout>] "
         "[-c <packet count>] [-s <payload size>] [-i <interpacket interval>] [-T <packet discard timeout>] "
-        "[-r <report mode>] [-o <path>] <server>\n", p);
+        "[-r <report mode>] [-o <path>] [-R <report types>] [-O <path>] <server>\n", p);
     if (mode) {
         fprintf(stderr, "\n"
             "\t-h\tprint usage help and exit\n"
@@ -277,11 +304,19 @@ static void print_usage(const char * const p, int mode)
             "\t-T\ttime in microseconds to wait for the last packet\n"
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\t-I\tsource IP address and/or :port for TWAMP-Light TEST stream, use [] for ipv6 literals\n"
-            "\t-r\tLMAP report mode: 0 = comma-separated, 1 = json array, 2 = none\n"
+            "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
             "\t-o\tredirect LMAP report output to <path>, stdout if <path> is - or empty\n"
-            "\t-R\tsummary report mode: 0 = none (default), 1 = json object\n"
-            "\t-O\tredirect summary report output to <path>, stdout if <path> is - or empty\n"
-            "\nserver: hostname or IP address of the TWAMP server\n\n");
+            "\t-R\tenable reports using a comma-separated list of report types (see below)\n"
+            "\t-O\tredirect non-LMAP report output to <path>, stdout if <path> is - or empty\n"
+            "\nserver: hostname or IP address of the TWAMP server\n"
+            "\n"
+            "report types: lmap (default), summary, metadata, parameters, results_summary\n"
+            "report type 'summary' includes: metadata, parameters, results_summary\n"
+            "\n"
+            "LMAP reports can be diverted from stdout through -o option,\n"
+            "non-LMAP reports can be diverted from stdout through -O option.\n"
+            "report ordering in stdout is fixed: first LMAP, then non-LMAP.\n"
+        );
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
@@ -298,7 +333,7 @@ int main(int argc, char **argv)
     int payload_size = DFL_TSTPKT_SIZE;
     int lmap_report_mode = 0;
     const char* lmap_report_path = NULL;
-    int summary_report_mode = 0;
+    twampc_report_flags_t reports_enabled = TWAMP_REPORT_ENABLED_LMAP;
     const char* summary_report_path = NULL;
     int twamp_mode = 0;
     long packet_interval_us = 30000;
@@ -386,9 +421,7 @@ int main(int argc, char **argv)
             }
             break;
         case 'R':
-            summary_report_mode = atoi(optarg);
-            if (summary_report_mode < 0 || summary_report_mode > 1) {
-                print_err("unknown summary report mode: %s", optarg);
+            if (cmdline_parse_reportenabled(optarg, &reports_enabled)) {
                 exit(SEXIT_FAILURE);
             }
             break;
@@ -441,7 +474,7 @@ int main(int argc, char **argv)
         .lmap_report_mode = lmap_report_mode,
         .lmap_report_path = lmap_report_path,
         .lmap_report_output = (!lmap_report_path) ? stdout : NULL,
-        .summary_report_enabled = summary_report_mode,
+        .reports_enabled = reports_enabled,
         .summary_report_path = summary_report_path,
         .summary_report_output = (!summary_report_path) ? stdout : NULL,
         .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,

@@ -276,8 +276,6 @@ static int xx_serialize_partial_report(const char * const what, const enum repor
                 goto ioerr_exit;
             }
             break;
-        case TWAMP_REPORT_MODE_NONE:
-            break;
         default:
             break;
         }
@@ -309,7 +307,7 @@ int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
 
     assert(param);
 
-    if (param->lmap_report_mode >= 2) {
+    if (!(param->reports_enabled & TWAMP_REPORT_ENABLED_LMAP)) {
         print_msg(MSG_DEBUG, "LMAP report generation disabled by LMAP report mode");
         return 0;
     }
@@ -657,7 +655,7 @@ err_exit:
  *      "packet_payload_size": <uint16>,  // UDP payload size, no UDP+IP headers
  *      "discard_on_timeout": <bool>,
  *   },
- *   "results": {
+ *   "results_summary": {
  *      "packets_sent": <int64>,
  *      "packets_received_valid": <int64>,
  *      "packets_received_invalid": <int64>,
@@ -685,7 +683,7 @@ int twamp_report_render_summary(TWAMPReport *report, TWAMPParameters *param)
     if (!report->privdata)
         return EINVAL;
 
-    if (!param->summary_report_enabled)
+    if (!(param->reports_enabled & TWAMP_REPORT_ENABLED_SUMMARY))
         return 0; /* report disabled */
 
     /* FIXME: not implemented (yet?) */
@@ -701,49 +699,55 @@ int twamp_report_render_summary(TWAMPReport *report, TWAMPParameters *param)
 
     const struct twamp_result * const r = report->result;
 
-    /* metadata, FIXME: socket metrics refactoring */
-    jo = json_object_new_object();
-    json_object_object_add(jo, "ip_family", json_object_new_string(str_ip46(param->family)));
-    json_object_object_add(jo, "server", json_object_new_string(param->host));
-    json_object_object_add(jo, "server_port", json_object_new_string(param->port));
-    jo1 = json_object_new_object();
+    if (param->reports_enabled & TWAMP_REPORT_ENABLED_TMETADATA) {
+        /* metadata, FIXME: socket metrics refactoring */
+        jo = json_object_new_object();
+        json_object_object_add(jo, "ip_family", json_object_new_string(str_ip46(param->family)));
+        json_object_object_add(jo, "server", json_object_new_string(param->host));
+        json_object_object_add(jo, "server_port", json_object_new_string(param->port));
+        jo1 = json_object_new_object();
 
-    const struct twamp_connection_info * const rtse = &(r->test_session_endpoints);
-    json_object_object_add(jo1, "ip_family", json_object_new_string(rtse->local_endpoint.family));
-    json_object_object_add(jo1, "sender_addr", json_object_new_string(rtse->local_endpoint.addr));
-    json_object_object_add(jo1, "sender_port", json_object_new_string(rtse->local_endpoint.port));
-    json_object_object_add(jo1, "reflector_addr", json_object_new_string(rtse->remote_endpoint.addr));
-    json_object_object_add(jo1, "reflector_port", json_object_new_string(rtse->remote_endpoint.port));
-    json_object_object_add(jo, "test_session_connection", jo1); jo1 = NULL;
+        const struct twamp_connection_info * const rtse = &(r->test_session_endpoints);
+        json_object_object_add(jo1, "ip_family", json_object_new_string(rtse->local_endpoint.family));
+        json_object_object_add(jo1, "sender_addr", json_object_new_string(rtse->local_endpoint.addr));
+        json_object_object_add(jo1, "sender_port", json_object_new_string(rtse->local_endpoint.port));
+        json_object_object_add(jo1, "reflector_addr", json_object_new_string(rtse->remote_endpoint.addr));
+        json_object_object_add(jo1, "reflector_port", json_object_new_string(rtse->remote_endpoint.port));
+        json_object_object_add(jo, "test_session_connection", jo1); jo1 = NULL;
 
-    json_object_object_add(jsummary, "metadata", jo); jo = NULL;
-
-    /* parameters */
-    jo = json_object_new_object();
-    json_object_object_add(jo, "packet_count", json_object_new_int64(param->packets_count));
-    json_object_object_add(jo, "packet_payload_size", json_object_new_int64(param->payload_size));
-    json_object_object_add(jo, "packet_timeout_us", json_object_new_int64(param->packets_timeout_us));
-    json_object_object_add(jo, "packet_delay_us", json_object_new_int64(param->packets_interval_us));
-    json_object_object_add(jo, "discard_on_timeout", json_object_new_boolean(param_discard_on_timeout));
-    json_object_object_add(jsummary, "parameters", jo); jo = NULL;
-
-    /* summary */
-    jo = json_object_new_object();
-    json_object_object_add(jo, "packets_sent", json_object_new_int64(r->packets_sent));
-    json_object_object_add(jo, "packets_received_valid", json_object_new_int64(r->packets_valid));
-    json_object_object_add(jo, (param_discard_on_timeout) ? "packets_discarded_timeout" : "packets_received_late", json_object_new_int64(r->packets_late));
-    json_object_object_add(jo, "packets_received_invalid", json_object_new_int64(r->packets_invalid));
-    json_object_object_add(jo, "packets_received_duplicates", json_object_new_int64(r->packets_duplicated));
-    json_object_object_add(jo, "packets_lost", json_object_new_int64(r->packets_lost));
-
-    if (r->packets_valid > 0) {
-        json_object *jrtt = json_object_new_object();
-        json_object_object_add(jrtt, "rtt_min_us", json_object_new_int64((int64_t)r->rtt_min));
-        json_object_object_add(jrtt, "rtt_max_us", json_object_new_int64((int64_t)r->rtt_max));
-        json_object_object_add(jrtt, "rtt_median_us", json_object_new_int64((int64_t)r->rtt_median));
-        json_object_object_add(jo, "rtt", jrtt);
+        json_object_object_add(jsummary, "metadata", jo); jo = NULL;
     }
-    json_object_object_add(jsummary, "results_summary", jo); jo = NULL;
+
+    if (param->reports_enabled & TWAMP_REPORT_ENABLED_TPARAMETERS) {
+        /* parameters */
+        jo = json_object_new_object();
+        json_object_object_add(jo, "packet_count", json_object_new_int64(param->packets_count));
+        json_object_object_add(jo, "packet_payload_size", json_object_new_int64(param->payload_size));
+        json_object_object_add(jo, "packet_timeout_us", json_object_new_int64(param->packets_timeout_us));
+        json_object_object_add(jo, "packet_delay_us", json_object_new_int64(param->packets_interval_us));
+        json_object_object_add(jo, "discard_on_timeout", json_object_new_boolean(param_discard_on_timeout));
+        json_object_object_add(jsummary, "parameters", jo); jo = NULL;
+    }
+
+    if (param->reports_enabled & TWAMP_REPORT_ENABLED_RSTATS) {
+        /* summary */
+        jo = json_object_new_object();
+        json_object_object_add(jo, "packets_sent", json_object_new_int64(r->packets_sent));
+        json_object_object_add(jo, "packets_received_valid", json_object_new_int64(r->packets_valid));
+        json_object_object_add(jo, (param_discard_on_timeout) ? "packets_discarded_timeout" : "packets_received_late", json_object_new_int64(r->packets_late));
+        json_object_object_add(jo, "packets_received_invalid", json_object_new_int64(r->packets_invalid));
+        json_object_object_add(jo, "packets_received_duplicates", json_object_new_int64(r->packets_duplicated));
+        json_object_object_add(jo, "packets_lost", json_object_new_int64(r->packets_lost));
+
+        if (r->packets_valid > 0) {
+            json_object *jrtt = json_object_new_object();
+            json_object_object_add(jrtt, "rtt_min_us", json_object_new_int64((int64_t)r->rtt_min));
+            json_object_object_add(jrtt, "rtt_max_us", json_object_new_int64((int64_t)r->rtt_max));
+            json_object_object_add(jrtt, "rtt_median_us", json_object_new_int64((int64_t)r->rtt_median));
+            json_object_object_add(jo, "rtt", jrtt);
+        }
+        json_object_object_add(jsummary, "results_summary", jo); jo = NULL;
+    }
 
     return xx_serialize_partial_report("summary report", TWAMP_REPORT_MODE_OBJECT,
             param->summary_report_path, param->summary_report_output, jsummary);
