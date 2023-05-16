@@ -212,7 +212,10 @@ subtask_serverselection() {
   #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX'"
   local i
   i=$(while [ "$PCNT" -gt 0 ] ; do
-	printf "%s:%s\n" "${RESRTT%% *}" "${RESIDX%% *}"
+	# busybox "small" sort (no -k, -t) workaround: zero-pad all fields before sort
+	local _pf
+	_pf=$(IFS=" :" ; for i in ${RESIDX%% *} ; do printf ":%06d" "$i" ; done)
+	printf "%12d%s\n" "${RESRTT%% *}" "$_pf"
 	RESRTT="${RESRTT#* }"
 	RESIDX="${RESIDX#* }"
 	PCNT=$(( PCNT - 1 ))
@@ -223,7 +226,9 @@ subtask_serverselection() {
     log_debug "server selection: failed to sort by latency."
     return
   }
-  GLOBAL_STATE_PEER_IDXMAP=$(append_list "$i" "$FBIDXLIST" "-1")
+  # we need to remove zero-padding to avoid parsing it as octal
+  GLOBAL_STATE_PEER_IDXMAP=$(append_list "$i" "$FBIDXLIST" "-1" | \
+    sed -e 's/^0\+\([0-9]\)/\1/' -e 's/ 0\+\([0-9]\)/ \1/g')
   #log_debug "server selection: ordered result: '$GLOBAL_STATE_PEER_IDXMAP'"
   :
 }
