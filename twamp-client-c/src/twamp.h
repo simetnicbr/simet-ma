@@ -20,6 +20,8 @@
 #define TWAMP_H_
 
 #include "report.h"
+#include <assert.h>
+#include <stdio.h>
 
 #ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
@@ -31,18 +33,58 @@
 
 #define TWAMP_DEFAULT_PORT "862"
 
+#define SIMET_TWAMP_AUTH_MINKEYSIZE 16
+#define SIMET_TWAMP_AUTH_MAXKEYSIZE 64
+
 #define SIMET_TWAMP_IDCOOKIE_V1LEN 16
 #define SIMET_TWAMP_IDCOOKIE_V1SIG 0x83b8c493
-struct simet_cookie { /* max 24 bytes, refer to messages.h */
+
+struct __attribute__((__packed__)) simet_cookie {
     /* SIMET cookie v1 */
     uint32_t sig; /* SIMET_TWAMP_IDCOOKIE_V1SIG, network byte order */
     uint8_t data[SIMET_TWAMP_IDCOOKIE_V1LEN]; /* SID from Accept-TW-Session */
+};
+
+#define SIMET_STAMP_AUTHTLV_TYPE    252
+#define SIMET_STAMP_TLV_PEN         60267    /* IANA-assigned Private Enterprise Number, CEPTRO.br */
+#define SIMET_STAMP_TLV_AUTHCOOKIE  0x0100   /* simet_tlv_sub_type */
+
+struct __attribute__((__packed__)) stamp_tlv_header {
+    uint8_t  flags;
+    uint8_t  type;
+    uint16_t length; /* Network byte order */
+};
+
+struct __attribute__((__packed__)) stamp_private_tlv {
+    struct   stamp_tlv_header hdr; /* hdr.type must be 252, 253 or 254 */
+    uint32_t private_enterprise_number; /* Network byte order */
+    uint16_t simet_tlv_sub_type;        /* Network byte order */
+    uint8_t  data[]; /* data[hdr.length - 8] */
 };
 
 enum {
     TWAMP_MODE_TWAMP = 0,
     TWAMP_MODE_TWAMPLIGHT,
 };
+
+/* TWAMP authentication key */
+typedef struct twamp_key {
+    uint8_t data[SIMET_TWAMP_AUTH_MAXKEYSIZE];
+    size_t  len; /* 0 for no key */
+} TWAMPKey;
+
+enum report_mode {
+    TWAMP_REPORT_MODE_FRAGMENT = 0, /* Array contents */
+    TWAMP_REPORT_MODE_OBJECT   = 1, /* array or object */
+    TWAMP_REPORT_MODE_EOL
+};
+
+#define TWAMP_REPORT_ENABLED_LMAP         0x0001U /* LMAP metrics (all), -R lmap */
+#define TWAMP_REPORT_ENABLED_TPARAMETERS  0x0002U /* TWAMP parameters, -R summary, -R parameters */
+#define TWAMP_REPORT_ENABLED_TMETADATA    0x0004U /* TWAMP metadata, -R summary, -R metadata */
+#define TWAMP_REPORT_ENABLED_RSTATS       0x0008U /* TWAMP result statistics, -R summary, -R result_stats */
+#define TWAMP_REPORT_ENABLED_SUMMARY      (TWAMP_REPORT_ENABLED_TPARAMETERS | TWAMP_REPORT_ENABLED_TMETADATA | TWAMP_REPORT_ENABLED_RSTATS)
+typedef uint32_t twampc_report_flags_t; /* TWAMP_REPORT_ENABLED_* */
 
 /* TWAMP parameters struct */
 /* all pointers are *not* owned by the struct */
@@ -52,13 +94,22 @@ typedef struct twamp_parameters {
     const struct sockaddr_storage * const source_ss;
     sa_family_t family;
     int connect_timeout;
-    int report_mode;
+
+    enum report_mode lmap_report_mode;
+    const char *lmap_report_path;  /* when not NULL, causes fopen/reopen of lmap_report_output */
+    FILE *lmap_report_output;      /* will be used if non-NULL and lmap_report_path is NULL */
+
+    twampc_report_flags_t reports_enabled;
+    const char *summary_report_path;  /* when not NULL, causes fopen/reopen of summary_report_output */
+    FILE *summary_report_output;      /* will be used if non-NULL and summary_report_path is NULL */
+
     unsigned int packets_count;
     unsigned int payload_size;
     unsigned int packets_max;
     unsigned int packets_interval_us;
     unsigned int packets_timeout_us;
     unsigned int ttl;
+    TWAMPKey key;
 } TWAMPParameters;
 
 /* Context */
@@ -75,9 +126,13 @@ typedef struct twamp_test_context {
 
 int twamp_run_client(TWAMPParameters * const param);
 int twamp_run_light_client(TWAMPParameters * const param);
-int twamp_report(TWAMPReport*, TWAMPParameters*);
+
 TWAMPReport * twamp_report_init(const sa_family_t family, const char * const host);
 void twamp_report_done(TWAMPReport *);
-int report_socket_metrics(TWAMPReport *, int sockfd, int sock_protocol);
+
+int twamp_report_testsession_connection(TWAMPReport *, int sockfd);
+int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param);
+int twamp_report_render_lmap(TWAMPReport*, TWAMPParameters*);
+int twamp_report_render_summary(TWAMPReport *report, TWAMPParameters *param);
 
 #endif /* TWAMP_H_ */

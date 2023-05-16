@@ -37,6 +37,7 @@
 
 #include "simet_err.h"
 #include "logger.h"
+#include "base64.h"
 
 /* We depend on these */
 static_assert(sizeof(int) >= 4, "code assumes (int) is at least 32 bits");
@@ -254,11 +255,38 @@ static void print_version(void)
     exit(SEXIT_SUCCESS);
 }
 
+static int cmdline_parse_reportenabled(const char *arg, twampc_report_flags_t * const e)
+{
+    const char *delim = ";, \t";
+
+    assert(e);
+
+    *e = 0;
+    char *tokens = strdup(arg); /* no trim because " " is in our strtok delimiters */
+    if (!tokens)
+        return 0;
+
+    for (char *tok = strtok(tokens, delim); tok && *tok; tok = strtok(NULL, delim)) {
+        if (!strcmp(tok, "lmap") || !strcmp(tok, "LMAP")) { *e |= TWAMP_REPORT_ENABLED_LMAP; }
+        else if (!strcmp(tok, "summary"))         { *e |= TWAMP_REPORT_ENABLED_SUMMARY; }
+        else if (!strcmp(tok, "metadata"))        { *e |= TWAMP_REPORT_ENABLED_TMETADATA; }
+        else if (!strcmp(tok, "parameters"))      { *e |= TWAMP_REPORT_ENABLED_TPARAMETERS; }
+        else if (!strcmp(tok, "results_summary")) { *e |= TWAMP_REPORT_ENABLED_RSTATS; }
+        else {
+            print_err("unknown report mode: %s", tok);
+            return 1;
+        }
+    }
+
+    free(tokens);
+    return 0;
+}
+
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-h] [-q|-v] [-V] [-4|-6] [-m twamp|light] [-p <service port>] [-t <timeout>] "
         "[-c <packet count>] [-s <payload size>] [-i <interpacket interval>] [-T <packet discard timeout>] "
-        "[-r <report mode>] [-o <path>] <server>\n", p);
+        "[-r <report mode>] [-o <path>] [-R <report types>] [-O <path>] <server>\n", p);
     if (mode) {
         fprintf(stderr, "\n"
             "\t-h\tprint usage help and exit\n"
@@ -268,6 +296,7 @@ static void print_usage(const char * const p, int mode)
             "\t-4\tuse IPv4, instead of system default\n"
             "\t-6\tuse IPv6, instead of system default\n"
             "\t-m\toperating mode: twamp (default), light\n"
+            "\t-k\tauthentication key, base64 (SIMET extension, not auth mode)\n"
             "\t-t\tconnection timeout in seconds\n"
             "\t-c\tnumber of packets to transmit per session\n"
             "\t-s\tsize of the packet payload (UDP/IP headers not included)\n"
@@ -276,8 +305,18 @@ static void print_usage(const char * const p, int mode)
             "\t-p\tservice name or numeric port of the TWAMP server\n"
             "\t-I\tsource IP address and/or :port for TWAMP-Light TEST stream, use [] for ipv6 literals\n"
             "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
-            "\t-o\tredirect report output to <path>\n"
-            "\nserver: hostname or IP address of the TWAMP server\n\n");
+            "\t-o\tredirect LMAP report output to <path>, stdout if <path> is - or empty\n"
+            "\t-R\tenable reports using a comma-separated list of report types (see below)\n"
+            "\t-O\tredirect non-LMAP report output to <path>, stdout if <path> is - or empty\n"
+            "\nserver: hostname or IP address of the TWAMP server\n"
+            "\n"
+            "report types: lmap (default), summary, metadata, parameters, results_summary\n"
+            "report type 'summary' includes: metadata, parameters, results_summary\n"
+            "\n"
+            "LMAP reports can be diverted from stdout through -o option,\n"
+            "non-LMAP reports can be diverted from stdout through -O option.\n"
+            "report ordering in stdout is fixed: first LMAP, then non-LMAP.\n"
+        );
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
@@ -292,17 +331,21 @@ int main(int argc, char **argv)
     int connect_timeout = 15;
     int packet_count = 200;
     int payload_size = DFL_TSTPKT_SIZE;
-    int report_mode = 0;
+    int lmap_report_mode = 0;
+    const char* lmap_report_path = NULL;
+    twampc_report_flags_t reports_enabled = TWAMP_REPORT_ENABLED_LMAP;
+    const char* summary_report_path = NULL;
     int twamp_mode = 0;
     long packet_interval_us = 30000;
     long packet_timeout_us = 10000000;
+    TWAMPKey key = { 0 };
 
     progname = argv[0];
     sanitize_std_fds();
 
     int option;
 
-    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:o:")) != -1) {
+    while ((option = getopt(argc, argv, "vq46hVm:p:I:t:c:s:T:i:r:R:o:O:k:")) != -1) {
         switch(option) {
         case 'v':
             if (log_level < 1)
@@ -317,9 +360,21 @@ int main(int argc, char **argv)
                 log_level = 0;
             break;
         case 'o':
-            if (freopen(optarg, "w", stdout) == NULL) {
-                print_err("could not redirect output to %s: %s", optarg, strerror(errno));
-                exit(SEXIT_FAILURE);
+            if (lmap_report_path)
+                free_constchar(lmap_report_path);
+            if (optarg && (optarg[0] != '\0') && !(optarg[0] == '-' && optarg[1] == '\0')) {
+                lmap_report_path = strdup_trim(optarg);
+            } else {
+                lmap_report_path = NULL;
+            }
+            break;
+        case 'O':
+            if (summary_report_path)
+                free_constchar(summary_report_path);
+            if (optarg && (*optarg != '\0')) {
+                summary_report_path = strdup_trim(optarg);
+            } else {
+                summary_report_path = NULL;
             }
             break;
         case '4':
@@ -359,7 +414,16 @@ int main(int argc, char **argv)
             packet_timeout_us = atol(optarg);
             break;
         case 'r':
-            report_mode = atoi(optarg);
+            lmap_report_mode = atoi(optarg);
+            if (lmap_report_mode < 0 || lmap_report_mode >= TWAMP_REPORT_MODE_EOL) {
+                print_err("unknown report mode: %s", optarg);
+                exit(SEXIT_FAILURE);
+            }
+            break;
+        case 'R':
+            if (cmdline_parse_reportenabled(optarg, &reports_enabled)) {
+                exit(SEXIT_FAILURE);
+            }
             break;
         case 'm':
             if (optarg && !strcasecmp("twamp", optarg)) {
@@ -368,6 +432,22 @@ int main(int argc, char **argv)
                 twamp_mode = TWAMP_MODE_TWAMPLIGHT;
             } else {
                 print_usage(argv[0], 1);
+            }
+            break;
+        case 'k': {
+                char *key_base64 = strdup_trim(optarg);
+                ssize_t b64len = base64_decode(key_base64, strlen(key_base64), key.data, sizeof(key.data));
+                if (b64len < 0) {
+                    print_err("authentication key: base64 decoding error: %s", strerror(-(int)b64len));
+                    exit(SEXIT_FAILURE);
+                } else if (b64len < SIMET_TWAMP_AUTH_MINKEYSIZE) {
+                    print_err("authentication key: too short (must be at least %u bytes)", (unsigned int)SIMET_TWAMP_AUTH_MINKEYSIZE);
+                    exit(SEXIT_FAILURE);
+                }
+                key.len = (size_t)b64len; /* verified, b64len >= 0 */
+
+                free(key_base64);
+                key_base64 = NULL;
             }
             break;
         case 'h':
@@ -391,7 +471,12 @@ int main(int argc, char **argv)
         .port = port,
         .source_ss = ss_source,
         .family = family,
-        .report_mode = report_mode,
+        .lmap_report_mode = lmap_report_mode,
+        .lmap_report_path = lmap_report_path,
+        .lmap_report_output = (!lmap_report_path) ? stdout : NULL,
+        .reports_enabled = reports_enabled,
+        .summary_report_path = summary_report_path,
+        .summary_report_output = (!summary_report_path) ? stdout : NULL,
         .connect_timeout = (connect_timeout <= 0 || connect_timeout > 30) ? 30 : connect_timeout,
         .packets_count = (unsigned int)((packet_count <= 0 || packet_count > 1000) ? 1000 : packet_count),
         .payload_size = (unsigned int)((payload_size < MAX_TSTPKT_SIZE)? ( (payload_size > MIN_TSTPKT_SIZE)? payload_size : MIN_TSTPKT_SIZE ) : MAX_TSTPKT_SIZE),
@@ -399,6 +484,7 @@ int main(int argc, char **argv)
         .packets_interval_us = (packet_interval_us > 0) ? (unsigned int) packet_interval_us : 30000U,
         .packets_timeout_us = (packet_timeout_us > 0) ? (unsigned int) packet_timeout_us : 100000U,
         .ttl = 255,
+        .key = key,
     };
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");

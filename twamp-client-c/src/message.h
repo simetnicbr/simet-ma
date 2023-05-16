@@ -21,8 +21,10 @@
 #include "twampc_config.h"
 #include "timestamp.h"
 
+#include <stddef.h>
 #include <inttypes.h>
 #include <sys/types.h>
+#include <assert.h>
 
 /********************/
 /* CONTROL MESSAGES */
@@ -126,22 +128,16 @@ typedef struct twamp_stop {
 #define OWAMP_PAD_OFFSET 14     /* where the "padding" in OWAMP-based messages start */
 
 /* RFC-6038, RFC-7750, symmetric-mode, reflect-octets-compatible packet */
-typedef struct __attribute__((__packed__)) test_packet {
+typedef struct __attribute__((__packed__)) {
     uint32_t SeqNumber;
     Timestamp Time;
     uint16_t ErrorEstimate;
-    uint8_t MBZ1[27]; /* RFC-6038 symmetric mode. RFC-7750 has data in offset 2 */
-    union {
-        struct {
-            /* SIMET Extension to match TWAMP_CONTROL and TWAMP_TEST server-side */
-            uint8_t Padding_align[3]; /* padding alignment */
-            uint8_t Cookie[24];       /* SIMET cookie, refer to twamp.h */
-        };
-    };
-    uint8_t ExtraPadding[];
+    uint8_t MBZ1[27];  /* STAMP and RFC-6038 symmetric mode. RFC-7750 has data in offset 2 */
+    uint8_t MBZ2[3];   /* Extra alignment zone required by STAMP and by SIMET cookies */
+    uint8_t Padding[]; /* TLV area for STAMP or start of SIMET cookie, padding for twamp/light */
 } UnauthPacket;
 
-typedef struct __attribute__((__packed__)) reflected_packet {
+typedef struct __attribute__((__packed__)) {
     uint32_t SeqNumber;
     Timestamp Time;
     uint16_t ErrorEstimate;
@@ -152,8 +148,12 @@ typedef struct __attribute__((__packed__)) reflected_packet {
     uint16_t SenderErrorEstimate;
     uint8_t MBZ2[2];
     uint8_t SenderTTL;
-    uint8_t Padding[];
+    uint8_t MBZ3[3];   /* STAMP-required, don't-care for twamp/light */
+    uint8_t Padding[]; /* TLV area for STAMP, padding for twamp/light */
 } UnauthReflectedPacket;
+
+static_assert(sizeof(UnauthPacket) < MIN_TSTPKT_SIZE, "MIN_TSTPKT_SIZE too small for type UnauthPacket");
+static_assert(offsetof(UnauthPacket, Padding) == offsetof(UnauthReflectedPacket, Padding), "types UnauthPacket and UnauthReflectedPacket are not compatible");
 
 /***********/
 /* DEFINES */

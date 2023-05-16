@@ -121,6 +121,27 @@ static void simet_cookie_as_padding(void * const dst, size_t dst_sz, const struc
     if (dst && dst_sz && cookie)
         memcpy(dst, cookie, sizeof(struct simet_cookie) <= dst_sz ? sizeof(struct simet_cookie) : dst_sz);
 }
+static_assert(sizeof(struct simet_cookie) < MIN_TSTPKT_SIZE - offsetof(UnauthPacket, Padding),
+              "struct simet_cookie must fit inside the padding of the smallest acceptable TEST packet");
+
+static void simet_auth_as_padding(void * const dst, size_t dst_sz, const TWAMPKey *key)
+{
+    if (key && key->len > 0 && dst_sz > sizeof(struct stamp_private_tlv) + key->len) {
+        struct stamp_private_tlv * const a = (struct stamp_private_tlv *)dst;
+        const size_t len = key->len + (offsetof(struct stamp_private_tlv, data) - sizeof(struct stamp_tlv_header));
+        if (len <= 0xffff) {
+            a->hdr.flags  = 0x80; /* U=1 */
+            a->hdr.type   = SIMET_STAMP_AUTHTLV_TYPE;
+            a->hdr.length = htons((uint16_t)len);
+            a->private_enterprise_number = htonl(SIMET_STAMP_TLV_PEN);
+            a->simet_tlv_sub_type = htons(SIMET_STAMP_TLV_AUTHCOOKIE);
+            memcpy(&a->data, key->data, key->len);
+        }
+    }
+}
+static_assert(offsetof(struct stamp_private_tlv, data) > sizeof(struct stamp_tlv_header), "code incompatible with struct stamp_private_tlv, refactor it!");
+static_assert(sizeof(struct stamp_private_tlv) + SIMET_TWAMP_AUTH_MAXKEYSIZE < MIN_TSTPKT_SIZE - offsetof(UnauthPacket, Padding),
+              "struct stamp_private_tlv + SIMET_TWAMP_AUTH_MAXKEYSIZE must fit inside the padding of the smallest acceptable TEST packet");
 
 static int twamp_rawdata_init(unsigned int num_packets, TWAMPRawData **pbuffer)
 {
@@ -302,7 +323,7 @@ int twamp_run_light_client(TWAMPParameters * const param)
     }
     t_ctx.report->address = hostAddr;
 
-    if (report_socket_metrics(t_ctx.report, fd_test, IPPROTO_UDP)) {
+    if (twamp_report_testsession_connection(t_ctx.report, fd_test)) {
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     } else {
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
@@ -324,10 +345,9 @@ int twamp_run_light_client(TWAMPParameters * const param)
     print_msg(MSG_IMPORTANT, "measurement finished %s",
             (rc == SEXIT_SUCCESS) ? "successfully" : "unsuccessfully");
 
-    /* FIXME: remove or repurpose packets_dropped_timeout */
-    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u received too late)",
             t_ctx.report->result->packets_sent, t_ctx.report->result->packets_received,
-            t_ctx.report->result->packets_dropped_timeout);
+            t_ctx.report->result->packets_late);
 
 TEST_EXIT:
     if (fd_test >= 0) {
@@ -343,8 +363,11 @@ TEST_EXIT:
         fd_test = -1;
     }
 
-    if (do_report)
-        twamp_report(t_ctx.report, param);
+    if (do_report) {
+        twamp_report_statistics(t_ctx.report, param);
+        twamp_report_render_lmap(t_ctx.report, param);
+        twamp_report_render_summary(t_ctx.report, param);
+    }
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
 
@@ -595,7 +618,7 @@ int twamp_run_client(TWAMPParameters * const param)
         goto TEST_CLOSE;
     }
 
-    if (report_socket_metrics(t_ctx.report, fd_test, IPPROTO_UDP))
+    if (twamp_report_testsession_connection(t_ctx.report, fd_test))
         print_warn("failed to add TEST socket information to report, proceeding anyway...");
     else
         print_msg(MSG_DEBUG, "TEST socket ambient metrics added to report");
@@ -648,10 +671,9 @@ int twamp_run_client(TWAMPParameters * const param)
     print_msg(MSG_IMPORTANT, "measurement finished %s",
             (rc == SEXIT_SUCCESS) ? "successfully" : "unsuccessfully");
 
-    /* FIXME: remove or repurpose packets_dropped_timeout */
-    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u discarded due to timeout)",
+    print_msg(MSG_DEBUG, "total packets sent: %u, received: %u (%u received too late)",
             t_ctx.report->result->packets_sent, t_ctx.report->result->packets_received,
-            t_ctx.report->result->packets_dropped_timeout);
+            t_ctx.report->result->packets_late);
 
 TEST_CLOSE:
     if (shutdown(fd_test, SHUT_RDWR) != 0) {
@@ -684,8 +706,11 @@ MEM_FREE:
     free(stpSessions);
     free(testPort);
 
-    if (do_report)
-        twamp_report(t_ctx.report, param);
+    if (do_report) {
+        twamp_report_statistics(t_ctx.report, param);
+        twamp_report_render_lmap(t_ctx.report, param);
+        twamp_report_render_summary(t_ctx.report, param);
+    }
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
 
@@ -841,6 +866,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
 
     const unsigned int pktsize = test_ctx->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
+    const size_t padsize = pktsize - offsetof(UnauthReflectedPacket, Padding);
     UnauthPacket *packet = calloc(1, pktsize);
     if (!packet) {
        print_err("Error allocating memory for test packet to send");
@@ -853,7 +879,9 @@ static int twamp_test(TWAMPContext * const test_ctx) {
 
     if (test_ctx->cookie_enabled) {
         print_msg(MSG_DEBUG, "inserting a cookie in the padding, to work around broken NAT should the reflector support it");
-        simet_cookie_as_padding(&packet->Cookie, sizeof(packet->Cookie), &(test_ctx->cookie));
+        simet_cookie_as_padding(&packet->Padding, padsize, &(test_ctx->cookie));
+    } else {
+        simet_auth_as_padding(&packet->Padding, padsize, &(test_ctx->param.key));
     }
 
     const int ttl = (test_ctx->param.ttl > 0 && test_ctx->param.ttl < 256)? (int)test_ctx->param.ttl : 255;
@@ -931,8 +959,6 @@ static int twamp_test(TWAMPContext * const test_ctx) {
 #endif
     }
 
-    test_ctx->report->result->packets_sent = counter;
-
     if (test_ctx->abort_test)
         print_msg(MSG_DEBUG, "[THREAD] sending thread stopping early due to abort_test flag");
 
@@ -956,6 +982,9 @@ err_out:
             rc = trc;
         }
     }
+
+    /* update this after threads have been quiesced, just in case */
+    test_ctx->report->result->packets_sent = counter;
 
     free(packet);
 
