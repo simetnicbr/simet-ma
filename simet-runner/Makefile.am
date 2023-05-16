@@ -45,10 +45,12 @@ version: $(top_srcdir)/version.sh
 	    "$^" > "$@"
 
 simetma_sources = src/defines.sh \
+		src/util.sh \
 		src/log.sh \
 		src/task_authentication.sh  \
 		src/task_authorization.sh  \
 		src/task_discover.sh \
+		src/subtask_serversel.sh \
 		src/task_geolocation.sh \
 		$(agentinfo) \
 		src/task_environment.sh \
