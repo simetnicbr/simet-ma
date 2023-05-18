@@ -26,6 +26,10 @@
 #include <sys/types.h>
 #include <assert.h>
 
+#if !defined(static_assert) && defined(__STDC_VERSION__) && (__STDC_VERSION__ < 202301L)
+#  define static_assert _Static_assert
+#endif
+
 /********************/
 /* CONTROL MESSAGES */
 /********************/

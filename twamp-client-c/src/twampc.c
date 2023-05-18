@@ -33,7 +33,11 @@
 
 #include <fcntl.h>
 #include <errno.h>
+
 #include <assert.h>
+#if !defined(static_assert) && defined(__STDC_VERSION__) && (__STDC_VERSION__ < 202301L)
+#  define static_assert _Static_assert
+#endif
 
 #include "simet_err.h"
 #include "logger.h"
