@@ -34,6 +34,9 @@
 #include <arpa/inet.h>
 
 #include <assert.h>
+#if !defined(static_assert) && defined(__STDC_VERSION__) && (__STDC_VERSION__ < 202301L)
+#  define static_assert _Static_assert
+#endif
 
 #include "simet_err.h"
 #include "logger.h"
@@ -783,6 +786,12 @@ static void *twamp_callback_thread(void *p) {
     ts_stop = ts_cur;
     ts_stop.tv_sec  += to.tv_sec;
     ts_stop.tv_nsec += to.tv_usec * 1000;
+
+    /* all timespecs going through timespec_lt() must be normalized! */
+    while (ts_stop.tv_nsec > 1000000000L) {
+        ts_stop.tv_sec++;
+        ts_stop.tv_nsec -= 1000000000L;
+    }
 
     while (!t_ctx->abort_test && timespec_lt(ts_cur, ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message

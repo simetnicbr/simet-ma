@@ -28,7 +28,11 @@
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
+
 #include <assert.h>
+#if !defined(static_assert) && defined(__STDC_VERSION__) && (__STDC_VERSION__ < 202301L)
+#  define static_assert _Static_assert
+#endif
 
 #include <sys/stat.h>
 #include <fcntl.h>
