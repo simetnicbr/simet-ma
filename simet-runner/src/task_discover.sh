@@ -97,7 +97,7 @@ discover_init() {
     --fail \
     --location \
     --connect-timeout 10 \
-    --max-time 30 \
+    --max-time 15 \
     --url "$API_SERVICE_DISCOVERY" > "$BASEDIR/services.json" \
   & _curl1_pid=$!
 
@@ -111,7 +111,7 @@ discover_init() {
     --fail \
     --location \
     --connect-timeout 10 \
-    --max-time 30 \
+    --max-time 15 \
     --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/twampquick_parameters.json" \
   & _curl2_pid=$!
 
