@@ -112,18 +112,21 @@ _twquick_wait() {
 
 _serversel_getresults() {
   local WPIDLIST="$1"
-  local WIDXLIST="$2"
+  local WDATLIST="$2"
+  local WIDXLIST="$3"
   local MEDIANRTT
   local i
   #log_debug "waiting for twamp client PIDs $WPIDLIST"
 
   for i in $WPIDLIST ; do
     WIDX="${WIDXLIST%% *}"
+    WDAT="${WDATLIST%% *}"
     WIDXLIST="${WIDXLIST#* }"
-    WPEERID="${WIDX##*:}"
-    if _twquick_wait "$i" "$WPEERID" ; then
-      log_verbose "server selection: peer #$WPEERID: network RTT is approximately $MEDIANRTT microseconds"
+    WDATLIST="${WDATLIST#* }"
+    if _twquick_wait "$i" "$WIDX" ; then
+      log_verbose "server selection: peer #$WIDX: network RTT is approximately $MEDIANRTT microseconds"
       RESIDX=$(append_list "$RESIDX" "$WIDX")
+      RESDAT=$(append_list "$RESDAT" "$WDAT")
       RESRTT=$(append_list "$RESRTT" "$MEDIANRTT")
       PCNT=$(( PCNT + 1 ))
     fi
@@ -166,9 +169,11 @@ subtask_serverselection() {
 
   local PEERPIDLIST=
   local PEERIDXLIST=
+  local PEERDATLIST=
   local FBIDXLIST=
   local RESIDX=
   local RESRTT=
+  local RESDAT=
   local PCNT=0
 
   while "$JSONFILTER" -i "$_services" -t "@[$SCNT]" >/dev/null 2>&1 ; do
@@ -182,14 +187,16 @@ subtask_serverselection() {
       if [ "$S_PUBPEER" -eq 0 ] && [ -n "$S_HOST" ] ; then
 	_twquick "$SCNT" "$S_HOST" 2>/dev/null & TWLPID=$!
 	PEERPIDLIST=$(append_list "$PEERPIDLIST" "$TWLPID")
-	PEERIDXLIST=$(append_list "$PEERIDXLIST" "$S_LEVEL:$SCNT")
+	PEERDATLIST=$(append_list "$PEERDATLIST" "$S_LEVEL")
+	PEERIDXLIST=$(append_list "$PEERIDXLIST" "$SCNT")
 
 	# sync wait on low-memory hosts
 	[ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && {
 	  # Updates RESIDX, RESRTT, PCNT
-	  _serversel_getresults "$PEERPIDLIST" "$PEERIDXLIST"
+	  _serversel_getresults "$PEERPIDLIST" "$PEERDATLIST" "$PEERIDXLIST"
 	  PEERPIDLIST=
 	  PEERIDXLIST=
+	  PEERDATLIST=
 	}
       elif [ -n "$S_HOST" ] ;  then
 	log_verbose "server selection: peer #$SCNT: $S_HOST, global last-choice peer"
@@ -200,27 +207,25 @@ subtask_serverselection() {
   done
 
   # Updates RESIDX, RESRTT, PCNT
-  _serversel_getresults "$PEERPIDLIST" "$PEERIDXLIST"
+  _serversel_getresults "$PEERPIDLIST" "$PEERDATLIST" "$PEERIDXLIST"
 
-  [ -z "$RESIDX" ] || [ -z "$RESRTT" ] || [ "$PCNT" -eq 0 ] && {
+  [ -z "$RESIDX" ] || [ -z "$RESDAT" ] || [ -z "$RESRTT" ] || [ "$PCNT" -eq 0 ] && {
     log_info "server selection: latency-based selection failed, using alternative selection method"
     return
   }
 
-  # order by (rtt, service-list tier, service-list array index)
-  # note that each entry in RESIDX has two keys separated by :
-  #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX'"
+  # order by (service-list tier, rtt, service-list array index)
+  #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX' RESDAT='$RESDAT'"
   local i
   i=$(while [ "$PCNT" -gt 0 ] ; do
 	# busybox "small" sort (no -k, -t) workaround: zero-pad all fields before sort
-	local _pf
-	_pf=$(IFS=" :" ; for i in ${RESIDX%% *} ; do printf ":%06d" "$i" ; done)
-	printf "%12d%s\n" "${RESRTT%% *}" "$_pf"
+	printf "%020d:%020d:%010d\n" "${RESDAT%% *}" "${RESRTT%% *}" "${RESIDX%% *}"
 	RESRTT="${RESRTT#* }"
 	RESIDX="${RESIDX#* }"
+	RESDAT="${RESDAT#* }"
 	PCNT=$(( PCNT - 1 ))
       done \
-      | LC_ALL=C sort -t: -k1n -k2n -k3n \
+      | LC_ALL=C sort \
       | cut -d ':' -f 3 | tr -s '\n\r' ' ' \
       | sed -e 's/^[ \t\n]*//' -e 's/[ \t\n]*$//') || {
     log_debug "server selection: failed to sort by latency."
