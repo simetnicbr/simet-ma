@@ -787,6 +787,12 @@ static void *twamp_callback_thread(void *p) {
     ts_stop.tv_sec  += to.tv_sec;
     ts_stop.tv_nsec += to.tv_usec * 1000;
 
+    /* all timespecs going through timespec_lt() must be normalized! */
+    while (ts_stop.tv_nsec > 1000000000L) {
+        ts_stop.tv_sec++;
+        ts_stop.tv_nsec -= 1000000000L;
+    }
+
     while (!t_ctx->abort_test && timespec_lt(ts_cur, ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
         ret = receive_reflected_packet(t_ctx->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
