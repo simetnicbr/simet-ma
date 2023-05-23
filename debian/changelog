@@ -1,3 +1,11 @@
+simet-ma (0.18.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.2
+  * twamp: fix issue introduced in 0.18.0 that resulted in early termination
+    of the receive thread, and a false report of dropped (lost) packets.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 23 May 2023 08:36:30 -0300
+
 simet-ma (0.18.1.1) unstable; urgency=medium
 
   * simet-ma version 0.18.1.1
