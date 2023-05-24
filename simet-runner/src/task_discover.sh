@@ -47,7 +47,7 @@
 #
 ################################################################################
 
-_report_servicelist_output() {
+report_servicelist_output() {
   export _task_name="${LMAP_TASK_NAME_PREFIX}servicelist-output"
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/0metadata-servicelist"
@@ -59,9 +59,10 @@ _report_servicelist_output() {
   export _task_status="0"
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
-  task_json_template "$BASEDIR/services.json" \
-	  "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_ServiceList-output__Multiple_Raw" \
-	  "services_json" > "$_task_dir/result.json" || :
+  task_json_template "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_ServiceList-output__Multiple_Raw" \
+      "$BASEDIR/services.json" "services_json" \
+      "$BASEDIR/services_reorder.json" "reordering_map" \
+    > "$_task_dir/result.json" || :
 }
 
 discover_init() {

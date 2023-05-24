@@ -12,11 +12,28 @@
 #  - input var: AGENT_ID, AGENT_TOKEN
 #  - input data: services.json, twampquick_parameters.json
 #  - output var: GLOBAL_STATE_PEER_IDXMAP
+#  - output file: services_reorder.json (for ServiceList report metric)
 #
 # Dependencies:
 # - jsonfilter (default installed at OpenWRT) as $JSONFILTER
 #
 ################################################################################
+
+_generate_reordermap_json() {
+  local outjson="$BASEDIR/services_reorder.json"
+  local map="$*"
+  {
+    printf '{ "rtt_serversel": [ '
+    while [ -n "$map" ] ; do
+      local e="${map%% *}"
+      map="${map#* }"
+      [ -z "$e" ] || [ "$e" -lt 0 ] && break
+      printf %s "$e, " || break
+    done | sed -e 's/, *$//'
+    printf '] }'
+  } > "$outjson"
+  :
+}
 
 _twquick() {
   local tw_tag="$1"
@@ -235,6 +252,7 @@ subtask_serverselection() {
   GLOBAL_STATE_PEER_IDXMAP=$(append_list "$i" "$FBIDXLIST" "-1" | \
     sed -e 's/^0\+\([0-9]\)/\1/' -e 's/ 0\+\([0-9]\)/ \1/g')
   #log_debug "server selection: ordered result: '$GLOBAL_STATE_PEER_IDXMAP'"
+  _generate_reordermap_json "$GLOBAL_STATE_PEER_IDXMAP"
   :
 }
 
