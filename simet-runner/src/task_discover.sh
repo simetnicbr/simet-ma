@@ -88,6 +88,8 @@ discover_init() {
     || GLOBAL_SERIALIZE_SERVERSEL=0
   }
 
+  mkdir -p "$BASEDIR/serversel"
+
   local _curl1_pid
   curl \
     --request GET \
@@ -112,7 +114,7 @@ discover_init() {
     --location \
     --connect-timeout 10 \
     --max-time 15 \
-    --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/twampquick_parameters.json" \
+    --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
   & _curl2_pid=$!
 
   wait $_curl1_pid && _report_servicelist_output
