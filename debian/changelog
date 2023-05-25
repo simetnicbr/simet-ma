@@ -1,3 +1,12 @@
+simet-ma (0.18.3) unstable; urgency=medium
+
+  * simet-ma version 0.18.3
+  * simet-runner: shorten max-wait for API calls to 15s
+  * simet-runner: change how latency-based server selection orders
+    peers to not reorder across Service List peer groups.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 25 May 2023 08:48:30 -0300
+
 simet-ma (0.18.2) unstable; urgency=medium
 
   * simet-ma version 0.18.2
