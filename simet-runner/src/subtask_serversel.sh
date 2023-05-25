@@ -12,11 +12,28 @@
 #  - input var: AGENT_ID, AGENT_TOKEN
 #  - input data: services.json, twampquick_parameters.json
 #  - output var: GLOBAL_STATE_PEER_IDXMAP
+#  - output file: services_reorder.json (for ServiceList report metric)
 #
 # Dependencies:
 # - jsonfilter (default installed at OpenWRT) as $JSONFILTER
 #
 ################################################################################
+
+_generate_reordermap_json() {
+  local outjson="$BASEDIR/services_reorder.json"
+  local map="$*"
+  {
+    printf '{ "rtt_serversel": [ '
+    while [ -n "$map" ] ; do
+      local e="${map%% *}"
+      map="${map#* }"
+      [ -z "$e" ] || [ "$e" -lt 0 ] && break
+      printf %s "$e, " || break
+    done | sed -e 's/, *$//'
+    printf '] }'
+  } > "$outjson"
+  :
+}
 
 _twquick() {
   local tw_tag="$1"
@@ -26,7 +43,7 @@ _twquick() {
   local tw_ip4pid
   local tw_ip6pid
   log_verbose "server selection: peer #$tw_tag: $tw_host, TWAMP light measurement"
-  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/twlight_result_${tw_tag}_ip4.json" \
+  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/serversel/twlight_result_${tw_tag}_ip4.json" \
       -c "$TWQUICK_PKTCOUNT" \
       -i "$TWQUICK_PKTDELAY" \
       -T "$TWQUICK_PKTTIMEOUT" \
@@ -34,7 +51,7 @@ _twquick() {
       -k "$TWQUICK_KEY" \
       -4 "$tw_host" \
     & tw_ip4pid=$!
-  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/twlight_result_${tw_tag}_ip6.json" \
+  "$TWAMPC" -m light -qq -R summary -O "$BASEDIR/serversel/twlight_result_${tw_tag}_ip6.json" \
       -c "$TWQUICK_PKTCOUNT" \
       -i "$TWQUICK_PKTDELAY" \
       -T "$TWQUICK_PKTTIMEOUT" \
@@ -47,11 +64,11 @@ _twquick() {
   local tw_ip6res=0
   wait "$tw_ip4pid" || {
     tw_ip4res=$?
-    rm "$BASEDIR/twlight_result_${tw_tag}_ip4.json"
+    rm "$BASEDIR/serversel/twlight_result_${tw_tag}_ip4.json"
   }
   wait "$tw_ip6pid" || {
     tw_ip6res=$?
-    rm "$BASEDIR/twlight_result_${tw_tag}_ip6.json"
+    rm "$BASEDIR/serversel/twlight_result_${tw_tag}_ip6.json"
   }
 
   # both failed
@@ -60,8 +77,8 @@ _twquick() {
   # prefer ipv6 latency for ordering when we have both
   local i
   for i in ip6 ip4 ; do
-    [ -s "$BASEDIR/twlight_result_${tw_tag}_$i.json" ] && {
-      mv "$BASEDIR/twlight_result_${tw_tag}_$i.json" "$BASEDIR/twlight_result_${tw_tag}.json"
+    [ -s "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json" ] && {
+      mv "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json" "$BASEDIR/serversel/twlight_result_${tw_tag}.json"
       return 0
     }
   done
@@ -77,12 +94,12 @@ _twquick_wait() {
     log_debug "server selection: peer #$_peer_id discarded: twamp client returned status $?"
     return 1
   }
-  [ -s "$BASEDIR/twlight_result_$_peer_id.json" ] || {
+  [ -s "$BASEDIR/serversel/twlight_result_$_peer_id.json" ] || {
     log_debug "server selection: peer #$_peer_id discarded: no/empty result file"
     return 1
   }
   local j
-  j=$("$JSONFILTER" -i "$BASEDIR/twlight_result_$_peer_id.json" \
+  j=$("$JSONFILTER" -i "$BASEDIR/serversel/twlight_result_$_peer_id.json" \
     -e "PKTSENT=@.results_summary.packets_sent" \
     -e "PKTDROP=@.results_summary.packets_lost" \
     -e "PKTRCVD=@.results_summary.packets_received_valid" ) || {
@@ -96,7 +113,7 @@ _twquick_wait() {
     return 1
   }
   # shellcheck disable=SC2015
-  MEDIANRTT=$("$JSONFILTER" -i "$BASEDIR/twlight_result_$_peer_id.json" \
+  MEDIANRTT=$("$JSONFILTER" -i "$BASEDIR/serversel/twlight_result_$_peer_id.json" \
       -e "@.results_summary.rtt.rtt_median_us" ) && [ "$MEDIANRTT" -ge 0 ] 2>/dev/null || {
     log_debug "server selection: peer #$_peer_id missing or invalid median RTT, discarded"
     return 1
@@ -137,11 +154,11 @@ subtask_serverselection() {
   local _services="$BASEDIR/services.json"
 
   [ -s "$_services" ] || return
-  [ -s "$BASEDIR/twampquick_parameters.json" ] || return
+  [ -s "$BASEDIR/serversel/twampquick_parameters.json" ] || return
   [ -x "$TWAMPC" ] || return
 
   local j
-  j=$("$JSONFILTER" -i "$BASEDIR/twampquick_parameters.json" \
+  j=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
     -e 'TWQUICK_PAYLOADSIZE=@.twamp_payload_size' \
     -e 'TWQUICK_PKTCOUNT=@.twamp_packet_count' \
     -e 'TWQUICK_PKTDELAY=@.twamp_packet_delay_us' \
@@ -149,9 +166,9 @@ subtask_serverselection() {
     -e 'TWQUICK_REMOTEPORT=@.reflector_port' \
     -e 'TWQUICK_KEY=@.auth_key_base64') || return
   eval "$j" || return
-  TWQUICK_DROPLIMIT=$("$JSONFILTER" -i "$BASEDIR/twampquick_parameters.json" \
+  TWQUICK_DROPLIMIT=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
     -e '@.twamp_packet_drop_limit') || TWQUICK_DROPLIMIT=1
-  TWQUICK_PRECISION=$("$JSONFILTER" -i "$BASEDIR/twampquick_parameters.json" \
+  TWQUICK_PRECISION=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
     -e '@.twamp_desired_precision_us') || TWQUICK_PRECISION=0
 
   log_info "server selection: measuring network roundtrip time to the available servers..."
@@ -235,6 +252,7 @@ subtask_serverselection() {
   GLOBAL_STATE_PEER_IDXMAP=$(append_list "$i" "$FBIDXLIST" "-1" | \
     sed -e 's/^0\+\([0-9]\)/\1/' -e 's/ 0\+\([0-9]\)/ \1/g')
   #log_debug "server selection: ordered result: '$GLOBAL_STATE_PEER_IDXMAP'"
+  _generate_reordermap_json "$GLOBAL_STATE_PEER_IDXMAP"
   :
 }
 

@@ -6,6 +6,7 @@
 ################################################################################
 #
 # function task_template()
+# function task_json_template()
 # function report_template()
 # function error_template()
 #
@@ -65,9 +66,14 @@ EOF2TASKTEMPLATE
   :
 }
 
-# task_json_template "filename" "URN" "column name" ... > tables/result.json
+# task_json_template "URN" "filename" "column name" ["filename" "column name" ...] > tables/result.json
+# single row, one or more columns.  Tolerates empty/missing files (encodes as "null").
 task_json_template(){
+  [ $# -lt 3 ] && return
+
   _helper_measurement_context_tag
+  FURN="$1"
+  shift
   cat << EOF1TASKJSONTEMPLATE
 {
   "schedule": "$REPORT_SCHEDULE",
@@ -88,25 +94,33 @@ task_json_template(){
   "table": [
 EOF1TASKJSONTEMPLATE
 
-  while [ $# -ge 3 ] ; do
+  printf '{ "function": [ {"uri": "%s"} ], "column": [' "$FURN"
+  ( #subshell to preserve "$@"
+    local comma=
+    while [ $# -ge 2 ] ; do
+      [ -s "$1" ] && {
+	printf ' %s\"%s\"' "$comma" "$2"
+        comma=", "
+      }
+      shift 2
+    done
+  )
+  printf '], "row": [ {"value": [\n'
+  local comma=
+  while [ $# -ge 2 ] ; do
     FN="$1"
-    FURN="$2"
-    FCOL="$3"
-    shift 3
-
-    echo "{\"function\":[{\"uri\":\"$FURN\"}],"
-    echo " \"column\":[\"$FCOL\"],\"row\":["
-    sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/^/{"value":["/' -e '$ s/$/"]}/' -e '$! s/$/"]},/' -e 's/[[:cntrl:]]*//g' \
-      < "$FN"
-  echo ']}'
-  [ $# -gt 0 ] && echo ','
-  :
+    if [ -s "$FN" ] ; then
+      [ -n "$comma" ] && printf ',\n'
+      printf '"'
+      sed -e 's/[\]/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/[[:cntrl:]]*//g' \
+	< "$FN"
+      printf '"'
+      comma=1
+    fi
+    shift 2
+    :
   done
-
-  cat << EOF2TASKJSONTEMPLATE
-  ]
-}
-EOF2TASKJSONTEMPLATE
+  printf '\n]}\n]}\n]}\n'
   :
 }
 
