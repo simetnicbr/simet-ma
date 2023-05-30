@@ -1,3 +1,13 @@
+simet-ma (0.18.3.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.3.1
+  * simet-runner: remove harmless left-over call to _report_servicelist_output.
+  * simet-runner: avoid failing the entire latency-based peer selection
+    process when there is no global IPv6 connectivity, but IPv6 packets were
+    sucessfully sent.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 30 May 2023 13:52:43 -0300
+
 simet-ma (0.18.3) unstable; urgency=medium
 
   * simet-ma version 0.18.3
