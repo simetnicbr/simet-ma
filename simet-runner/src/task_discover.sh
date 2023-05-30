@@ -118,7 +118,7 @@ discover_init() {
     --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
   & _curl2_pid=$!
 
-  wait $_curl1_pid && _report_servicelist_output
+  wait $_curl1_pid
   wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
 }
 
