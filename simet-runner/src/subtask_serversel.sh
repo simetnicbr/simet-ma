@@ -74,16 +74,27 @@ _twquick() {
   # both failed
   [ $tw_ip4res -ne 0 ] && [ $tw_ip6res -ne 0 ] && return 1
 
-  # prefer ipv6 latency for ordering when we have both
+  # both sucessfull, remap 100% packet loss to failure, pick
+  # ipv6 over ipv4.
   local i
   for i in ip6 ip4 ; do
+    # shellcheck disable=SC2015
+    j=$("$JSONFILTER" -i "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json" \
+      -e "PKTSENT=@.results_summary.packets_sent" \
+      -e "PKTRCVD=@.results_summary.packets_received_valid" ) && eval "$j" || {
+	log_debug "server selection: incorrect or missing data in results for peer #$tw_tag, $i"
+	rm -f "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json"
+      }
+    # shellcheck disable=SC2015
+    [ "$PKTSENT" -eq "$TWQUICK_PKTCOUNT" ] 2>/dev/null && [ "$PKTRCVD" -gt 0 ] 2>/dev/null || continue
+
     [ -s "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json" ] && {
       mv "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json" "$BASEDIR/serversel/twlight_result_${tw_tag}.json"
       return 0
     }
   done
 
-  # twampc returned zero status with empty summary files, should never happen
+  # invalid results from peer, or both IP families lost too many packets
   return 1
 }
 
