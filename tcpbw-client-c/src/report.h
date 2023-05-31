@@ -29,6 +29,8 @@ typedef struct tcpbw_download_result
 } DownResult;
 
 struct tcpbw_report {
+    /* ensures proper aligment for the struct, does not really exist */
+    void * do_not_use_this_field;
     /* all fields private, size unknown */
 };
 
