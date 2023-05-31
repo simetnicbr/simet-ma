@@ -94,8 +94,9 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
-	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>] [-o <path>]"
+    fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <duration>] [-c <streams>] "
+	    "[-s <period>] [-S <factor>] "
+	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>] [-o <path>] [-O <path>] "
 	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
@@ -112,6 +113,9 @@ static void print_usage(const char * const p, int mode)
 		"\t-j\taccess credentials\n"
 		"\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
 		"\t-o\tredirect report output to <path>\n"
+		"\t-O\twrite debugging data report to <path>\n"
+		"\t-s\tsampling period in milliseconds (500ms)\n"
+		"\t-S\tstatistics oversampling factor (0 - disabled)\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -124,16 +128,20 @@ int main(int argc, char **argv) {
     char *token = NULL;
     int family = 6;
     int report_mode = 0;
+    char *streamdata_path = NULL;
+    FILE *streamdata_file = NULL;
     int timeout_test = 30;
     int test_lenght = 11;
     int numstreams = 5;
+    int samplingperiod = 500;
+    int statsoversampling = 0;
 
     progname = argv[0];
     sanitize_std_fds();
 
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:O:s:S:")) != -1) {
         switch (option) {
         case 'v':
             if (log_level < 1)
@@ -152,6 +160,18 @@ int main(int argc, char **argv) {
 	        print_err("could not redirect output to %s: %s", optarg, strerror(errno));
 	        exit(SEXIT_FAILURE);
 	    }
+	    break;
+	case 'O':
+	    if (!optarg || !*optarg) {
+		print_err("missing output file name for -O");
+		exit(SEXIT_FAILURE);
+	    }
+	    streamdata_file = fopen(optarg, "w");
+	    if (!streamdata_file) {
+		print_err("could not create file %s: %s", optarg, strerror(errno));
+		exit(SEXIT_FAILURE);
+	    }
+	    streamdata_path = strdup(optarg);
 	    break;
 	case '4':
 	    family = 4;
@@ -176,6 +196,12 @@ int main(int argc, char **argv) {
 	    break;
 	case 'r':
 	    report_mode = atoi(optarg);
+	    break;
+	case 's':
+	    samplingperiod = atoi(optarg);
+	    break;
+	case 'S':
+	    statsoversampling = atoi(optarg);
 	    break;
 	case 'h':
 	    print_usage(progname, 1);
@@ -216,11 +242,14 @@ int main(int argc, char **argv) {
 	.token = token,
 	.family = family,
 	.report_mode = report_mode,
+	.streamdata_path = streamdata_path,
+	.streamdata_file = streamdata_file,
 	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test,
 	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams,
 	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght,
 	.sessionid = NULL,
-	.sample_period_ms = 500U,
+	.sample_period_ms = (samplingperiod < 50 || samplingperiod > 1000) ? 500 : (unsigned int) samplingperiod,
+	.stats_oversampling = (statsoversampling < 0 || statsoversampling > 50 || (statsoversampling > 0 && samplingperiod / statsoversampling < 10)) ? 1 : (unsigned int)statsoversampling,
     };
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
@@ -230,6 +259,7 @@ int main(int argc, char **argv) {
     if (value != 0)
         print_err("TCP CLIENT RUN ERROR");
 
+    free(streamdata_path);
     free(token);
 
     return value;

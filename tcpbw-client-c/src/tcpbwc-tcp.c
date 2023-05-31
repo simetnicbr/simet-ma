@@ -26,6 +26,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -41,7 +42,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/tcp.h>
+
+#include "tcpinfo.h" /* struct simet_tcp_info, alias for struct tcp_info */
+#include <linux/sock_diag.h> /* for SO_MEMINFO, SK_MEMINFO_VARS */
 
 #include "json-c/json.h"
 #include "curl/curl.h"
@@ -56,6 +59,9 @@
 #define TCPBW_MAX_SAMPLES 10000
 #define TCPBW_RANDOM_SOURCE "/dev/urandom"
 #define TCPBW_EARLY_EXIT_S 2
+
+#define likely(x)   __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 static fd_set sockListFDs;
 int sockList[MAX_CONCURRENT_SESSIONS];
@@ -527,18 +533,74 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 /* main loop */
 
-static int sendUploadPackets(const MeasureContext ctx)
+static void postprocess_tcpi(TcpInfoSample *samples, size_t total_sample_count, struct timespec *zerotime)
 {
-    const long upTimeout = ctx.test_duration;
-    struct timespec ts_cur, ts_stop;
+    if (samples) {
+	for (TcpInfoSample *p = samples; total_sample_count > 0; p++, total_sample_count--) {
+	    p->timestamp = timespec_sub(&(p->timestamp), zerotime);
+	}
+    }
+}
+
+static void postprocess_skmem(SkmemSample *samples, size_t total_sample_count, struct timespec *zerotime)
+{
+    if (samples) {
+	for (SkmemSample *p = samples; total_sample_count > 0; p++, total_sample_count--) {
+	    p->timestamp = timespec_sub(&(p->timestamp), zerotime);
+	}
+    }
+}
+
+static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * const rctx)
+{
+    struct timespec ts_start, ts_cur, ts_stop, ts_sample, ts_oversample;
+    TcpInfoSample *upload_tcpi = NULL;
+    SkmemSample *upload_skmem = NULL;
     fd_set wset, masterset;
     unsigned int i;
+    int rc = -1;
 
     assert(sockBuffer);
     assert(sockBufferSz);
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
     memset(&sndposList, 0, sizeof(sndposList));
+
+    if (ctx->test_duration > 1000 || ctx->sample_period_ms <= 0)
+	return -EINVAL;
+    unsigned int max_samples = (ctx->test_duration * 1000U) / ctx->sample_period_ms;
+
+    /* clamp, just in case */
+    if (max_samples > TCPBW_MAX_SAMPLES)
+	max_samples = TCPBW_MAX_SAMPLES;
+
+    const size_t max_tcpi_samples = ctx->numstreams * max_samples;
+    if (ctx->streamdata_file) {
+	upload_tcpi = calloc(max_tcpi_samples, sizeof(TcpInfoSample));
+	if (!upload_tcpi)
+	    goto err_exit;
+    }
+#if HAVE_DECL_SO_MEMINFO != 0
+    const size_t max_skmem_samples = (ctx->streamdata_file) ?
+	ctx->numstreams * max_samples * ctx->stats_oversampling : 0;
+#else
+    const size_t max_skmem_samples = 0;
+#endif
+    if (max_skmem_samples) {
+	upload_skmem = calloc(max_skmem_samples, sizeof(SkmemSample));
+	if (!upload_skmem)
+	    goto err_exit;
+    }
+
+    const struct timespec ts_samplingperiod = {
+	.tv_sec = ctx->sample_period_ms / 1000,
+	.tv_nsec = (ctx->sample_period_ms % 1000) * 1000000,
+    };
+    const unsigned int oversample_period_ms = ctx->sample_period_ms / ((ctx->stats_oversampling)? ctx->stats_oversampling : 1);
+    const struct timespec ts_oversamplingperiod = {
+	.tv_sec = oversample_period_ms / 1000,
+	.tv_nsec = (oversample_period_ms % 1000) * 1000000,
+    };
 
     /* FIXME: switch to blocking IO, using one thread per socket, so that it will sleep without blocking the others?
      *        right now, we return from select to write a bit to large socket buffers that are still far from empty...
@@ -547,13 +609,21 @@ static int sendUploadPackets(const MeasureContext ctx)
      *        Consider vmsplice and ring buffers if absolutely required.
      */
 
-    int active_streams = (int)ctx.numstreams; /* safe, numstreams <<< INT_MAX */
+    TcpInfoSample *current_tcpi = upload_tcpi;
+    SkmemSample *current_skmem = upload_skmem;
+    unsigned long tcpi_sample_cnt = 0;
+    unsigned long skmem_sample_cnt = 0;
+
+    int active_streams = (int)ctx->numstreams; /* safe, numstreams <<< INT_MAX */
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
 	return -1;
     }
+    ts_start = ts_cur;
     ts_stop = ts_cur;
-    ts_stop.tv_sec += upTimeout;
+    ts_stop.tv_sec += ctx->test_duration;
+    ts_sample = timespec_add(&ts_cur, &ts_samplingperiod);
+    ts_oversample = timespec_add(&ts_cur, &ts_oversamplingperiod);
 
     /*
      * we fill TCP buffers for the whole test time window, and they will
@@ -565,14 +635,39 @@ static int sendUploadPackets(const MeasureContext ctx)
      * be necessary to revisit this
      */
     while (timespec_lt(&ts_cur, &ts_stop) && active_streams > 0) {
-	struct timespec ts_timeo = timespec_sub_saturated(&ts_stop, &ts_cur, 1000);
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_oversample, &ts_cur, 0);
 
         memcpy(&wset, &masterset, sizeof(fd_set));
-        if (pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL) > 0) {
-	    for (i = 0; i < ctx.numstreams; i++) {
+
+        int rc_select = pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL);
+	if (rc_select >= 0) {
+	    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+		goto err_exit;
+
+	    for (i = 0; i < ctx->numstreams; i++) {
+		if (sockList[i] < 0)
+		    continue;
+
+#if HAVE_DECL_SO_MEMINFO != 0
+		if (current_skmem && timespec_le(&ts_oversample, &ts_cur) && skmem_sample_cnt < max_skmem_samples) {
+		    socklen_t meminfo_len = sizeof(current_skmem->sk_meminfo);
+		    if (likely(!getsockopt(sockList[i], SOL_SOCKET, SO_MEMINFO, &(current_skmem->sk_meminfo), &meminfo_len)
+				&& meminfo_len == sizeof(current_skmem->sk_meminfo))) {
+			current_skmem->timestamp = ts_cur;
+			current_skmem->stream_id = i;
+			current_skmem++;
+			skmem_sample_cnt++;
+		    } else {
+			/* stop sampling */
+			current_skmem = NULL;
+			skmem_sample_cnt = 0;
+		    }
+		}
+#endif
+
 		if (FD_ISSET(sockList[i], &wset)) {
-		    const uint8_t *txbuf = (uint8_t *)sockBuffer + sndposList[i];
-		    const size_t iosz = sockBufferSz - sndposList[i];
+		    const uint8_t *txbuf = (uint8_t *)sockBuffer ;//+ sndposList[i];
+		    const size_t iosz = sockBufferSz ;//- sndposList[i];
 
 		    ssize_t res = send(sockList[i], txbuf, iosz, MSG_DONTWAIT | MSG_NOSIGNAL);
 		    if (res >= 0) {
@@ -585,72 +680,222 @@ static int sendUploadPackets(const MeasureContext ctx)
 		    }
 		}
 	    }
+	} else if (rc_select < 0 && errno != EINTR) {
+	    rc = -errno;
+	    goto err_exit;
         }
 
-	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
-	    return -1;
+	/* do this before updating ts_cur, or we risk skipping samples with oversampling=1 */
+	while (timespec_le(&ts_oversample, &ts_cur)) {
+	    /* if this runs more than once, we were too slow and lost one oversampling window */
+	    ts_oversample = timespec_add(&ts_oversample, &ts_oversamplingperiod);
+	}
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	    goto err_exit;
+
+	if (current_tcpi && timespec_le(&ts_sample, &ts_cur) && tcpi_sample_cnt < max_tcpi_samples) {
+	    for (i = 0; i < ctx->numstreams; i++) {
+		if (sockList[i] >= 0) {
+		    socklen_t tcpi_len = sizeof(current_tcpi->tcpi);
+		    if (likely(!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &(current_tcpi->tcpi), &tcpi_len)
+			    && tcpi_len >= offsetof(struct simet_tcp_info, tcpi_bytes_retrans))) {
+		        current_tcpi->timestamp = ts_cur;
+			current_tcpi->stream_id = i;
+			current_tcpi++;
+			tcpi_sample_cnt++;
+		    } else {
+			/* stop sampling */
+			current_tcpi = NULL;
+			tcpi_sample_cnt = 0;
+		    }
+		}
+	    }
+
+	    /* the above can be very, very expensive. */
+	    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+		goto err_exit;
+	}
+
+	while (timespec_le(&ts_sample, &ts_cur)) {
+	    /* if this runs more than once, we were too slow and lost one sampling window */
+	    ts_sample = timespec_add(&ts_sample, &ts_samplingperiod);
 	}
     }
 
     /* Too early an exit fails the measurement... */
     if (active_streams <= 0 && timespec_sub(&ts_stop, &ts_cur).tv_sec > TCPBW_EARLY_EXIT_S) {
 	print_err("measurement connections were closed by the peer");
-	return -ECONNRESET;
+	rc = -ECONNRESET;
+	goto err_exit;
     }
 
+    /* Report some TCP statistics to aid debugging */
+    uint64_t bytes_retrans = 0;
+    uint64_t bytes_total = 0;
+    uint64_t bytes_acked = 0;
+    bool sndbuf_limited = false;
+    for (i = 0; i < ctx->numstreams; i++) {
+	if (sockList[i] >= 0) {
+	    struct simet_tcp_info tcpi = { 0 };
+	    socklen_t tcpi_len = sizeof(tcpi);
+	    if (!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len)
+		    && tcpi_len > offsetof(struct simet_tcp_info, tcpi_bytes_retrans) + sizeof(tcpi.tcpi_bytes_retrans)) {
+		bytes_retrans += tcpi.tcpi_bytes_retrans;
+		bytes_total   += tcpi.tcpi_bytes_sent;
+		bytes_acked   += tcpi.tcpi_bytes_acked;
+		sndbuf_limited |= (tcpi.tcpi_sndbuf_limited > 0);
+	    }
+	}
+    }
+    if (bytes_total > 0) {
+	print_msg(MSG_NORMAL, "TCP: %zu bytes transmitted (including retransmissions, if any)", bytes_total);
+	print_msg(MSG_NORMAL, "TCP: %zu bytes acknowleged as received by the peer (%.3f%% of transmitted)", bytes_acked,
+		100 * (double)bytes_acked / (double)bytes_total);
+	if (bytes_retrans > 0) {
+	   print_msg(MSG_NORMAL, "TCP: %zu bytes (%.3f%%) were TCP retransmissons, and not accounted for in throughput rate",
+		   bytes_retrans, 100 * (double)bytes_retrans / (double)bytes_total);
+	}
+    }
+
+    /* possible transmission bottleneck warnings */
+    if (sndbuf_limited)
+	print_warn("TCP: sending rate was limited by lack of kernel buffer memory");
+
+    /* discard partial samples if necessary */
+    if (!current_skmem && upload_skmem) {
+	free(upload_skmem);
+	upload_skmem = NULL;
+	skmem_sample_cnt = 0;
+    }
+    if (!current_tcpi && upload_tcpi) {
+	free(upload_tcpi);
+	upload_tcpi= NULL;
+	tcpi_sample_cnt = 0;
+    }
+
+    postprocess_tcpi(upload_tcpi, tcpi_sample_cnt, &ts_start);
+    postprocess_skmem(upload_skmem, skmem_sample_cnt, &ts_start);
+    rctx->upload_tcpi = upload_tcpi;
+    rctx->upload_tcpi_count = tcpi_sample_cnt;
+    rctx->upload_skmem = upload_skmem;
+    rctx->upload_skmem_count = skmem_sample_cnt;
+    rctx->upload_streams_count = ctx->numstreams;
     return 0;
+
+err_exit:
+    free(upload_tcpi);
+    free(upload_skmem);
+    return rc;
 }
 
-static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const res, unsigned int *numres)
+static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContext * const rctx)
 {
+    struct timespec ts_start, ts_cur, ts_stop, ts_last, ts_sample, ts_oversample;
+    TcpInfoSample *download_tcpi = NULL;
+    SkmemSample *download_skmem = NULL;
     ssize_t bytes_recv = 0;
-    struct timespec ts_last, ts_cur, ts_sample, ts_stop;
     fd_set rset, masterset;
     uint64_t total = 0;
     unsigned int rCounter = 0;
+    int rc = -1;
 
-    assert(res && numres && sockBufferSz > 0);
+    assert(ctx && rctx && sockBufferSz > 0);
     const size_t io_size = sockBufferSz;
 
-    if (ctx.test_duration > 1000 || ctx.sample_period_ms <= 0)
+    if (ctx->test_duration > 1000 || ctx->sample_period_ms <= 0)
 	return -EINVAL;
-    unsigned int max_samples = (ctx.test_duration * 1000U) / ctx.sample_period_ms;
+    unsigned int max_samples = (ctx->test_duration * 1000U) / ctx->sample_period_ms;
 
     /* clamp, just in case */
     if (max_samples > TCPBW_MAX_SAMPLES)
 	max_samples = TCPBW_MAX_SAMPLES;
 
+    const size_t max_tcpi_samples = ctx->numstreams * max_samples;
+    if (ctx->streamdata_file) {
+	download_tcpi = calloc(max_tcpi_samples, sizeof(TcpInfoSample));
+	if (!download_tcpi)
+	    goto err_exit;
+    }
+#if HAVE_DECL_SO_MEMINFO != 0
+    const size_t max_skmem_samples = (ctx->streamdata_file) ?
+	ctx->numstreams * max_samples * ctx->stats_oversampling : 0;
+#else
+    const size_t max_skmem_samples = 0;
+#endif
+    if (max_skmem_samples) {
+	download_skmem = calloc(max_skmem_samples, sizeof(SkmemSample));
+	if (!download_skmem)
+	    goto err_exit;
+    }
+
+    TcpInfoSample *current_tcpi = download_tcpi;
+    SkmemSample *current_skmem = download_skmem;
+    unsigned long tcpi_sample_cnt = 0;
+    unsigned long skmem_sample_cnt = 0;
+
+    int active_streams = (int)ctx->numstreams; /* safe, numstreams <<< INT_MAX */
+
+    const struct timespec ts_samplingperiod = {
+	.tv_sec = ctx->sample_period_ms / 1000,
+	.tv_nsec = (ctx->sample_period_ms % 1000) * 1000000,
+    };
+    const unsigned int oversample_period_ms = ctx->sample_period_ms / ((ctx->stats_oversampling)? ctx->stats_oversampling : 1);
+    const struct timespec ts_oversamplingperiod = {
+	.tv_sec = oversample_period_ms / 1000,
+	.tv_nsec = (oversample_period_ms % 1000) * 1000000,
+    };
+
+    rc = -ENOMEM;
+
     DownResult *downloadResults = calloc(max_samples, sizeof(DownResult));
-    *res = downloadResults;
-    *numres = 0;
     if (!downloadResults)
-	return -ENOMEM;
+	goto err_exit;
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
 
-    int active_streams = (int)ctx.numstreams; /* safe, numstreams <<< INT_MAX */
-
-    const struct timespec ts_samplingperiod = {
-	.tv_sec = ctx.sample_period_ms / 1000,
-	.tv_nsec = (ctx.sample_period_ms % 1000) * 1000000,
-    };
+    rc = -EINVAL;
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
-	return -EINVAL;
+	goto err_exit;
+    ts_start = ts_cur;
     ts_stop = ts_cur;
-    ts_stop.tv_sec += ctx.test_duration;
-
+    ts_stop.tv_sec += ctx->test_duration;
     ts_sample = timespec_add(&ts_cur, &ts_samplingperiod);
     ts_last = ts_cur;
+    ts_oversample = timespec_add(&ts_cur, &ts_oversamplingperiod);
 
+    uint64_t payload_total = 0;
     while (rCounter < max_samples && active_streams > 0) {
-	struct timespec ts_timeo = timespec_sub_saturated(&ts_sample, &ts_cur, 0);
+	struct timespec ts_timeo = timespec_sub_saturated(&ts_oversample, &ts_cur, 0);
 
 	memcpy(&rset, &masterset, sizeof(fd_set));
-
 	int rc_select = pselect(sockListLastFD + 1, &rset, NULL, NULL, &ts_timeo, NULL);
-	if (rc_select > 0) {
-	    for (unsigned int i = 0; i < ctx.numstreams; i++) {
+	if (rc_select >= 0) {
+	    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+		goto err_exit;
+
+	    for (unsigned int i = 0; i < ctx->numstreams; i++) {
+		if (sockList[i] < 0)
+		    continue;
+
+#if HAVE_DECL_SO_MEMINFO != 0
+		if (current_skmem && timespec_le(&ts_oversample, &ts_cur) && skmem_sample_cnt < max_skmem_samples) {
+		    socklen_t meminfo_len = sizeof(current_skmem->sk_meminfo);
+		    if (likely(!getsockopt(sockList[i], SOL_SOCKET, SO_MEMINFO, &(current_skmem->sk_meminfo), &meminfo_len)
+				&& meminfo_len == sizeof(current_skmem->sk_meminfo))) {
+			current_skmem->timestamp = ts_cur;
+			current_skmem->stream_id = i;
+			current_skmem++;
+			skmem_sample_cnt++;
+		    } else {
+			/* stop sampling */
+			current_skmem = NULL;
+			skmem_sample_cnt = 0;
+		    }
+		}
+#endif
+
 		if (FD_ISSET(sockList[i], &rset)) {
 		    /* drain stream buffer before switching to next,
 		     * try to avoid the recv() that would result in EAGAIN */
@@ -667,44 +912,116 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 		}
 	    }
 	} else if (rc_select < 0 && errno != EINTR) {
-	    return -errno;
+	    rc = -errno;
+	    goto err_exit;
 	}
 
-	/* doing it here seems to work better than right after pselect() */
-	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
-	   return -EINVAL;
+	/* do this before updating ts_cur, or we risk skipping samples with oversampling=1 */
+	while (timespec_le(&ts_oversample, &ts_cur)) {
+	    /* if this runs more than once, we were too slow and lost one oversampling window */
+	    ts_oversample = timespec_add(&ts_oversample, &ts_oversamplingperiod);
+	}
 
-	if (timespec_le(&ts_sample, &ts_cur)) {
-	    downloadResults[rCounter].nstreams = ctx.numstreams;
+	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
+	    goto err_exit;
+
+	if (timespec_le(&ts_sample, &ts_cur) && rCounter < max_samples) {
+	    downloadResults[rCounter].nstreams = ctx->numstreams;
 	    downloadResults[rCounter].bytes = total;
 	    downloadResults[rCounter].interval_ns = (uint64_t)timespec_sub_nanoseconds(&ts_cur, &ts_last); /* ts_last <= ts_cur */
 
-	    while (timespec_le(&ts_sample, &ts_cur)) {
-		/* if this runs more than once, we were too slow and lost one sampling window */
-		ts_sample = timespec_add(&ts_sample, &ts_samplingperiod);
-	    }
 	    ts_last = ts_cur;
 
 	    rCounter++;
+	    payload_total += total;
 	    total = 0;
+
+	    if (current_tcpi && tcpi_sample_cnt < max_tcpi_samples) {
+		for (unsigned int i = 0; i < ctx->numstreams; i++) {
+		    if (sockList[i] >= 0) {
+			socklen_t tcpi_len = sizeof(current_tcpi->tcpi);
+			if (likely(!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &(current_tcpi->tcpi), &tcpi_len)
+				&& tcpi_len >= offsetof(struct simet_tcp_info, tcpi_bytes_retrans))) {
+			    current_tcpi->timestamp = ts_cur;
+			    current_tcpi->stream_id = i;
+			    current_tcpi++;
+			    tcpi_sample_cnt++;
+			} else {
+			    /* stop sampling */
+			    current_tcpi = NULL;
+			    tcpi_sample_cnt = 0;
+			}
+		    }
+		}
+	    }
 	}
 
+	/* the above can be very, very expensive. */
 	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
-	    return -EINVAL;
+	    goto err_exit;
 
 	if (timespec_lt(&ts_stop, &ts_cur)) /* lt, not le ! */
 	    break;
+
+	while (timespec_le(&ts_sample, &ts_cur)) {
+	    /* if this runs more than once, we were too slow and lost one sampling window */
+	    ts_sample = timespec_add(&ts_sample, &ts_samplingperiod);
+	}
     }
 
     /* Too early an exit fails the measurement... */
     if (active_streams <= 0 && timespec_sub(&ts_stop, &ts_cur).tv_sec > TCPBW_EARLY_EXIT_S) {
 	print_err("measurement connections were closed by the peer");
-	return -ECONNRESET;
+	rc = -ECONNRESET;
+	goto err_exit;
     }
 
-    *numres = rCounter;
+    /* Report some TCP statistics to aid debugging */
+    uint64_t bytes_total  = 0;
+    for (unsigned int i = 0; i < ctx->numstreams; i++) {
+	if (sockList[i] >= 0) {
+	    struct simet_tcp_info tcpi = { 0 };
+	    socklen_t tcpi_len = sizeof(tcpi);
+	    if (!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len)
+		    && tcpi_len > offsetof(struct simet_tcp_info, tcpi_bytes_retrans) + sizeof(tcpi.tcpi_bytes_retrans)) {
+		bytes_total   += tcpi.tcpi_bytes_received;
+	    }
+	}
+    }
+    if (bytes_total > 0) {
+	print_msg(MSG_NORMAL, "TCP: %zu bytes received (%.2f%% delivered to application)", bytes_total,
+		100 * (double)payload_total / (double)bytes_total);
+    }
+
+    /* discard partial samples if necessary */
+    if (!current_skmem && download_skmem) {
+	free(download_skmem);
+	download_skmem = NULL;
+	skmem_sample_cnt = 0;
+    }
+    if (!current_tcpi && download_tcpi) {
+	free(download_tcpi);
+	download_tcpi= NULL;
+	tcpi_sample_cnt = 0;
+    }
+
+    postprocess_tcpi(download_tcpi, tcpi_sample_cnt, &ts_start);
+    postprocess_skmem(download_skmem, skmem_sample_cnt, &ts_start);
+    rctx->download_tcpi = download_tcpi;
+    rctx->download_tcpi_count = tcpi_sample_cnt;
+    rctx->download_skmem = download_skmem;
+    rctx->download_skmem_count = skmem_sample_cnt;
+    rctx->download_streams_count = ctx->numstreams;
+
+    rctx->summary_sample_count = rCounter;
+    rctx->summary_samples = downloadResults;
 
     return 0;
+
+err_exit:
+    free(download_tcpi);
+    free(download_skmem);
+    return rc;
 }
 
 /* do not call twice */
@@ -713,11 +1030,9 @@ int tcp_client_run(MeasureContext ctx)
     CURL *curl;
     int rc;
 
-    unsigned int rcvcounter = 0;
-    DownResult *rcv = NULL;
     const char *upload_results_json = NULL;
 
-    struct tcpbw_report *report;
+    ReportContext *report_context;
 
     char strbuf[MAX_URL_SIZE];
     struct MemoryStruct chunk = { 0 };
@@ -733,8 +1048,8 @@ int tcp_client_run(MeasureContext ctx)
 	return SEXIT_OUTOFRESOURCE;
     }
 
-    report = tcpbw_report_init();
-    if (!report) {
+    report_context = tcpbw_report_init();
+    if (!report_context) {
 	print_err("failed to initialize report structures");
 	return SEXIT_OUTOFRESOURCE;
     }
@@ -787,7 +1102,7 @@ int tcp_client_run(MeasureContext ctx)
 
     print_msg(MSG_DEBUG, "creating socket information report");
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
-	if (sockList[i] != -1 && report_socket_metrics(report, sockList[i], IPPROTO_TCP))
+	if (sockList[i] != -1 && report_socket_metrics(report_context, sockList[i], IPPROTO_TCP))
 	    print_warn("failed to report socket information for stream %u", i);
     }
 
@@ -805,7 +1120,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting upload measurement (send)");
-    if (sendUploadPackets(ctx) < 0) {
+    if (sendUploadPackets(&ctx, report_context) < 0) {
 	print_err("failed while sending packets");
 	rc = SEXIT_FAILURE;
 	goto err_exit;
@@ -841,7 +1156,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     print_msg(MSG_IMPORTANT, "starting download measurement (receive)");
-    if (receiveDownloadPackets(ctx, &rcv, &rcvcounter) < 0) {
+    if (receiveDownloadPackets(&ctx, report_context) < 0) {
 	print_err("failed while receiving packets");
 	rc = SEXIT_FAILURE;
 	goto err_exit;
@@ -888,7 +1203,7 @@ int tcp_client_run(MeasureContext ctx)
 
 err_exit:
     /* we want the lmap report table (even if it is empty) if we can output it */
-    if (tcpbw_report(report, upload_results_json, rcv, rcvcounter, &ctx))
+    if (tcpbw_report(report_context, upload_results_json, &ctx))
 	rc = rc ? rc : SEXIT_FAILURE;
 
     free(chunk.memory);
@@ -901,7 +1216,7 @@ err_exit:
 
     curl_global_cleanup();
     free_curl_err_handling();
-    tcpbw_report_done(report);
+    tcpbw_report_done(report_context);
 
     return rc;
 }

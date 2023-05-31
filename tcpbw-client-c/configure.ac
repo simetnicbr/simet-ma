@@ -130,6 +130,18 @@ AC_SUBST(JSON_LIBS)
 
 LIBCURL_CHECK_CONFIG([yes],[],[],[AC_MSG_ERROR([Could not find working libcurl])])
 
+dnl check level of struct tcp_info support...
+AC_CHECK_MEMBERS([struct tcp_info.tcpi_fastopen_client_fail, struct tcp_info.tcpi_snd_wnd, struct tcp_info.tcpi_rcv_wnd],
+    [], [],
+    [#include <linux/tcp.h>])
+
+dnl check for SK_MEMINFO_*, SO_MEMINFO
+AC_CHECK_DECLS([SK_MEMINFO_VARS, SK_MEMINFO_DROPS, SO_MEMINFO], [], [],
+    [
+         #include <sys/socket.h>
+         #include <linux/sock_diag.h>
+    ])
+
 dnl -------------------------------------------
 dnl Override hardcoded *FLAGS for GCC and Clang
 dnl If this breaks your platform, file a bug

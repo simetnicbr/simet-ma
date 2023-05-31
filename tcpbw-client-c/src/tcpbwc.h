@@ -20,6 +20,7 @@
 #define TCP_H_
 
 #include <sys/types.h>
+#include <stdio.h>
 
 /* TCP measure context struct */
 typedef struct measure_context {
@@ -31,10 +32,13 @@ typedef struct measure_context {
     char *sessionid;
     int family;
     int report_mode;
+    char *streamdata_path;
+    FILE *streamdata_file;
     unsigned int timeout_test;
     unsigned int numstreams;
     unsigned int test_duration;
     unsigned int sample_period_ms;
+    unsigned int stats_oversampling;
 } MeasureContext;
 
 struct MemoryStruct {
