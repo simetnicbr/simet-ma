@@ -336,6 +336,14 @@ int tcpbw_report(struct tcpbw_report *report,
     }
     fflush(stdout);
 
+    /* free some RAM */
+    if (rp->sockrows)
+	json_object_put(rp->sockrows);
+    rp->sockrows = NULL;
+    if (rp->root)
+	json_object_put(rp->root);
+    rp->root = NULL;
+
     return 0;
 }
 
