@@ -17,6 +17,12 @@ export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
 # package maintainers to append LDFLAGS
 #export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
+
+# One must update all cron scripts *and* debian/rules should this file
+# get moved/renamed.  It is used as a guard to detect package is in
+# installed, and not removed or purged state.
+SIMET_ENSURE_FILE_EXISTS=/opt/simet/bin/simet_register_ma.sh
+
 %:
 	dh $@
 
@@ -57,6 +63,8 @@ override_dh_auto_test:
 # ensure we always get the same behavior from dh_auto_install
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
+	[ -f "debian/tmp/$(SIMET_ENSURE_FILE_EXISTS)" ] || \
+		{ printf '\n\n%s\n\n' "ERROR: fix source and packaging, $(SIMET_ENSURE_FILE_EXISTS) was moved or renamed?" ; exit 99 ; }
 
 override_dh_install:
 	CODENAME=$$( lsb_release -sc ) && DISTRO=$$( lsb_release -si | tr A-Z a-z ) && \
