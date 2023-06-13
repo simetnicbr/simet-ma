@@ -1,33 +1,34 @@
 #!/bin/sh
 # simet-ma.cron.weekly - weekly maintenance for the SIMET Measurement Agent
-# Copyright (c) 2018,2019 NIC.br
+# Copyright (c) 2018-2023 NIC.br
 #
 # Distributed under the GPLv3+ license with additional terms and permissions
 # Refer to the COPYING file on the program source for details
 
 SIMET_PACKAGES="simet-ma simet-lmapd"
 
-# Attempt to auto-update if unattended-upgrades are not explicitly disabled.
-# We also configure unattended-upgrades just in case this one fails, but that
-# won't work if we had to change the initscripts or other stuff in /etc.
+# Attempt to auto-update regardless of unattended-updates, otherwise we end up
+# with installs running very outdated software (well over an year old).  We
+# do restrict ourselves to just the core SIMET packages, and any dependencies
+# that have versioned requirements.
 test -f /opt/simet/bin/simet_register_ma.sh && {
-	RES=$(apt-config shell APTUPD1 APT::Periodic::Update-Package-Lists) && eval $RES
-	RES=$(apt-config shell APTUPD2 APT::Periodic::Unattended-Upgrade) && eval $RES
-	[ -z "$APTUPD1" ] && APTUPD1=1
-	[ -z "$APTUPD2" ] && APTUPD2=1
-	[ $APTUPD1 -ne 0 ] && [ $APTUPD2 -ne 0 ] && {
-		# Sleep for a random time before we do this, at least 1h
-		# some code from cron-apt, thanks!
-		if [ -z "$RANDOM" ] ; then
-			RANDOM=$(( $(dd if=/dev/urandom bs=2 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 32767 ))
-		fi
-		TIME=$(($RANDOM % 3600 + 3600))
-		sleep $TIME
-		apt-get update -qq || true
-		UCF_FORCE_CONFFNEW=1 DEBIAN_FRONTEND=noninteractive \
-		    apt-get install -qq --install-recommends -y \
-			-o Dpkg::Options::=--force-confmiss -o Dpkg::Options::=--force-confnew \
-			$SIMET_PACKAGES
-	}
+	# Sleep for a random time before we do this, at least 1h
+	# some code from cron-apt, thanks!
+	# shellcheck disable=SC2039
+	if [ -z "$RANDOM" ] ; then
+		RANDOM=$(( $(dd if=/dev/urandom bs=4 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 32767 )) || RANDOM=1
+	fi
+	# shellcheck disable=SC2039
+	TIME=$((RANDOM % 3600 + 3600)) || TIME=1
+	sleep $TIME || :
+	# update package lists
+	apt-get update -qq || true
+	# self-heal anything can be self-healed by apt
+	DEBIAN_FRONTEND=noninteractive apt-get -f install --reinstall -qq -y || true
+	# shellcheck disable=SC2086
+	UCF_FORCE_CONFFNEW=1 DEBIAN_FRONTEND=noninteractive \
+	    apt-get install -qq --install-recommends -y \
+		-o Dpkg::Options::=--force-confmiss -o Dpkg::Options::=--force-confnew \
+		$SIMET_PACKAGES
 }
 :
