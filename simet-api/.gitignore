@@ -21,6 +21,8 @@ simet*_geolocation.sh
 simet_read_vlabel.sh*
 simet*_spoofer.sh
 simet_create_vlabel.sh*
+simet_issuebanner-generator.sh
+simet_qrcode.sh
 simet_lib.sh*
 simet_lib_config.sh
 lmap-tasks/*.sh
