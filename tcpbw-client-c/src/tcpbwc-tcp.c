@@ -33,6 +33,9 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 #include <sys/types.h>
@@ -51,9 +54,11 @@
 #define TCP_MIN_BUFSIZE 1480U
 
 #define TCPBW_MAX_SAMPLES 10000
+#define TCPBW_RANDOM_SOURCE "/dev/urandom"
 
 static fd_set sockListFDs;
 int sockList[MAX_CONCURRENT_SESSIONS];
+size_t sndposList[MAX_CONCURRENT_SESSIONS];
 static int sockListLastFD = -1;
 static void *sockBuffer = NULL;
 static size_t sockBufferSz = 0;
@@ -101,7 +106,41 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 
     print_msg(MSG_DEBUG, "will send/receive using a buffer of %zu bytes", buflen);
 
-    void *buf = calloc(1, buflen);
+    /* create zero-filled buffer to avoid leaking data to network... */
+    uint8_t *buf = calloc(1, buflen);
+
+#ifdef TCPBW_DEFEAT_COMPRESSION
+    if (buf) {
+	/* we just need something that won't compress well */
+	const char * const randompath = TCPBW_RANDOM_SOURCE;
+	int rfd = open(randompath, O_RDONLY);
+	if (rfd < 0) {
+	    /* warn and degrade to compressible */
+	    print_warn("could not open %s, using compressible payload", randompath);
+	} else {
+	    uint8_t *bufpos = buf;
+	    size_t rdsize = buflen;
+
+	    print_msg(MSG_DEBUG, "generating incompressible payload using %s", randompath);
+
+	    errno = EAGAIN;
+	    while (rdsize > 0 && (errno == EINTR || errno == EAGAIN)) {
+		ssize_t rlen = read(rfd, bufpos, rdsize);
+		if (rlen <= 0 || (size_t) rlen > rdsize) {
+		    /* should never happen, unless reading from a short file */
+		    print_warn("random source %s misbehaving, payload may be compressible", randompath);
+		    break;
+		}
+		if (rlen > 0) {
+		    bufpos += (size_t) rlen;
+		    rdsize -= (size_t) rlen; /* rlen <= rdsize ensured above */
+		}
+	    }
+	    close(rfd);
+	}
+    }
+#endif /* TCPBW_DEFEAT_COMPRESSION */
+
     *p = buf;
     return buf ? buflen : 0;
 }
@@ -491,8 +530,7 @@ static int sendUploadPackets(const MeasureContext ctx)
     assert(sockBufferSz);
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
-
-    /* FIXME: fill buffer with uncompressible pseudo-random, it is all-zeros right now */
+    memset(&sndposList, 0, sizeof(sndposList));
 
     /* FIXME: switch to blocking IO, using one thread per socket, so that it will sleep without blocking the others?
      *        right now, we return from select to write a bit to large socket buffers that are still far from empty...
@@ -522,8 +560,15 @@ static int sendUploadPackets(const MeasureContext ctx)
         if (pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL) > 0) {
 	    for (i = 0; i < ctx.numstreams; i++) {
 		if (FD_ISSET(sockList[i], &wset)) {
-		    if (send(sockList[i], sockBuffer, sockBufferSz, MSG_DONTWAIT | MSG_NOSIGNAL) == -1 &&
-			(errno == EPIPE || errno == ECONNRESET)) {
+		    const uint8_t *txbuf = (uint8_t *)sockBuffer + sndposList[i];
+		    const size_t iosz = sockBufferSz - sndposList[i];
+
+		    ssize_t res = send(sockList[i], txbuf, iosz, MSG_DONTWAIT | MSG_NOSIGNAL);
+		    if (res >= 0) {
+			sndposList[i] += (size_t) res;
+			if (sndposList[i] >= sockBufferSz)
+			    sndposList[i] = 0;
+		    } else if (errno == EPIPE || errno == ECONNRESET) {
 			    FD_CLR(sockList[i], &masterset);
 		    }
 		}
