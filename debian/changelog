@@ -1,3 +1,12 @@
+simet-ma (0.17.9.2.2) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.2.2
+  * simet-api: remove fping-to-ixbr measurement
+  * debian: attempt to update the simet-ma and simet-lmapd packages in
+    cron.weekly, regardless of automated-upgrades.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 15 Jun 2023 14:43:38 -0300
+
 simet-ma (0.17.9.2.1) unstable; urgency=medium
 
   * simet-ma version 0.17.9.2.1
