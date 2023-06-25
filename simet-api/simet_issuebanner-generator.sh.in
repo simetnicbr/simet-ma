@@ -1,0 +1,88 @@
+#!/bin/sh
+# Generates an agetty-compatible /etc/issue file with SIMET-MA identification data.
+# Copyright (c) 2023 NIC.br
+#
+# Distributed under the BSD 3-clause license or GPLv3+
+#
+# By default, creates/overwrites /etc/issue.d/simet-ma.issue.
+# Options:
+# --stdout      : output to stdout
+# --file <file> : output to <file> instead of creating a file in /etc/issue.d/
+
+set -e
+
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
+MODE=0
+OUTFILE=
+
+while [ $# -gt 0 ] ; do
+	case "$1" in
+		--stdout)
+			MODE=1
+			;;
+		--file)
+			MODE=2
+			OUTFILE="$2"
+			shift
+			;;
+		*)
+			printf "%s: unknown option %s" "$0" "$1" >&2
+			exit 2
+			;;
+	esac
+	shift
+done
+
+write_issue() {
+	[ -s "$AGENT_VERSION_FILE" ] && AGENTVERSION=$(cat "$AGENT_VERSION_FILE") || AGENTVERSION=
+	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL=
+	[ -s "$AGENT_ID_FILE" ] && AID=$(cat "$AGENT_ID_FILE") || AID=
+
+	printf 'SIMET Measurement Agent %s\nhttps://medicoes.nic.br/\n\n' "$AGENTVERSION"
+
+	[ -n "$SIMET2_VLABEL" ] && \
+		printf 'Etiqueta SIMET (SIMET label): %s\n' "$SIMET2_VLABEL"
+	[ -n "$AID" ] && \
+		printf 'Id. agente SIMET (agent-id):  %s\n' "$AID"
+	[ -n "$SIMET_MAC_LABEL" ] && \
+		printf 'MAC: %s\n' "$SIMET_MAC_LABEL"
+
+	# pairing
+	if [ -s "$AGENT_PARTICIPANT_INFO" ] ; then
+		PSNAME=$($JSONFILTER -i "$AGENT_PARTICIPANT_INFO" -e '@.short_name' 2>/dev/null) || PSNAME=
+		PFNAME=$($JSONFILTER -i "$AGENT_PARTICIPANT_INFO" -e '@.name' 2>/dev/null) || PFNAME=
+		PNAME=
+		if [ -n "$PFNAME" ] && [ -n "$PSNAME" ] ; then
+			PNAME="\"$PFNAME\" ($PSNAME)"
+		elif [ -n "$PFNAME$PSNAME" ] ; then
+			PNAME="\"$PFNAME$PSNAME\""
+		fi
+		[ -n "$PNAME" ] && \
+			printf 'Medidor associado a (paired to): %s\n' "$PNAME"
+	else
+		[ -n "$URL_AGENT_INTERACTIVE_PAIRING" ] && \
+			printf "\nURL para associar o medidor:\n%s?vl=%s\n" "$URL_AGENT_INTERACTIVE_PAIRING" "$SIMET2_VLABEL"
+	fi
+	:
+}
+
+[ "$MODE" -eq 0 ] && {
+	#shellcheck disable=SC2174
+	[ -d /etc/issue.d ] || mkdir -p -m 0755 /etc/issue.d || {
+		printf "%s: directory /etc/issue.d does not exist and could not be created\n" "$0" >&2
+		exit 1
+	}
+	OUTFILE=/etc/issue.d/simet-ma.issue
+}
+
+# note: add call to "simet_qrcode.sh --issue" in a future version.
+if [ "$MODE" -eq 1 ] ; then
+	write_issue || exit 1
+else
+	write_issue > "$OUTFILE" || {
+		printf "%s: failed to update /etc/issue.d/simet-ma.issue\n" "$0" >&2
+		exit 1
+	}
+fi
+:

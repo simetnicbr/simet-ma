@@ -15,6 +15,8 @@ set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 
+umask 0022
+
 OUTFILE=
 RC=1
 abend() {
@@ -25,20 +27,79 @@ abend() {
 
 [ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
 
-if [ -z "$SIMET2_VLABEL" ] ; then
-  RDATA=$( set -o pipefail ; dd if=/dev/urandom bs=128 count=1 2>/dev/null | md5sum - | tr -dc 0-9a-fA-F | tr A-F a-f ) \
+# Load hooks and overrides
+simet_load_hooks create_vlabel
+
+#overridable
+platform_generate_vlabel() {
+  RC=1
+  [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_label" ] && {
+    # attempt to retreive a real, printed label from FLASH
+    RC=0
+    IVS=$(@SIMETLIBDIR@/vendor/get_platform_simet_label vlabel) || RC=$?
+    # temporary error, *MUST* retry later and not generate own label
+    [ $RC -ge 2 ] && return 20
+  }
+  [ $RC -eq 0 ] && printf '%s' "$IVS"
+  return $RC
+}
+
+#overridable
+platform_generate_secret() {
+  [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_secret" ] && \
+    SBXSEED=$(@SIMETLIBDIR@/vendor/get_platform_simet_secret vlabel) || SBXSEED=
+  if [ "$SBXSEED" = "DISABLED" ] || [ "$SBXSEED" = "disabled" ] ; then
+    printf "DISABLED"
+  elif [ -n "$SBXSEED" ] ; then
+    SBXSEED=$( set -o pipefail ; printf "NIC VLABEL IV 0132457869\n%s\nNIC VLABEL IV TRAILER 9123432100" "$SBXSEED" | sha256sum - ) \
+      || RC=3 abend "failed to derive stable secret from platform simet secret"
+    #shellcheck disable=SC2018,SC2019
+    printf 'NIC3%s' "$SBXSEED" | tr -dc 0-9a-zA-Z | tr a-z A-Z
+  else
+    return 1
+  fi
+  :
+}
+
+#overridable
+platform_generate_random() {
+  RDATA=$( set -o pipefail ; dd if=/dev/urandom bs=128 count=1 2>/dev/null | md5sum - ) \
     || RC=1 abend "failed to read /dev/urandom"
   [ -z "$RDATA" ] && RC=1 abend "md5sum empty ?!"
   [ "$RDATA" = "d41d8cd98f00b204e9800998ecf8427e" ] && RC=1 abend "got the md5sum of an empty file !"
-  SIMET2_VLABEL="NIC2${RDATA}"
+  #shellcheck disable=SC2018,SC2019
+  printf 'NIC2%s' "${RDATA}" | tr -dc 0-9a-zA-Z | tr a-z A-Z
   :
-else
-  SIMET2_VLABEL="NIC0${SIMET2_VLABEL}"
-fi
+}
+
+# caller-provided virtual label (normally not used)
+[ -n "$SIMET2_VLABEL" ] && SIMET2_VLABEL="NIC0${SIMET2_VLABEL}"
+
+call_hook before_platform
+
+[ -z "$SIMET2_VLABEL" ] && {
+  RRC=0
+  SIMET2_VLABEL=$(call platform_generate_vlabel) || RRC=$?
+  [ "$RRC" -eq 20 ] && RC=3 abend "cannot retrieve vlabel right now, please retry later"
+  [ "$RRC" -eq 0 ] || SIMET2_VLABEL=
+}
+[ -z "$SIMET2_VLABEL" ] && {
+  # may set to DISABLED
+  SIMET2_VLABEL=$(call platform_generate_secret) || SIMET2_VLABEL=$(call platform_generate_random) || SIMET2_VLABEL=
+}
+
+call_hook after_platform
 
 [ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA could not create its virtual label"
-echo "$SIMET2_VLABEL" > "$AGENT_VLABEL_FILE" \
+printf "%s\n" "$SIMET2_VLABEL" > "$AGENT_VLABEL_FILE" \
   || RC=1 abend "Could not write virtual label to persistent storage"
 
-echo "$SIMET2_VLABEL"
+if [ "$SIMET2_VLABEL" = "DISABLED" ] ; then
+  ( call_hook vlabel_disabled ) </dev/null >/dev/null || :
+else
+  ( call_hook vlabel_created "$SIMET2_VLABEL" ) </dev/null >/dev/null || :
+fi
+
+# may print "DISABLED"
+printf "%s\n" "$SIMET2_VLABEL"
 :

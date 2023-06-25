@@ -84,6 +84,18 @@ do_start_prepare() {
 		chgrp $SGROUP "$SIMET_LOCK_DIR" && \
 		chmod 0770 "$SIMET_LOCK_DIR"
 
+	# Create virtual label if one does not exist.  If you want to
+	# disable it, use an empty file or one containing DISABLED
+	log_action_begin_msg "Verifying SIMET pairing label"
+	RC=0
+	VLABEL=$(/opt/simet/bin/simet_create_vlabel.sh) || RC=$?
+	if [ "$RC" -eq 0 ] ; then
+		log_action_end_msg 0 "$VLABEL"
+		logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
+	else
+		log_action_end_msg "$RC" "unavailable"
+	fi
+
 	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
 	# --name doesn't matter, as long as it doesn't match, and not too long
 	start-stop-daemon -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
