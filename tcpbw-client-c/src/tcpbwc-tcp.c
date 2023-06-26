@@ -723,7 +723,7 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     curl_easy_setopt(curl, CURLOPT_POST, 1);
-    snprintf(strbuf, sizeof(strbuf), "version=1;ipvn=%i;concurrentStreams=%u;measureSeconds=%u;samplePeriodMiliSeconds=%u;agentId=%s",
+    snprintf(strbuf, sizeof(strbuf), "version=1&ipvn=%i&concurrentStreams=%u&measureSeconds=%u&samplePeriodMiliSeconds=%u&agentId=%s",
 	     ctx.family, ctx.numstreams, ctx.test_duration, ctx.sample_period_ms, ctx.agent_id ? ctx.agent_id : "");
     curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, strbuf);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
