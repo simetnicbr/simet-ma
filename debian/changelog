@@ -1,3 +1,15 @@
+simet-ma (0.18.4.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.1
+  * simet-api: add QRcode and /etc/issue generators
+    Inactive by default, you have to explicitly call the scripts.
+    Requires package "qrencode" to work (added to Suggests).
+  * simet-api: hook support for simet_create_vlabel (non-OpenWRT version)
+  * tcpbw: update request/session API call to use & as the field-separator
+  * debian: move simet_create_vlabel call from postinst to initscript
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 27 Jun 2023 08:28:50 -0300
+
 simet-ma (0.18.4) unstable; urgency=medium
 
   * simet-ma version 0.18.4
