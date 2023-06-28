@@ -360,7 +360,14 @@ static int prepare_command_channel(CURL * const handle,
 
     assert(endpoint && baseurl);
 
-    snprintf(url, MAX_URL_SIZE, "%s%s", baseurl, endpoint);
+    if (!baseurl || !endpoint)
+	return SEXIT_INTERNALERR;
+
+    /* skip '/' at start of endpoint if there is already a trailing '/' in baseurl */
+    const size_t bl = strlen(baseurl);
+    size_t epstart = (endpoint[0] == '/' && bl > 2 && baseurl[bl-2] != '/' && baseurl[bl-1] == '/') ? 1: 0;
+
+    snprintf(url, MAX_URL_SIZE, "%s%s", baseurl, &endpoint[epstart]);
     if ((rc = check_curl_error(curl_easy_setopt(handle, CURLOPT_URL, url))))
 	return rc;
 
