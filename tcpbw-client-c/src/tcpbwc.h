@@ -39,6 +39,8 @@ typedef struct measure_context {
     unsigned int test_duration;
     unsigned int sample_period_ms;
     unsigned int stats_oversampling;
+
+    size_t outgoing_mss;
 } MeasureContext;
 
 struct MemoryStruct {

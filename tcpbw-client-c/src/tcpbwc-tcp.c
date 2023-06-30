@@ -205,9 +205,10 @@ static ssize_t message_send(const int socket, const int timeout, const void * co
     return -1;
 }
 
-static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid)
+static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid, size_t * const mss)
 {
     const int one = 1;
+    const int zero = 0;
     int fd_measure;
 
     if (!sessionid || !port || !host)
@@ -249,16 +250,33 @@ static int create_measure_socket(const char * const host, const char * const por
     tcpbw_hello_msg.version = htonl(1);
     tcpbw_hello_msg.session_id_len = htonl((uint32_t)sessionid_len);
 
+    /* Send and flush header */
+    setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one));
     if (message_send(fd_measure, 10, &tcpbw_hello_msg, sizeof(tcpbw_hello_msg)) < 0 ||
 	message_send(fd_measure, 10, sessionid, sessionid_len) < 0) {
-        print_warn("message_send problem");
+        print_warn("failed to send test stream header");
         return -1;
     }
+    setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &zero, sizeof(zero));
 
-    /* Flush header, and set TCP_NODELAY mode from now on */
-    if (setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one))) {
-	print_warn("failed to set TCP_NODELAY");
-	return -1;
+    if (mss) {
+	int amss = 0;
+	socklen_t amss_len = sizeof(amss);
+
+	if (!getsockopt(fd_measure, IPPROTO_TCP, TCP_MAXSEG, &amss, &amss_len) && amss_len == sizeof(amss) && amss > 0) {
+	    *mss = (size_t)amss; /* verified, amss > 0 */
+	} else {
+	    print_warn("failed to read stream's sending MSS");
+	    *mss = 0;
+	}
+    }
+
+    /* Keep Nagle disabled, no waiting for ACKs */
+    setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+
+    /* Set TCP_CORK mode from now on: no partial segments */
+    if (setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one))) {
+	print_warn("failed to enable TCP_CORK, might send smaller packets");
     }
 
     return fd_measure;
@@ -561,10 +579,12 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
     int rc = -1;
 
     assert(sockBuffer);
-    assert(sockBufferSz);
+    assert(sockBufferSz && sockBufferSz > ctx->outgoing_mss);
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
     memset(&sndposList, 0, sizeof(sndposList));
+
+    const size_t omss = ctx->outgoing_mss;
 
     if (ctx->test_duration > 1000 || ctx->sample_period_ms <= 0)
 	return -EINVAL;
@@ -672,7 +692,7 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 		    ssize_t res = send(sockList[i], txbuf, iosz, MSG_DONTWAIT | MSG_NOSIGNAL);
 		    if (res >= 0) {
 			sndposList[i] += (size_t) res;
-			if (sndposList[i] >= sockBufferSz)
+			if (sndposList[i] >= sockBufferSz - 2*omss)
 			    sndposList[i] = 0;
 		    } else if (errno == EPIPE || errno == ECONNRESET) {
 			FD_CLR(sockList[i], &masterset);
@@ -1076,13 +1096,17 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     unsigned int streamcount = 0;
+    size_t mss = 0;
+    int warnmss = 0;
     if (ctx.numstreams >= MAX_CONCURRENT_SESSIONS)
 	ctx.numstreams = MAX_CONCURRENT_SESSIONS;
     print_msg(MSG_NORMAL, "opening up to %u measurement streams", ctx.numstreams);
     FD_ZERO(&sockListFDs);
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
+	size_t smss = 0;
 	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
-					     ctx.sessionid ? ctx.sessionid : ctx.token);
+					     ctx.sessionid ? ctx.sessionid : ctx.token,
+					     &smss);
 	if (m_socket != -1) {
 	    streamcount++;
 	    FD_SET(m_socket, &sockListFDs);
@@ -1092,6 +1116,11 @@ int tcp_client_run(MeasureContext ctx)
 	    print_warn("m_socket == -1");
 	}
 	sockList[i] = m_socket;
+	if (smss > 0) {
+	    warnmss = warnmss | (mss > 0 && mss != smss);
+	    if (smss > mss)
+		mss = smss;
+	}
     }
     if (!streamcount) {
 	print_warn("could not open any test streams, aborting test");
@@ -1099,6 +1128,16 @@ int tcp_client_run(MeasureContext ctx)
     }
     print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
 	      "will use %u measurement streams", streamcount);
+
+    if (warnmss)
+	print_warn("streams have different outgoing MSS");
+    if (mss > 65536) {
+	mss = 65536;
+    } else if (!mss) {
+	mss = 1400; /* we need *something* to work with... */
+    }
+    print_msg(MSG_DEBUG, "optimizing for streams with an outgoing MSS of %zu bytes", mss);
+    ctx.outgoing_mss = mss;
 
     print_msg(MSG_DEBUG, "creating socket information report");
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
@@ -1108,8 +1147,8 @@ int tcp_client_run(MeasureContext ctx)
 
     /* Create a single buffer with a good size */
     sockBufferSz = new_tcp_buffer(sockList[0], &sockBuffer);
-    if (!sockBufferSz) {
-	print_err("could not allocate socket buffer");
+    if (sockBufferSz < 10*mss) { /* 5*mss, but Linux returns twice that */
+	print_err("could not allocate a large enough socket buffer");
 	return SEXIT_OUTOFRESOURCE;
     }
 
