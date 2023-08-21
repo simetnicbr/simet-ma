@@ -1,8 +1,8 @@
 /*
- * Base64 encoding/decoding (RFC4648)
+ * Base64 encoding/decoding (RFC4648) rev.2
  * Copyright (c) 2023 NIC.br
  *
- * This software may be distributed under the terms of the BSD license.
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #ifndef SIMET_BASE64_H_
@@ -30,6 +30,33 @@
  * -EINVAL:  invalid base64 input data
  * -ENOSPC:  output buffer too small, nothing done
  */
-ssize_t base64_decode(const char* const src, const size_t src_len, uint8_t *dst, const size_t max_dst_len);
+ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint8_t * restrict dst, const size_t max_dst_len);
+
+/* base64_encode - RFC 4648
+ *
+ * Encodes a buffer in base64, using the standard dictionary, with '=' padding.
+ * ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
+ *
+ * @src is a byte buffer with length @src_len
+ * @dst is a C-string with maximum length @max_dst_len.
+ *
+ * Returns the length of dst, or a negative error (-EOVERFLOW, -ENOSPC)
+ * -EOVERFLOW: size too large to fit ssize_t when decoded.
+ * -ENOSPC: destination buffer too small. *
+ */
+ssize_t base64_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len);
+
+/* base64safe_encode - RFC 4648
+ *
+ * same as base64_encode, but uses a dictionary that is more friendly
+ * to URLs and filenames.
+ * ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_
+ *
+ * @src is a byte buffer with length @src_len
+ * @dst is a C-string with maximum length @max_dst_len.
+ *
+ * Returns the length of dst, or a negative error (-EOVERFLOW, -ENOSPC)
+ */
+ssize_t base64safe_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len);
 
 #endif /* SIMET_BASE64_H_ */

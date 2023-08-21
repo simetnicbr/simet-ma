@@ -15,6 +15,7 @@
 static void b64_test_vector(const char* raw, const char* b64enc, ssize_t expected_res)
 {
     char buf[32];
+    char buf2[32];
 
     if (!raw)
 	raw = "";
@@ -22,32 +23,32 @@ static void b64_test_vector(const char* raw, const char* b64enc, ssize_t expecte
 	b64enc = "";
 
     /* decode test */
-    size_t out_len = raw ? strlen(raw) : 0;
-    if (out_len + 1 > sizeof(buf)) {
+    size_t raw_len = raw ? strlen(raw) : 0;
+    if (raw_len + 1 > sizeof(buf)) {
 	fprintf(stderr, "internal error: raw test vector too large for buffer\n");
 	exit(EXIT_FAILURE);
     }
 
     if (expected_res >= 0) {
 	fprintf(stdout, "testing base64_decode(input='%s', input_len='%zu', desired_output='%s', max_output_len='%zu', desired_result='%zu')...\n",
-		b64enc, strlen(b64enc), raw, out_len, expected_res);
+		b64enc, strlen(b64enc), raw, raw_len, expected_res);
     } else {
 	fprintf(stdout, "testing base64_decode(input='%s', input_len='%zu', desired_output='%s', max_output_len='%zu', desired_error='%s')...\n",
-		b64enc, strlen(b64enc), raw, out_len, strerror(-expected_res));
+		b64enc, strlen(b64enc), raw, raw_len, strerror(-expected_res));
     }
 
-    ssize_t res = base64_decode(b64enc, strlen(b64enc), (void *)buf, out_len);
+    ssize_t res = base64_decode(b64enc, strlen(b64enc), (void *)buf, raw_len);
     if (expected_res != res) {
 	if (res < 0) {
 	    fprintf(stderr, "base64_decode: failed with an unexpected error: %s\n", strerror(-res));
 	    exit(EXIT_FAILURE);
 	} else if (expected_res < 0) {
-	    buf[out_len] = '\0';
+	    buf[raw_len] = '\0';
 	    fprintf(stderr, "base64_decode: expected an error, but got output='%s', len=%zu\n",
 		    buf, res);
 	    exit(EXIT_FAILURE);
 	} else {
-	    buf[out_len] = '\0';
+	    buf[raw_len] = '\0';
 	    fprintf(stderr, "base64_decode: incorrect output length: output='%s', len=%zu\n",
 		    buf, res);
 	    exit(EXIT_FAILURE);
@@ -57,6 +58,39 @@ static void b64_test_vector(const char* raw, const char* b64enc, ssize_t expecte
 	fprintf(stderr, "base64_decode: result mismatch, expected '%s', got '%s'\n",
 	    raw, buf);
 	exit(EXIT_FAILURE);
+    }
+
+    if (expected_res >= 0) {
+        /* encoder test */
+	fprintf(stdout, "testing base64_encode(input='%s', input_len='%zu', desired_output='%s')...\n",
+		raw, raw_len, b64enc);
+	res = base64_encode(raw, raw_len, buf, sizeof(buf));
+	if (res < 0) {
+	    fprintf(stderr, "base64_encode: failed with an unexpected error: %s\n", strerror(-res));
+	    exit(EXIT_FAILURE);
+	}
+	if (res != strlen(b64enc) || res >= sizeof(buf) || strcmp(buf, b64enc)) {
+	    fprintf(stderr, "base64_encode: expected result='%s', result_len=%zd, but got '%s', len=%zd\n",
+		    b64enc, strlen(b64enc), buf, res);
+	    exit(EXIT_FAILURE);
+	}
+
+	/* roundtrip */
+	res = base64_decode(buf, res, buf2, sizeof(buf2));
+	if (res != raw_len || strcmp(raw, buf2)) {
+	    fprintf(stderr, "base64_decode(base64_encode)): failed");
+	    exit(EXIT_FAILURE);
+	}
+	res = base64safe_encode(raw, raw_len, buf, sizeof(buf));
+	if (res < 0) {
+	    fprintf(stderr, "base64safe_encode: failed with an unexpected error: %s\n", strerror(-res));
+	    exit(EXIT_FAILURE);
+	}
+	res = base64_decode(buf, res, buf2, sizeof(buf2));
+	if (res != raw_len || strcmp(raw, buf2)) {
+	    fprintf(stderr, "base64_decode(base64safe_encode)): failed");
+	    exit(EXIT_FAILURE);
+	}
     }
 }
 

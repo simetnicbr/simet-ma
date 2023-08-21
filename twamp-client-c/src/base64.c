@@ -2,11 +2,14 @@
  * Base64 encoding/decoding (RFC4648)
  * Copyright (c) 2023 NIC.br
  *
- * This software may be distributed under the terms of the BSD license.
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 
 /* Based on source code from Polfosol:
    https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c/13935718
+
+   Based on source code from Jouni Malinen <j@w1.fi>:
+   http://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
 */
 
 #include "twampc_config.h"
@@ -16,6 +19,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <limits.h>
 
 #include <errno.h>
 
@@ -39,7 +43,7 @@
  * -ENOSPC:  output buffer too small, nothing done
  */
 
-ssize_t base64_decode(const char* const src, const size_t src_len, uint8_t *dst, const size_t max_dst_len) {
+ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint8_t * restrict dst, const size_t max_dst_len) {
     const uint8_t b64dec[256] = {
         0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U,
         0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U, 0x80U,
@@ -159,3 +163,72 @@ ssize_t base64_decode(const char* const src, const size_t src_len, uint8_t *dst,
 
     return (ssize_t)o;
 }
+
+/*
+ * base64 dictionaries from RFC 4648
+ *
+ * The "safe" one is better for filenames and URLs.
+ *
+ * Note: not C-strings, there's no NUL at the end!
+ */
+static const char b64_table[64]     = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char b64safe_table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/* base64_encode - RFC 4648
+ *
+ * Encodes a buffer to a C-strig in base64, with padding.
+ */
+static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len, char * restrict dst, const size_t max_dst_len, const char b64table[64])
+{
+    char * orig_dst = dst;
+
+    if (max_dst_len < 4)
+	return -ENOSPC;
+
+    size_t dst_len = 4 * ((src_len + 2)/3) + 1;
+    if (dst_len > max_dst_len)
+	return -ENOSPC;
+    if (dst_len > SSIZE_MAX)
+	return -EOVERFLOW;
+
+    const uint8_t * const src_end = src + src_len;
+    char * const dst_end = dst + dst_len;
+
+    while (src <= src_end - 3 && dst <= dst_end - 4) {
+        *dst++ = b64table[src[0] >> 2];
+        *dst++ = b64table[((src[0] & 0x03) << 4) | (src[1] >> 4)];
+        *dst++ = b64table[((src[1] & 0x0f) << 2) | (src[2] >> 6)];
+        *dst++ = b64table[src[2] & 0x3f];
+        src += 3;
+    }
+
+    if (src < src_end && dst <= dst_end - 4) {
+        *dst++ = b64table[src[0] >> 2];
+	if (src_end - src == 1) {
+            *dst++ = b64table[(src[0] & 0x03) << 4];
+            *dst++ = '=';
+        } else {
+            *dst++ = b64table[((src[0] & 0x03) << 4) | (src[1] >> 4)];
+            *dst++ = b64table[(src[1] & 0x0f) << 2];
+        }
+        *dst++ = '=';
+    }
+
+    if (dst < dst_end) {
+	*dst = '\0';
+    }
+
+    return (dst - orig_dst);
+}
+
+
+ssize_t base64_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len)
+{
+    return xx_b64encode(src, src_len, dst, max_dst_len, b64_table);
+}
+
+ssize_t base64safe_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len)
+{
+    return xx_b64encode(src, src_len, dst, max_dst_len, b64safe_table);
+}
+
