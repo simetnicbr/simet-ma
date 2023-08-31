@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
 	    agent_id = optarg;
 	    break;
 	case 'j':
-	    token = optarg;
+	    token = strdup(optarg);
 	    break;
 	case 'r':
 	    report_mode = atoi(optarg);
@@ -229,6 +229,8 @@ int main(int argc, char **argv) {
 
     if (value != 0)
         print_err("TCP CLIENT RUN ERROR");
+
+    free(token);
 
     return value;
 }
