@@ -786,7 +786,7 @@ int tcp_client_run(MeasureContext ctx)
 
     print_msg(MSG_IMPORTANT, "starting upload measurement (send)");
     if (sendUploadPackets(ctx) < 0) {
-	print_warn("failed while sending packets");
+	print_err("failed while sending packets");
 	rc = SEXIT_FAILURE;
 	goto err_exit;
     }
@@ -822,7 +822,7 @@ int tcp_client_run(MeasureContext ctx)
 
     print_msg(MSG_IMPORTANT, "starting download measurement (receive)");
     if (receiveDownloadPackets(ctx, &rcv, &rcvcounter) < 0) {
-	print_warn("failed while receiving packets");
+	print_err("failed while receiving packets");
 	rc = SEXIT_FAILURE;
 	goto err_exit;
     }
