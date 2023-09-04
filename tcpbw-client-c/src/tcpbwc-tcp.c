@@ -55,6 +55,7 @@
 
 #define TCPBW_MAX_SAMPLES 10000
 #define TCPBW_RANDOM_SOURCE "/dev/urandom"
+#define TCPBW_EARLY_EXIT_S 2
 
 static fd_set sockListFDs;
 int sockList[MAX_CONCURRENT_SESSIONS];
@@ -545,6 +546,9 @@ static int sendUploadPackets(const MeasureContext ctx)
      *
      *        Consider vmsplice and ring buffers if absolutely required.
      */
+
+    int active_streams = (int)ctx.numstreams; /* safe, numstreams <<< INT_MAX */
+
     if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
 	return -1;
     }
@@ -560,7 +564,7 @@ static int sendUploadPackets(const MeasureContext ctx)
      * a future version of the protocol that does a shutdown(), it may
      * be necessary to revisit this
      */
-    while (timespec_lt(&ts_cur, &ts_stop)) {
+    while (timespec_lt(&ts_cur, &ts_stop) && active_streams > 0) {
 	struct timespec ts_timeo = timespec_sub_saturated(&ts_stop, &ts_cur, 1000);
 
         memcpy(&wset, &masterset, sizeof(fd_set));
@@ -576,7 +580,8 @@ static int sendUploadPackets(const MeasureContext ctx)
 			if (sndposList[i] >= sockBufferSz)
 			    sndposList[i] = 0;
 		    } else if (errno == EPIPE || errno == ECONNRESET) {
-			    FD_CLR(sockList[i], &masterset);
+			FD_CLR(sockList[i], &masterset);
+			active_streams--;
 		    }
 		}
 	    }
@@ -585,6 +590,12 @@ static int sendUploadPackets(const MeasureContext ctx)
 	if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
 	    return -1;
 	}
+    }
+
+    /* Too early an exit fails the measurement... */
+    if (active_streams <= 0 && timespec_sub(&ts_stop, &ts_cur).tv_sec > TCPBW_EARLY_EXIT_S) {
+	print_err("measurement connections were closed by the peer");
+	return -ECONNRESET;
     }
 
     return 0;
@@ -617,6 +628,8 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
     memcpy(&masterset, &sockListFDs, sizeof(fd_set));
 
+    int active_streams = (int)ctx.numstreams; /* safe, numstreams <<< INT_MAX */
+
     const struct timespec ts_samplingperiod = {
 	.tv_sec = ctx.sample_period_ms / 1000,
 	.tv_nsec = (ctx.sample_period_ms % 1000) * 1000000,
@@ -630,7 +643,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
     ts_sample = timespec_add(&ts_cur, &ts_samplingperiod);
     ts_last = ts_cur;
 
-    while (rCounter < max_samples) {
+    while (rCounter < max_samples && active_streams > 0) {
 	struct timespec ts_timeo = timespec_sub_saturated(&ts_sample, &ts_cur, 0);
 
 	memcpy(&rset, &masterset, sizeof(fd_set));
@@ -649,6 +662,7 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 		    if (!bytes_recv) {
 			/* EOF */
 			FD_CLR(sockList[i], &masterset);
+			active_streams--;
 		    }
 		}
 	    }
@@ -680,6 +694,12 @@ static int receiveDownloadPackets(const MeasureContext ctx, DownResult ** const 
 
 	if (timespec_lt(&ts_stop, &ts_cur)) /* lt, not le ! */
 	    break;
+    }
+
+    /* Too early an exit fails the measurement... */
+    if (active_streams <= 0 && timespec_sub(&ts_stop, &ts_cur).tv_sec > TCPBW_EARLY_EXIT_S) {
+	print_err("measurement connections were closed by the peer");
+	return -ECONNRESET;
     }
 
     *numres = rCounter;
