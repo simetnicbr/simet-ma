@@ -205,7 +205,7 @@ static ssize_t message_send(const int socket, const int timeout, const void * co
     return -1;
 }
 
-static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid, size_t * const mss)
+static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid, size_t * const mss, unsigned int * const srtt)
 {
     const int one = 1;
     const int zero = 0;
@@ -259,16 +259,36 @@ static int create_measure_socket(const char * const host, const char * const por
     }
     setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &zero, sizeof(zero));
 
-    if (mss) {
-	int amss = 0;
-	socklen_t amss_len = sizeof(amss);
-
-	if (!getsockopt(fd_measure, IPPROTO_TCP, TCP_MAXSEG, &amss, &amss_len) && amss_len == sizeof(amss) && amss > 0) {
-	    *mss = (size_t)amss; /* verified, amss > 0 */
-	} else {
-	    print_warn("failed to read stream's sending MSS");
-	    *mss = 0;
+    if (mss || srtt) {
+	size_t amss = 0;
+	struct simet_tcp_info tcpi;
+	socklen_t tcpi_len = sizeof(tcpi);
+	if (likely(!getsockopt(fd_measure, IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len)
+		&& tcpi_len >= offsetof(struct simet_tcp_info, tcpi_min_rtt))) {
+	    amss = tcpi.tcpi_snd_mss;
+	    if (srtt) {
+		if (tcpi.tcpi_min_rtt > 0) {
+		    *srtt = tcpi.tcpi_min_rtt;
+		} else if (tcpi.tcpi_rtt) {
+		    *srtt = tcpi.tcpi_rtt;
+		}
+	    }
+	} else if (srtt) {
+	    print_warn("failed to read stream's iRTT");
+	    *srtt = 0;
 	}
+	if (!amss && mss) {
+	    int iamss = 0;
+	    socklen_t iamss_len = sizeof(iamss);
+	    if (!getsockopt(fd_measure, IPPROTO_TCP, TCP_MAXSEG, &iamss, &iamss_len) && iamss_len == sizeof(iamss) && iamss > 0) {
+		amss = (size_t)iamss;
+	    } else {
+		print_warn("failed to read stream's MSS");
+		amss = 0;
+	    }
+	}
+	if (mss)
+	    *mss = amss;
     }
 
     /* Keep Nagle disabled, no waiting for ACKs */
@@ -1104,9 +1124,10 @@ int tcp_client_run(MeasureContext ctx)
     FD_ZERO(&sockListFDs);
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	size_t smss = 0;
+	unsigned int srtt = 0;
 	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
 					     ctx.sessionid ? ctx.sessionid : ctx.token,
-					     &smss);
+					     &smss, &srtt);
 	if (m_socket != -1) {
 	    streamcount++;
 	    FD_SET(m_socket, &sockListFDs);
@@ -1121,6 +1142,9 @@ int tcp_client_run(MeasureContext ctx)
 	    if (smss > mss)
 		mss = smss;
 	}
+	if (srtt < ctx.rtt || !ctx.rtt) {
+	    ctx.rtt = srtt;
+	}
     }
     if (!streamcount) {
 	print_warn("could not open any test streams, aborting test");
@@ -1128,6 +1152,12 @@ int tcp_client_run(MeasureContext ctx)
     }
     print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
 	      "will use %u measurement streams", streamcount);
+
+    if (ctx.rtt) {
+	print_msg(MSG_DEBUG, "optimizing for a RTT of %u microseconds", ctx.rtt);
+    } else {
+	print_warn("could not retrieve the RTT from tcp streams");
+    }
 
     if (warnmss)
 	print_warn("streams have different outgoing MSS");

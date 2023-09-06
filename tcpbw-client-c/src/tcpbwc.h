@@ -41,6 +41,7 @@ typedef struct measure_context {
     unsigned int stats_oversampling;
 
     size_t outgoing_mss;
+    unsigned int rtt; /* smallest RTT (microseconds) */
 } MeasureContext;
 
 struct MemoryStruct {
