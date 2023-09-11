@@ -241,6 +241,9 @@ static int create_measure_socket(const char * const host, const char * const por
      * <test stream>, MSS 1400 bytes ?
      *
      * FIXME: tcp_maxseg (+cli), tcp_user_timeout(?)
+     * LOWAT, including TCP_NOTSENT_LOWAT:
+     * https://blog.cloudflare.com/optimizing-tcp-for-high-throughput-and-low-latency/
+     * https://lwn.net/Articles/560082/
      *
      */
     struct {
