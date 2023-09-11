@@ -13,6 +13,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License and the COPYING file in the program Source
  * for details.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 #ifndef NICBR_TIMESPEC_H
@@ -23,6 +25,19 @@
 #define MICROSECONDS_IN_SECOND 1000000LL
 #define NANOSECONDS_IN_SECOND  1000000000LL
 #define TIMESPEC_NANOSECONDS(ts) ((ts.tv_sec * NANOSECONDS_IN_SECOND) + ts.tv_nsec)
+
+/* normalize in the general case, suboptimal if just one add or sub */
+static inline void timespec_normalize(struct timespec * const ts1)
+{
+    while (ts1->tv_nsec >= NANOSECONDS_IN_SECOND) {
+	++ts1->tv_sec;
+	ts1->tv_nsec -= NANOSECONDS_IN_SECOND;
+    }
+    while (ts1->tv_nsec < 0) {
+	--ts1->tv_sec;
+	ts1->tv_nsec += NANOSECONDS_IN_SECOND;
+    }
+}
 
 /* ts1, ts2 must be normalized. Must not be NULL */
 static inline int timespec_lt(const struct timespec * const ts1, const struct timespec * const ts2)
@@ -36,7 +51,7 @@ static inline int timespec_le(const struct timespec * const ts1, const struct ti
     return (ts1->tv_sec < ts2->tv_sec || (ts1->tv_sec == ts2->tv_sec && ts1->tv_nsec <= ts2->tv_nsec));
 }
 
-/* t1, ts2 must be normalized */
+/* ts1, ts2 must be normalized. Must not be NULL */
 static inline struct timespec timespec_add(const struct timespec * const ts1, const struct timespec * const ts2)
 {
     struct timespec result;
@@ -50,6 +65,35 @@ static inline struct timespec timespec_add(const struct timespec * const ts1, co
     return result;
 }
 
+/* returns 0 for no timeout, or a CLOCK_MONOTONIC deadline */
+static inline struct timespec timespec_deadline_microseconds(long us_from_now)
+{
+    struct timespec result = { 0 };
+    if (us_from_now > 0) {
+	clock_gettime(CLOCK_MONOTONIC, &result);
+	while (us_from_now > MICROSECONDS_IN_SECOND) {
+	    ++result.tv_sec;
+	    us_from_now -= MICROSECONDS_IN_SECOND;
+	}
+	result.tv_nsec += us_from_now * 1000L;
+	while (result.tv_nsec >= NANOSECONDS_IN_SECOND) {
+	    ++result.tv_sec;
+	    result.tv_nsec -= NANOSECONDS_IN_SECOND;
+	}
+    }
+    return result;
+}
+
+/* returns 0 for no timeout, or a CLOCK_MONOTONIC deadline */
+static inline struct timespec timespec_deadline_seconds(long s_from_now)
+{
+    struct timespec result = { 0 };
+    if (s_from_now > 0) {
+	clock_gettime(CLOCK_MONOTONIC, &result);
+	result.tv_sec += s_from_now;
+    }
+    return result;
+}
 
 /* t1, ts2 must be normalized */
 static inline struct timespec timespec_sub(const struct timespec * const ts1, const struct timespec * const ts2)
@@ -91,17 +135,15 @@ static inline long long timespec_sub_microseconds(const struct timespec * const 
     return (long long)(ts1->tv_sec - ts2->tv_sec) * MICROSECONDS_IN_SECOND + (ts1->tv_nsec - ts2->tv_nsec)/1000;
 }
 
-/* normalize in the general case, suboptimal if just one add or sub */
-static inline void timespec_normalize(struct timespec * const ts1)
+static inline struct timespec microseconds_to_timespec(long microseconds)
 {
-    while (ts1->tv_nsec >= NANOSECONDS_IN_SECOND) {
-	++ts1->tv_sec;
-	ts1->tv_nsec -= NANOSECONDS_IN_SECOND;
+    struct timespec result =  { .tv_sec = 0 };
+    while (microseconds > MICROSECONDS_IN_SECOND) {
+	result.tv_sec++;
+	microseconds -= MICROSECONDS_IN_SECOND;
     }
-    while (ts1->tv_nsec < 0) {
-	--ts1->tv_sec;
-	ts1->tv_nsec += NANOSECONDS_IN_SECOND;
-    }
+    result.tv_nsec = microseconds * 1000L;
+    return result;
 }
 
 #endif /* NICBR_TIMESPEC_H */
