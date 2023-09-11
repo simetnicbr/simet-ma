@@ -501,6 +501,18 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 	if (seconds != (int)ctx->test_duration)
 	    ctx->test_duration = (unsigned int)seconds;
     }
+    if (json_object_object_get_ex(j_obj, "streamStartDelay", &j_content) &&
+	    json_object_is_type(j_content, json_type_string)) {
+	int64_t useconds;
+
+	errno = 0;
+	useconds = json_object_get_int64(j_content);
+	if (errno || useconds < -5 || useconds > 1000000)
+	    goto err_exit;
+	/* FIXME: maybe we want to abort, instead ? */
+	if (useconds != (int64_t)ctx->stream_start_delay)
+	    ctx->stream_start_delay = (int)useconds;
+    }
     if (json_object_object_get_ex(j_obj, "sessionId", &j_content) &&
 	    json_object_is_type(j_content, json_type_string)) {
 	free(ctx->sessionid);
@@ -524,8 +536,8 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 
     json_object_put(j_obj);
 
-    print_msg(MSG_DEBUG, "peer=%s : %s, streams=%u, measurement_duration=%us, sampling_period=%ums",
-	    ctx->host_name, ctx->port, ctx->numstreams, ctx->test_duration, ctx->sample_period_ms);
+    print_msg(MSG_DEBUG, "peer=%s : %s, streams=%u, measurement_duration=%us, sampling_period=%ums, stream_start_delay=%d",
+	    ctx->host_name, ctx->port, ctx->numstreams, ctx->test_duration, ctx->sample_period_ms, ctx->stream_start_delay);
     return 0;
 
 err_exit:
@@ -594,7 +606,7 @@ static void postprocess_skmem(SkmemSample *samples, size_t total_sample_count, s
 
 static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * const rctx)
 {
-    struct timespec ts_start, ts_cur, ts_stop, ts_sample, ts_oversample;
+    struct timespec ts_start, ts_cur, ts_stop, ts_sample, ts_oversample, ts_streamstart, ts_nextstream;
     TcpInfoSample *upload_tcpi = NULL;
     SkmemSample *upload_skmem = NULL;
     fd_set wset, masterset;
@@ -635,6 +647,24 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 	    goto err_exit;
     }
 
+    unsigned int next_stream_to_start = ctx->numstreams;
+    const long streamdelay_us = (ctx->stream_start_delay < 0) ?
+		    (long)ctx->rtt / (-ctx->stream_start_delay * (long)ctx->numstreams) :
+		    ctx->stream_start_delay;
+    bool delay_streams = (streamdelay_us > 0 && ctx->numstreams > 0);
+    if (delay_streams && ctx->numstreams > 1) {
+	print_msg(MSG_DEBUG, "will delay stream start using steps of %ldus", streamdelay_us);
+
+	/* note: we skip the first stream below, so it starts immediately */
+	next_stream_to_start = 1;
+	for (i = next_stream_to_start; i < ctx->numstreams; i++) {
+	    if (sockList[i] >= 0) {
+		FD_CLR(sockList[i], &masterset);
+	    }
+	}
+    }
+    ts_streamstart = microseconds_to_timespec(streamdelay_us);
+
     const struct timespec ts_samplingperiod = {
 	.tv_sec = ctx->sample_period_ms / 1000,
 	.tv_nsec = (ctx->sample_period_ms % 1000) * 1000000,
@@ -667,6 +697,7 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
     ts_stop.tv_sec += ctx->test_duration;
     ts_sample = timespec_add(&ts_cur, &ts_samplingperiod);
     ts_oversample = timespec_add(&ts_cur, &ts_oversamplingperiod);
+    ts_nextstream = timespec_add(&ts_cur, &ts_streamstart);
 
     /*
      * we fill TCP buffers for the whole test time window, and they will
@@ -678,16 +709,29 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
      * be necessary to revisit this
      */
     while (timespec_lt(&ts_cur, &ts_stop) && active_streams > 0) {
-	struct timespec ts_timeo = timespec_sub_saturated(&ts_oversample, &ts_cur, 0);
-
+	struct timespec ts_timeo = timespec_sub_saturated(
+		(delay_streams && timespec_lt(&ts_nextstream, &ts_oversample)) ? &ts_nextstream : &ts_oversample,
+		&ts_cur, 0);
         memcpy(&wset, &masterset, sizeof(fd_set));
-
         int rc_select = pselect(sockListLastFD + 1, NULL, &wset, NULL, &ts_timeo, NULL);
 	if (rc_select >= 0) {
 	    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
 		goto err_exit;
 
 	    for (i = 0; i < ctx->numstreams; i++) {
+		/* start the stream if necessary */
+		if (i >= next_stream_to_start && timespec_le(&ts_nextstream, &ts_cur)) {
+		    if (sockList[i] >= 0) {
+			FD_SET(sockList[i], &masterset);
+			FD_SET(sockList[i], &wset); /* O_NONBLOCK, so it is safe */
+		    }
+		    next_stream_to_start++;
+		    ts_nextstream = timespec_add(&ts_nextstream, &ts_streamstart);
+
+		    if (next_stream_to_start >= ctx->numstreams)
+			delay_streams = 0; /* all streams are already running */
+		}
+
 		if (sockList[i] < 0)
 		    continue;
 
@@ -1108,8 +1152,8 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     curl_easy_setopt(curl, CURLOPT_POST, 1);
-    snprintf(strbuf, sizeof(strbuf), "version=1&ipvn=%i&concurrentStreams=%u&measureSeconds=%u&samplePeriodMiliSeconds=%u&agentId=%s",
-	     ctx.family, ctx.numstreams, ctx.test_duration, ctx.sample_period_ms, ctx.agent_id ? ctx.agent_id : "");
+    snprintf(strbuf, sizeof(strbuf), "version=1&ipvn=%i&concurrentStreams=%u&measureSeconds=%u&samplePeriodMiliSeconds=%u&streamStartDelay=%d&agentId=%s",
+	     ctx.family, ctx.numstreams, ctx.test_duration, ctx.sample_period_ms, ctx.stream_start_delay, ctx.agent_id ? ctx.agent_id : "");
     curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, strbuf);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);

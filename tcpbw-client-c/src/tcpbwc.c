@@ -119,6 +119,7 @@ static void print_usage(const char * const p, int mode)
 		"\t-s\tsampling period in milliseconds (500ms)\n"
 		"\t-S\tstatistics oversampling factor (0 - disabled)\n"
 		"\t-X\textended measurement parameter(s) separated by blank or ;\n"
+		"\t\ttxdelay=n  inter-stream start delay (< 0: RTT/(-n*streams). >= 0: delay in us)\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -144,6 +145,12 @@ static int cmdline_extended_param(MeasureContext *ctx, char *param)
     if (!param_data || strtok_r(NULL, "=", &strtokp))
 	return -1;
 
+    if (!strcmp("txdelay", param_name)) {
+       int data = atoi(param_data);
+       ctx->stream_start_delay = (data < -2 || data > 1000000L) ? -2 : data;
+       return 0;
+    }
+
     print_err("unknown extended parameter %s", param_name);
     return 1;
 }
@@ -166,6 +173,7 @@ int main(int argc, char **argv) {
     sanitize_std_fds();
 
     MeasureContext ctx = {
+	.stream_start_delay = -2,
     };
 
     int option;
