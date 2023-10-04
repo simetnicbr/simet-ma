@@ -1,3 +1,17 @@
+simet-ma (0.18.4.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.2
+  * simet-api: update interactive pairing URL for QRcode and /etc/issue
+  * tcpbw: avoid double slashs when composing URLs.
+  * tcpbw: fix benign leaks to avoid false-postives from valgrind
+  * tcpbw: report aborted measurement as errors, not as warnings.
+  * simet-api: support simet_get_mac_address.sh, simet_get_model.sh.
+    Note that we do not provide a default simet_get_mac_address.sh or
+    simet_get_device_model.sh outside of SIMETBox.  They are provided by
+    vendor-specific or platform-specific supplementary packages.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 04 Oct 2023 14:25:35 -0300
+
 simet-ma (0.18.4.1) unstable; urgency=medium
 
   * simet-ma version 0.18.4.1
