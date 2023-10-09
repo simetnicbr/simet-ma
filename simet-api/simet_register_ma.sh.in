@@ -522,6 +522,9 @@ simet_pairing_flow() {
 			[ x"$OLDPAIR" != x"$PAIREDTO" ] && echo "$PAIREDTO" > "$AGENT_PAIR_FILE"
 		}
 		call_hook pairing_paired
+	else
+		rm -f "$AGENT_PAIR_FILE"
+		call_hook pairing_unpaired
 	fi
 }
 
