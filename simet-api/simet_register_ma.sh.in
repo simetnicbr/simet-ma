@@ -491,18 +491,22 @@ simet_attempt_pairing_recovery() {
 simet_pairing_flow() {
 	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL=
 	[ "$SIMET2_VLABEL" = "DISABLED" ] && SIMET2_VLABEL=
-	[ -z "$SIMET2_VLABEL" ] && {
+	if [ -z "$SIMET2_VLABEL" ] ; then
 		# register as not available for pairing
 		call simet_register_vlabel || true
 		rm -f "$AGENT_PAIRBKP_FILE"
-		return 0
-	}
-
-	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
-		call simet_attempt_pairing_recovery && call simet_refresh_agent_status
-	fi
-	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
-		call simet_register_vlabel || true
+		# We are no longer available for pairing, if we were in the
+		# first place.  But we MIGHT be paired for whatever reason: we
+		# did not request to remove an existing pairing above.
+		#
+		# PAIREDTO and PAIRED will be correctly set and up-to-date.
+	else
+		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+			call simet_attempt_pairing_recovery && call simet_refresh_agent_status
+		fi
+		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+			call simet_register_vlabel || true
+		fi
 	fi
 
 	call simet_update_participant_info || \
