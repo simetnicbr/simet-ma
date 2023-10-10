@@ -5,21 +5,22 @@
 # Distributed under the GPLv3+ license with additional terms and permissions
 # Refer to the COPYING file on the program source for details
 
-SIMET_PACKAGES="simet-ma simet-lmapd"
+SIMET_PACKAGES="$(dpkg-query --showformat '${Package}\t${db:Status-Abbrev}\n' --show 'simet*' | sed -n -e '/[\t]i/ { s/\t.*// ; p }')" \
+	|| SIMET_PACKAGES="simet-ma simet-lmapd"
 
 # Attempt to auto-update regardless of unattended-updates, otherwise we end up
 # with installs running very outdated software (well over an year old).  We
 # do restrict ourselves to just the core SIMET packages, and any dependencies
 # that have versioned requirements.
 test -f /opt/simet/bin/simet_register_ma.sh && {
-	# Sleep for a random time before we do this, at least 1h
+	# Sleep for a random time before we do this, at least 10 minutes
 	# some code from cron-apt, thanks!
 	# shellcheck disable=SC2039
 	if [ -z "$RANDOM" ] ; then
-		RANDOM=$(( $(dd if=/dev/urandom bs=4 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 32767 )) || RANDOM=1
+		RANDOM=$(( $(dd if=/dev/urandom bs=4 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 4096 )) || RANDOM=1
 	fi
 	# shellcheck disable=SC2039
-	TIME=$((RANDOM % 3600 + 3600)) || TIME=1
+	TIME=$((RANDOM % 1800 + 600)) || TIME=1
 	sleep $TIME || :
 	# update package lists
 	apt-get update -qq || true
