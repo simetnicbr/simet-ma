@@ -1,3 +1,14 @@
+simet-ma (0.18.4.3) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.3
+  * simet-api: detect pairing status even without a vlabel
+  * simet-api: handle MA transitioning to unpaired
+  * deb: simet-ma.cron.weekly: update all simet* packages
+    Use dpkg-query to find all installed simet* packages (which includes the
+    new simetbox-deb* series of packages), and update them all.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 10 Oct 2023 11:34:19 -0300
+
 simet-ma (0.18.4.2) unstable; urgency=medium
 
   * simet-ma version 0.18.4.2
