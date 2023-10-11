@@ -67,6 +67,13 @@ case "$1" in
 esac
 CURLOPT="$CURLOPT $CURLOPT2"
 
+# WARNING: we might be run from inside lmapd, which in turn
+# could signal us with SIGTERM when we send it a configuration
+# reload signal (or worse: restart it).
+#
+# Thus, queue calls to simet_restart_services() via an EXIT
+# trap.  Do not call it inline.
+
 #overridable
 simet_restart_services() {
 	if [ -n "$SIMETMA_RECONFIG" ] ; then
@@ -592,6 +599,9 @@ gettoken() {
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
 
+	# don't leave behind tmpfiles
+	trap 'run_trap' INT TERM QUIT
+
 	VL_GOOD=1
 	[ -e "$SIMET_RUNSTATE_DIR/vlabel-was-foreign" ] && VL_GOOD=0
 	call simet_detect_cloned_id "$VL_GOOD" && __simet_invalidate_all "ma_foreign"
@@ -626,7 +636,7 @@ gettoken() {
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
 		simet_log simet-ma daemon.notice "SIMET: agent-id or authorization token has changed"
-		call simet_restart_services
+		trap 'trap "" TERM ; call simet_restart_services || true' EXIT
 		call_hook reginfo_changed
 	else
 		call_hook reginfo_unchanged
