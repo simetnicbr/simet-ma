@@ -1,4 +1,10 @@
 This uses the toplevel configure.ac
 This uses the toplevel Makefile.am via SUBDIRS
 
-API.md describes the API.
+API.md describes the API.  Some of it is not stable, and intended to be
+replaced soon with scripts that implement a more stable API.  Those are only
+described in the source code.
+
+For OpenWRT ("SIMETBox") builds, refer to the openwrt feed, it has a higher
+level ubus RPC API that should be used, and its implementation can shed light
+on the current inner workings of the SIMET measurement engine.

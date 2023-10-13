@@ -36,15 +36,15 @@ into some details of the SIMET2 web API.
 ## TOKEN and LMAP AGENT-ID API
 
   The agent token, required to authorize with SIMET2 services, will
-  be retrieved and refreshed by {simet,simetbox}\_register\_ma.sh.
+  be retrieved and refreshed by simet\_register\_ma.sh.
 
   *  The agent token will be stored in $AGENT\_TOKEN\_FILE
   *  The LMAP agent-id will be stored in $AGENT\_ID\_FILE
 
-  The <>\_register\_ma.sh script can be called at any time, so all reads
+  The simet\_register\_ma.sh script can be called at any time, so all reads
   from the above files must be atomic *or* must flock($AGENT\_TOKEN\_LOCK)
-  in shared mode (reading) or exclusive mode (writing).  This lock
-  protects both $AGENT\_TOKEN\_FILE and $AGENT\_ID\_FILE.
+  in shared mode (reading) or exclusive mode (writing).  This lock protects
+  both $AGENT\_TOKEN\_FILE and $AGENT\_ID\_FILE.
 
   If either file is missing, measurements are *NOT* to be carried out.
 
@@ -56,9 +56,9 @@ into some details of the SIMET2 web API.
   Access to measurement results and reports is done using the _agent-id_
   and _view-results token_.  The agent token is not used.
 
-  The _view-results token_ is changed every time <>\_register\_ma.sh is
-  run to refresh tokens and credentials, typically this should be done
-  once every 24h.
+  The _view-results token_ is changed every time simet\_register\_ma.sh is
+  run to refresh tokens and credentials, typically this should be done once
+  every 24h.
 
   The simet\_view\_results.sh script can be used to open a device-results
   page on the web browser, using the above tokens.  It can also take
@@ -78,9 +78,12 @@ into some details of the SIMET2 web API.
 
   When that happens, the MA will attempt to create a new identity for
   itself, as an automated healing strategy.  This new identity will be
-  "anonymous" (not paired to any participant in the web portal).  But it
-  will be an unpaired new identity, so all new measurements made won't be
-  visible to any participant [until it gets paired].
+  "anonymous" (not paired to any participant in the web portal).
+
+  As this new identitiy is unpaired, any new measurements made won't be
+  visible to any participant [until the MA gets paired again].  The MA's
+  measurement result page will also lose access to any measurements made by
+  the MA's previous identity.
 
   The MA can then resume all measurements using the new identity /
   credentials.  Should its new identity/credentials be paired, all such
@@ -94,7 +97,13 @@ into some details of the SIMET2 web API.
   team has deployed an strategy for disaster recovery due to an issue on
   the server-side.
 
-  Pairing recovery mode is automatically handled by <>\_register\ma.sh.
+  Pairing recovery mode is automatically handled by simet\_register\ma.sh.
+
+  Measurement Agents of the "embedded" class, when appropriate support for
+  a device-persistent ID that survives factory-reset / full reinstall is
+  present, are eligible for automated identity recovery.  In that case, the
+  MA will receive an updated version of its previous identity and tokens,
+  and will recover previous pairing and measurement history.
 
 ## Virtual Label API, agent pairing
 
@@ -352,11 +361,13 @@ into some details of the SIMET2 web API.
 
   The hook implementation is provided by simet\_lib.sh.
 
-### simet\_register\_ma.sh (in the future, maybe simetbox\_register\_ma.sh)
+### simet\_register\_ma.sh
 
   <libdir>/simet/simet\_register\_ma-hooks.sh
   <sysconfdir>/simet/simet\_register\_ma-hooks.sh
 
+  Hook availability is often reduced in SIMETBox builds, we recommend
+  checking the source code.
 
 ## Geolocation
 
