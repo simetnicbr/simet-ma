@@ -94,11 +94,12 @@ case "$1" in
 	fix_traceroute
 	fix_letsencrypt
 
-	# Remove any downloaded schedule
+	# Remove any downloaded schedule, lastrun data
 	rm -f /var/run/lmapd/*.json
 	( . /opt/simet/lib/simet/simet_lib_config.sh \
 		&& ln -sf /opt/simet/lib/simet/lmap-emergency-schedule.json "$LMAP_SCHEDULE_FILE" \
 		&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" \
+		&& { test -s "${AGENT_LOCK}" && printf "0\n" > "${AGENT_LOCK}" || : ; }
 	) 2>/dev/null >/dev/null </dev/null || true
 
 	#FIXME:
