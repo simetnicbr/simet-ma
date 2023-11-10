@@ -205,7 +205,7 @@ static ssize_t message_send(const int socket, const int timeout, const void * co
     return -1;
 }
 
-static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid, size_t * const mss, unsigned int * const srtt)
+static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid, size_t * const mss, unsigned int * const srtt, unsigned int pacerate)
 {
     const int one = 1;
     const int zero = 0;
@@ -300,6 +300,12 @@ static int create_measure_socket(const char * const host, const char * const por
     /* Set TCP_CORK mode from now on: no partial segments */
     if (setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one))) {
 	print_warn("failed to enable TCP_CORK, might send smaller packets");
+    }
+
+    /* enable TCP pacing, when requested */
+    uint32_t apace = (pacerate > UINT32_MAX) ? UINT32_MAX : (uint32_t) pacerate;
+    if (apace > 0 && setsockopt(fd_measure, SOL_SOCKET, SO_MAX_PACING_RATE, &apace, sizeof(apace))) {
+	print_warn("failed to enable TCP pacing (%u): %m", apace);
     }
 
     return fd_measure;
@@ -513,6 +519,18 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 	if (useconds != (int64_t)ctx->stream_start_delay)
 	    ctx->stream_start_delay = (int)useconds;
     }
+    if (json_object_object_get_ex(j_obj, "maxPacingRate", &j_content) &&
+	    json_object_is_type(j_content, json_type_string)) {
+	int64_t ubps;
+
+	errno = 0;
+	ubps = json_object_get_int64(j_content);
+	if (errno || ubps < 0)
+	    goto err_exit;
+	if (ubps > UINT32_MAX)
+	    ubps = UINT32_MAX;
+	ctx->max_pacing_rate = (uint32_t) ubps;
+    }
     if (json_object_object_get_ex(j_obj, "sessionId", &j_content) &&
 	    json_object_is_type(j_content, json_type_string)) {
 	free(ctx->sessionid);
@@ -538,6 +556,9 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 
     print_msg(MSG_DEBUG, "peer=%s : %s, streams=%u, measurement_duration=%us, sampling_period=%ums, stream_start_delay=%d",
 	    ctx->host_name, ctx->port, ctx->numstreams, ctx->test_duration, ctx->sample_period_ms, ctx->stream_start_delay);
+    if (ctx->max_pacing_rate) {
+	print_msg(MSG_NORMAL, "TCP maximum per-stream pacing rate set to %u bytes/s, may limit maximum throughput", ctx->max_pacing_rate);
+    }
     return 0;
 
 err_exit:
@@ -1152,8 +1173,8 @@ int tcp_client_run(MeasureContext ctx)
 	goto err_exit;
 
     curl_easy_setopt(curl, CURLOPT_POST, 1);
-    snprintf(strbuf, sizeof(strbuf), "version=1&ipvn=%i&concurrentStreams=%u&measureSeconds=%u&samplePeriodMiliSeconds=%u&streamStartDelay=%d&agentId=%s",
-	     ctx.family, ctx.numstreams, ctx.test_duration, ctx.sample_period_ms, ctx.stream_start_delay, ctx.agent_id ? ctx.agent_id : "");
+    snprintf(strbuf, sizeof(strbuf), "version=1&ipvn=%i&concurrentStreams=%u&measureSeconds=%u&samplePeriodMiliSeconds=%u&streamStartDelay=%d&maxPacingRate=%u&agentId=%s",
+	     ctx.family, ctx.numstreams, ctx.test_duration, ctx.sample_period_ms, ctx.stream_start_delay, ctx.max_pacing_rate, ctx.agent_id ? ctx.agent_id : "");
     curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, strbuf);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
@@ -1174,7 +1195,7 @@ int tcp_client_run(MeasureContext ctx)
 	unsigned int srtt = 0;
 	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
 					     ctx.sessionid ? ctx.sessionid : ctx.token,
-					     &smss, &srtt);
+					     &smss, &srtt, ctx.max_pacing_rate);
 	if (m_socket != -1) {
 	    streamcount++;
 	    FD_SET(m_socket, &sockListFDs);

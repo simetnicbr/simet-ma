@@ -120,6 +120,7 @@ static void print_usage(const char * const p, int mode)
 		"\t-S\tstatistics oversampling factor (0 - disabled)\n"
 		"\t-X\textended measurement parameter(s) separated by blank or ;\n"
 		"\t\ttxdelay=n  inter-stream start delay (< 0: RTT/(-n*streams). >= 0: delay in us)\n"
+		"\t\tpacing=n   approximate per-stream pacing rate in KiB/s, 0: system default\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -149,6 +150,15 @@ static int cmdline_extended_param(MeasureContext *ctx, char *param)
        int data = atoi(param_data);
        ctx->stream_start_delay = (data < -2 || data > 1000000L) ? -2 : data;
        return 0;
+    } else if (!strcmp("pacing", param_name)) {
+	long data = atol(param_data);
+	if (data <= 0) {
+	    data = 0;
+	} else {
+	    data *= 1024; /* KiB/s -> bytes/s */
+	}
+	ctx->max_pacing_rate = (data > UINT32_MAX) ? UINT32_MAX : (uint32_t) data;
+	return 0;
     }
 
     print_err("unknown extended parameter %s", param_name);
@@ -174,6 +184,7 @@ int main(int argc, char **argv) {
 
     MeasureContext ctx = {
 	.stream_start_delay = -2,
+	.max_pacing_rate = 0,
     };
 
     int option;
