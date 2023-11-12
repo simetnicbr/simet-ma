@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
 #include <getopt.h>
@@ -97,6 +98,7 @@ static void print_usage(const char * const p, int mode)
     fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <duration>] [-c <streams>] "
 	    "[-s <period>] [-S <factor>] "
 	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>] [-o <path>] [-O <path>] "
+	    "[-X <param>=<val>[;<param>=<val>]...] "
 	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
@@ -116,11 +118,35 @@ static void print_usage(const char * const p, int mode)
 		"\t-O\twrite debugging data report to <path>\n"
 		"\t-s\tsampling period in milliseconds (500ms)\n"
 		"\t-S\tstatistics oversampling factor (0 - disabled)\n"
+		"\t-X\textended measurement parameter(s) separated by blank or ;\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
 
+/* parameters can be separated by space, tab, semicolon */
+/* multi-value parameters should use comma as a separator */
+static int cmdline_extended_param(MeasureContext *ctx, char *param)
+{
+    char *strtokp = NULL;
+
+    (void) ctx;
+
+    if (!param)
+	return -1;
+
+    char *param_name = strtok_r(param, "=", &strtokp);
+    if (!param_name)
+	return -1;
+
+    /* assumes all parameters take one value */
+    char *param_data = strtok_r(NULL, "=", &strtokp);
+    if (!param_data || strtok_r(NULL, "=", &strtokp))
+	return -1;
+
+    print_err("unknown extended parameter %s", param_name);
+    return 1;
+}
 
 int main(int argc, char **argv) {
     char *agent_id = NULL;
@@ -139,9 +165,12 @@ int main(int argc, char **argv) {
     progname = argv[0];
     sanitize_std_fds();
 
+    MeasureContext ctx = {
+    };
+
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:O:s:S:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:O:s:S:X:")) != -1) {
         switch (option) {
         case 'v':
             if (log_level < 1)
@@ -203,6 +232,23 @@ int main(int argc, char **argv) {
 	case 'S':
 	    statsoversampling = atoi(optarg);
 	    break;
+	case 'X':
+	    /* param=value pairs separated by C locale isspace() or ; */
+	    if (optarg) {
+		char *strtokp = NULL;
+		char *subopt = strtok_r(optarg, " \t\v\f\n\r;", &strtokp);
+		while (subopt && *subopt) {
+		    int r = cmdline_extended_param(&ctx, subopt);
+		    if (r < 0) {
+			print_err("invalid extended parameter: %s", subopt);
+		    }
+		    if (r) {
+			exit(SEXIT_BADCMDLINE);
+		    }
+		    subopt = strtok_r(NULL, " \t\v\f\n\r;", &strtokp);
+		}
+	    }
+	    break;
 	case 'h':
 	    print_usage(progname, 1);
 	    /* fall-through */ /* silence bogus warning */
@@ -234,23 +280,21 @@ int main(int argc, char **argv) {
 	print_msg(MSG_DEBUG, "generated session id: %s", token);
     }
 
-    MeasureContext ctx = {
-	.agent_id = agent_id,
-	.host_name = NULL,
-	.port = NULL,
-	.control_url = control_url,
-	.token = token,
-	.family = family,
-	.report_mode = report_mode,
-	.streamdata_path = streamdata_path,
-	.streamdata_file = streamdata_file,
-	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test,
-	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams,
-	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght,
-	.sessionid = NULL,
-	.sample_period_ms = (samplingperiod < 50 || samplingperiod > 1000) ? 500 : (unsigned int) samplingperiod,
-	.stats_oversampling = (statsoversampling < 0 || statsoversampling > 50 || (statsoversampling > 0 && samplingperiod / statsoversampling < 10)) ? 1 : (unsigned int)statsoversampling,
-    };
+    ctx.agent_id = agent_id;
+    ctx.host_name = NULL;
+    ctx.port = NULL;
+    ctx.control_url = control_url;
+    ctx.token = token;
+    ctx.family = family;
+    ctx.report_mode = report_mode;
+    ctx.streamdata_path = streamdata_path;
+    ctx.streamdata_file = streamdata_file;
+    ctx.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test;
+    ctx.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams;
+    ctx.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght;
+    ctx.sessionid = NULL;
+    ctx.sample_period_ms = (samplingperiod < 50 || samplingperiod > 1000) ? 500 : (unsigned int) samplingperiod;
+    ctx.stats_oversampling = (statsoversampling < 0 || statsoversampling > 50 || (statsoversampling > 0 && samplingperiod / statsoversampling < 10)) ? 1 : (unsigned int)statsoversampling;
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
