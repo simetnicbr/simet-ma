@@ -53,6 +53,7 @@ simetma_sources = src/defines.sh \
 		src/task_authorization.sh  \
 		src/task_discover.sh \
 		src/subtask_serversel.sh \
+		src/subtask_msmtparams.sh \
 		src/task_geolocation.sh \
 		src/task_environment.sh \
 		src/task_traceroute.sh \
