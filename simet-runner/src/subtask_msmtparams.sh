@@ -24,11 +24,19 @@ subtask_msmtprofile_tcpbw() {
   TCPBW_MSMT_PARAMS=
   [ -s "$BASEDIR/msmt_profiles.json" ] || return 0
 
+  # for now, we use the RTT from TWAMP and have no other sources
+  # of RTT
+  [ "$TWAMP_MEDIANRTT" -gt 0 ] 2>/dev/null && {
+    MEDIANRTT="$TWAMP_MEDIANRTT"
+    log_debug "TCPBW: measurement profile selection will be based on TWAMP median RTT"
+  }
+
+  # RTT <= 49ms covers >75% of the non-wifi/non-mobile SIMET MAs in 2023
   local mrtt
   if [ "$MEDIANRTT" -ge 0 ] 2>/dev/null ; then
-    mrtt=$(( MEDIANRTT / 1000 )) || mrtt=50
+    mrtt=$(( MEDIANRTT / 1000 )) || mrtt=49
   else
-    mrtt=50
+    mrtt=49
   fi
 
   # NULL selector is the default entry
