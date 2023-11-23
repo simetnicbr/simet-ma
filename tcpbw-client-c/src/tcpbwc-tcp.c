@@ -1190,7 +1190,7 @@ int tcp_client_run(MeasureContext ctx)
     int warnmss = 0;
     if (ctx.numstreams >= MAX_CONCURRENT_SESSIONS)
 	ctx.numstreams = MAX_CONCURRENT_SESSIONS;
-    print_msg(MSG_NORMAL, "opening up to %u measurement streams", ctx.numstreams);
+    print_msg(MSG_NORMAL, "opening %u measurement streams", ctx.numstreams);
     FD_ZERO(&sockListFDs);
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	size_t smss = 0;
@@ -1204,7 +1204,8 @@ int tcp_client_run(MeasureContext ctx)
 	    if (m_socket > sockListLastFD)
 		sockListLastFD = m_socket;
 	} else {
-	    print_warn("m_socket == -1");
+	    /* stop measurement if we did not get all the streams we need */
+	    break;
 	}
 	sockList[i] = m_socket;
 	if (smss > 0) {
@@ -1219,9 +1220,10 @@ int tcp_client_run(MeasureContext ctx)
     if (!streamcount) {
 	print_warn("could not open any test streams, aborting test");
 	return SEXIT_MP_TIMEOUT;
+    } else if (ctx.numstreams != streamcount) {
+	print_warn("could not open enough test streams, aborting test");
+	return SEXIT_MP_TIMEOUT;
     }
-    print_msg((ctx.numstreams != streamcount)? MSG_NORMAL : MSG_DEBUG,
-	      "will use %u measurement streams", streamcount);
 
     if (ctx.rtt) {
 	print_msg(MSG_DEBUG, "optimizing for a RTT of %u microseconds", ctx.rtt);
