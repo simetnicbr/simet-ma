@@ -118,8 +118,14 @@ discover_init() {
     --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
   & _curl2_pid=$!
 
-  wait $_curl1_pid
+  rc=0
+  wait $_curl1_pid || {
+    log_error "failed to retrieve list of measurement peers"
+    rc=1
+  }
   wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
+
+  return $rc
 }
 
 discover_next_peer() {
