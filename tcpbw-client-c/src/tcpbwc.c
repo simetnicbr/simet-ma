@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
     FILE *streamdata_file = NULL;
     int timeout_test = 30;
     int test_lenght = 11;
-    int numstreams = 5;
+    int numstreams = 6;
     int samplingperiod = 500;
     int statsoversampling = 0;
 
