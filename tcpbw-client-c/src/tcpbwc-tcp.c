@@ -54,7 +54,8 @@
 
 #define MAX_URL_SIZE 1024
 #define TCP_MAX_BUFSIZE 1048576U
-#define TCP_MIN_BUFSIZE 1480U
+#define TCP_DFL_BUFSIZE 131072U
+#define TCP_MIN_BUFSIZE 14800U
 
 #define TCPBW_MAX_SAMPLES 10000
 #define TCPBW_RANDOM_SOURCE "/dev/urandom"
@@ -85,28 +86,29 @@ static size_t sockBufferSz = 0;
  */
 static size_t new_tcp_buffer(int sockfd, void **p)
 {
-    size_t buflen = 128*1024; /* default */
+    size_t buflen = TCP_DFL_BUFSIZE; /* default application buffer size */
     int optval = 0;
     socklen_t optvalsz;
 
     assert(p);
 
+    /* grow application buffer size to handle kernel's default socket buffer size */
     optvalsz = sizeof(optval);
     if (!getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &optval, &optvalsz)) {
-	print_msg(MSG_DEBUG, "Socket TCP send buffer size: %d bytes", optval);
+	print_msg(MSG_DEBUG, "TCP Socket initial send buffer size: %d bytes", optval);
 	if (optval > 0 && (size_t) optval > buflen)
 	    buflen = (size_t) optval;
     }
 
     optvalsz = sizeof(optval);
     if (!getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &optval, &optvalsz)) {
-	print_msg(MSG_DEBUG, "Socket TCP receive buffer size: %d bytes", optval);
+	print_msg(MSG_DEBUG, "TCP Socket initial receive buffer size: %d bytes", optval);
 	if (optval > 0 && (size_t) optval > buflen)
 	    buflen = (size_t) optval;
     }
 
     if (buflen < TCP_MIN_BUFSIZE) {
-	buflen = TCP_MIN_BUFSIZE;
+	buflen = TCP_MIN_BUFSIZE; /* in case of bugs above */
     } else if (buflen > TCP_MAX_BUFSIZE) {
 	buflen = TCP_MAX_BUFSIZE;
     }
