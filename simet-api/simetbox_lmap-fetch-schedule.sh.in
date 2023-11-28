@@ -121,11 +121,11 @@ simet_gen_local_schedule() {
 	T_PERIODIC_SPOOFER_SPREAD="${SIMET_PERIODIC_SPOOFER_SPREAD_SECONDS:-300}"
 
 	engineconf=$(ubus call simet_ma simet_engine_status) || engineconf="{}"
-	T_PERIODIC_TEST_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.basic.time_step' || uci -q get simet_ma.basic.time_step) \
+	T_PERIODIC_TEST_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.basic.period_minutes' || uci -q get simet_ma.basic.time_step) \
 		|| T_PERIODIC_TEST_PERIOD="${SIMET_PERIODIC_TEST_PERIOD_MINUTES:-240}"
-	T_PERIODIC_GWP_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.gw_ping.time_step' || uci -q get simet_ma.gw_ping.time_step) \
+	T_PERIODIC_GWP_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.gw_ping.period_minutes' || uci -q get simet_ma.gw_ping.time_step) \
 		|| T_PERIODIC_GWP_PERIOD="${SIMET_PERIODIC_GWPING_PERIOD_MINUTES:-60}"
-	T_PERIODIC_SPOOFER_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.spoofer.time_step' || uci -q get simet_ma.spoofer.time_step) \
+	T_PERIODIC_SPOOFER_PERIOD=$(jsonfilter -s "$engineconf" -e '@.local_measurement_config.spoofer.period_minutes' || uci -q get simet_ma.spoofer.time_step) \
 		|| T_PERIODIC_SPOOFER_PERIOD="${SIMET_PERIODIC_SPOOFER_PERIOD_MINUTES:-720}"
 
 	T_PERIODIC_GWP_PERIOD_S=$((T_PERIODIC_GWP_PERIOD * 60))
