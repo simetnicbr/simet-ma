@@ -1,3 +1,12 @@
+simet-ma (0.18.4.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.4
+  * simet-api: simetbox: local measurement periodicty configuration fixes
+  * simet-api: remove local schedule remants of fping-to-ixbr
+  * simet-runner: discover_init() errorpath fixes
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 28 Nov 2023 17:08:28 -0300
+
 simet-ma (0.18.4.3) unstable; urgency=medium
 
   * simet-ma version 0.18.4.3
