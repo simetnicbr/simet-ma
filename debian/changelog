@@ -1,3 +1,11 @@
+simet-ma (0.18.4.5) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.5
+  * tcpbw: use the default automatic socket buffer limit
+  * deb: increase system socket buffer size limits
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 04 Dec 2023 15:43:01 -0300
+
 simet-ma (0.18.4.4) unstable; urgency=medium
 
   * simet-ma version 0.18.4.4
