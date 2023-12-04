@@ -59,6 +59,33 @@ fix_traceroute() {
     :
 }
 
+# We *really* need bigger buffers for high-BDP, and unfortunately
+# due to several issues in many versions of the Linux kernels, it
+# has to already start big.  And we need some tricks because /bin/sh
+# "read" cannot reliably cope with /proc
+do_update_proc_triplet() {
+	F="$1"
+	P1="$2"
+	P2="$3"
+	P3="$4"
+	P=$(cat "$F") || P=
+	OIFS="$IFS"
+	IFS="$(printf ' \t\n')" set -- $P
+	IFS="$OIFS"
+	[ "$P1" -lt "$1" ] 2>/dev/null && P1="$1"
+	[ "$P2" -lt "$2" ] 2>/dev/null && P2="$2"
+	[ "$P3" -lt "$3" ] 2>/dev/null && P3="$3"
+	printf "%d %d %d\n" "$P1" "$P2" "$P3" > "$F" || return 1
+	:
+}
+fix_tcp() {
+	do_update_proc_triplet /proc/sys/net/ipv4/tcp_rmem 4096 1048576 16777216 && \
+	do_update_proc_triplet /proc/sys/net/ipv4/tcp_wmem 4096 1048576 16777216 || {
+		logger -t simet-ma -p daemon.warning "SIMET-MA: failed to increase socket buffer size limits, bandwidth measurements might be too low" >/dev/null 2>&1 || true
+	}
+	:
+}
+
 # not called by default init-d-script reload/restart
 do_start_prepare() {
 	# used for the geolocation cache and ephemeral tokens
@@ -103,6 +130,7 @@ do_start_prepare() {
 }
 
 do_reload() {
+	fix_tcp
 	invoke-rc.d simet-lmapd reload || true
 
 	log_daemon_msg "Reloading $DESC agent-id and credentials" "$NAME"
@@ -123,6 +151,7 @@ do_stop_cmd_override() {
 #   2 if daemon could not be started
 do_start_cmd_override() {
 	fix_traceroute
+	fix_tcp
 
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
 	    $START_ARGS \
