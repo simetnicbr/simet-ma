@@ -50,8 +50,8 @@
 #include "timespec.h"
 
 #define MAX_URL_SIZE 1024
-#define TCP_MAX_BUFSIZE 1048576U
-#define TCP_MIN_BUFSIZE 1480U
+#define TCP_MAX_BUFSIZE 32*1024*1024U
+#define TCP_MIN_BUFSIZE 4*1024*1024U
 
 #define TCPBW_MAX_SAMPLES 10000
 #define TCPBW_RANDOM_SOURCE "/dev/urandom"
