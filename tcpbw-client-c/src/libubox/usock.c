@@ -52,6 +52,7 @@ static int usock_connect(int type, struct sockaddr *sa, int sa_len, int family, 
 
 	usock_set_flags(sock, type);
 
+#if 0
 	/*
 	 * TCP buffer sizes:
 	 *
@@ -67,6 +68,7 @@ static int usock_connect(int type, struct sockaddr *sa, int sa_len, int family, 
 	const int bufsize = 32*1024*1024;
 	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize));
 	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
+#endif
 
 	if (server) {
 		const int one = 1;
