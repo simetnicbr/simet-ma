@@ -1,3 +1,26 @@
+simet-ma (0.18.5) unstable; urgency=medium
+
+  * tcpbw: early-free JSON report data structures
+  * tcpbw: add sampling control, and extended performance sampling
+    * Add CLI option -s to adjust the base sampling period (default 500ms)
+    * Add CLI option -S to enable tcp_info sampling (expensive)
+    * Add CLI option -O to enable and output json data with the per-stream
+      data samples, socket buffer state (skmem), and per-stream TCP state
+  * tcpbw: MSS awareness, enable TCP_CORK mode
+  * tcpbw: RTT awareness: delay stream start-of-transmission
+    Delay the start of the data transmission on each measurement stream
+    using a stair pattern, where just one stream starts transmitting data at
+    first, and then other streams start transmitting one by one, separated
+    by a configurable delay
+  * tcpbw: implement kernel-assisted tcp pacing control (disabled by default)
+  * simet-runner: silence errors from curl in task_discovery.sh
+  * tcpbw: change default number of streams to 6
+  * tcpbw: early exit if peer closes every stream
+  * tcpbw: abort measurement on measurement connection fail
+  * tcpbw: default IO size changed to 1MiB
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 08 Dec 2023 11:17:19 -0300
+
 simet-ma (0.18.4.5) unstable; urgency=medium
 
   * simet-ma version 0.18.4.5
