@@ -21,6 +21,9 @@
 #include "tcpbwc.h"
 #include <inttypes.h>
 
+#include "tcpinfo.h"
+#include <linux/sock_diag.h> /* for SK_MEMINFO_* */
+
 typedef struct tcpbw_download_result
 {
     uint64_t bytes;
@@ -28,15 +31,50 @@ typedef struct tcpbw_download_result
     unsigned int nstreams;
 } DownResult;
 
+typedef uint32_t tcpbw_skmeminfo_t[SK_MEMINFO_VARS];
+
+typedef struct tcpbw_data_sample {
+    struct timespec timestamp; /* relative to start of this measurement pass */
+    unsigned int stream_id;
+    struct simet_tcp_info tcpi;
+} TcpInfoSample;
+
+typedef struct tcpbw_skmem_sample {
+    struct timespec timestamp; /* relative to start of this measurement pass */
+    unsigned int stream_id;
+    tcpbw_skmeminfo_t sk_meminfo; /* SO_MEMINFO */
+} SkmemSample;
+
+typedef struct report_context {
+    struct tcpbw_report *report;
+    const char  *peer_json_report;
+
+    unsigned int download_streams_count;
+    unsigned int upload_streams_count;
+
+    unsigned long int download_tcpi_count;
+    unsigned long int upload_tcpi_count;
+    TcpInfoSample  *download_tcpi;
+    TcpInfoSample  *upload_tcpi;
+
+    unsigned long int download_skmem_count;
+    unsigned long int upload_skmem_count;
+    SkmemSample *download_skmem;
+    SkmemSample *upload_skmem;
+
+    unsigned int summary_sample_count;
+    DownResult  *summary_samples;
+} ReportContext;
+
 struct tcpbw_report {
     /* ensures proper aligment for the struct, does not really exist */
     void * do_not_use_this_field;
     /* all fields private, size unknown */
 };
 
-struct tcpbw_report* tcpbw_report_init(void);
-void tcpbw_report_done(struct tcpbw_report *);
-int report_socket_metrics(struct tcpbw_report *, int sockfd, int proto);
-int tcpbw_report(struct tcpbw_report *, const char *, DownResult *, uint32_t, MeasureContext *);
+ReportContext *tcpbw_report_init(void);
+void tcpbw_report_done(ReportContext *rctx);
+int report_socket_metrics(ReportContext *rctx, int sockfd, int proto);
+int tcpbw_report(ReportContext *rctx, const char *upload_results_json, MeasureContext *ctx);
 
 #endif /* REPORT_H_ */

@@ -389,11 +389,6 @@ _task_tcpbw(){
     return 0
   fi
 
-  local _tcpbwv=
-  if [[ "$DEBUG" = "true" ]] ; then
-	  _tcpbwv="-v -v"
-  fi
-
   log_measurement "TCPBW ${_tst_prefix}IPv$_af"
   local _host="ipv$_af.$( discover_service TCPBW HOST )"
   local _port=$( discover_service TCPBW PORT )
@@ -409,6 +404,14 @@ _task_tcpbw(){
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
+
+  local _tcpbw_perstream=
+  local _tcpbwv=
+  if [[ "$DEBUG" = "true" ]] ; then
+	  _tcpbwv="-v -v"
+	  _tcpbw_perstream="-O \"${_task_dir}/perstream_data.json\""
+  fi
+
   if [ -n "$AUTHORIZATION_TOKEN" ] ; then
     tcpbwauth="-j $AUTHORIZATION_TOKEN"
   else
@@ -416,11 +419,11 @@ _task_tcpbw(){
   fi
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TCPBWC $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC $_tcpbw_perstream $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TCPBWC $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC $_tcpbw_perstream $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

@@ -96,7 +96,6 @@ discover_init() {
     --request GET \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
-    --show-error \
     --fail \
     --location \
     --connect-timeout 10 \
@@ -110,7 +109,6 @@ discover_init() {
     --request GET \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
-    --show-error \
     --fail \
     --location \
     --connect-timeout 10 \

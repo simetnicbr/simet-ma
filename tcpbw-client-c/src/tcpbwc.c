@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
 #include <getopt.h>
@@ -94,8 +95,10 @@ static void print_version(void)
 
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <test duration>] [-c <number of streams>] "
-	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>] [-o <path>]"
+    fprintf(stderr, "Usage: %s [-h] [-q] [-v] [-V] [-4|-6] [-t <timeout>] [-l <duration>] [-c <streams>] "
+	    "[-s <period>] [-S <factor>] "
+	    "[-d <agent-id>] [-j <token> ] [-r <report_mode>] [-o <path>] [-O <path>] "
+	    "[-X <param>=<val>[;<param>=<val>]...] "
 	    "<server URL>\n", p);
     if (mode) {
 	fprintf(stderr, "\n"
@@ -112,11 +115,55 @@ static void print_usage(const char * const p, int mode)
 		"\t-j\taccess credentials\n"
 		"\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
 		"\t-o\tredirect report output to <path>\n"
+		"\t-O\twrite debugging data report to <path>\n"
+		"\t-s\tsampling period in milliseconds (500ms)\n"
+		"\t-S\tstatistics oversampling factor (0 - disabled)\n"
+		"\t-X\textended measurement parameter(s) separated by blank or ;\n"
+		"\t\ttxdelay=n  inter-stream start delay (< 0: RTT/(-n*streams). >= 0: delay in us)\n"
+		"\t\tpacing=n   approximate per-stream pacing rate in KiB/s, 0: system default\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
 }
 
+/* parameters can be separated by space, tab, semicolon */
+/* multi-value parameters should use comma as a separator */
+static int cmdline_extended_param(MeasureContext *ctx, char *param)
+{
+    char *strtokp = NULL;
+
+    (void) ctx;
+
+    if (!param)
+	return -1;
+
+    char *param_name = strtok_r(param, "=", &strtokp);
+    if (!param_name)
+	return -1;
+
+    /* assumes all parameters take one value */
+    char *param_data = strtok_r(NULL, "=", &strtokp);
+    if (!param_data || strtok_r(NULL, "=", &strtokp))
+	return -1;
+
+    if (!strcmp("txdelay", param_name)) {
+       int data = atoi(param_data);
+       ctx->stream_start_delay = (data < -2 || data > 1000000L) ? -2 : data;
+       return 0;
+    } else if (!strcmp("pacing", param_name)) {
+	long data = atol(param_data);
+	if (data <= 0) {
+	    data = 0;
+	} else {
+	    data *= 1024; /* KiB/s -> bytes/s */
+	}
+	ctx->max_pacing_rate = (data > UINT32_MAX) ? UINT32_MAX : (uint32_t) data;
+	return 0;
+    }
+
+    print_err("unknown extended parameter %s", param_name);
+    return 1;
+}
 
 int main(int argc, char **argv) {
     char *agent_id = NULL;
@@ -124,16 +171,25 @@ int main(int argc, char **argv) {
     char *token = NULL;
     int family = 6;
     int report_mode = 0;
+    char *streamdata_path = NULL;
+    FILE *streamdata_file = NULL;
     int timeout_test = 30;
     int test_lenght = 11;
-    int numstreams = 5;
+    int numstreams = 6;
+    int samplingperiod = 500;
+    int statsoversampling = 0;
 
     progname = argv[0];
     sanitize_std_fds();
 
+    MeasureContext ctx = {
+	.stream_start_delay = -2,
+	.max_pacing_rate = 0,
+    };
+
     int option;
     /* FIXME: parameter range checking, proper error messages, strtoul instead of atoi */
-    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:")) != -1) {
+    while ((option = getopt (argc, argv, "vq46hVc:l:t:d:j:r:o:O:s:S:X:")) != -1) {
         switch (option) {
         case 'v':
             if (log_level < 1)
@@ -152,6 +208,18 @@ int main(int argc, char **argv) {
 	        print_err("could not redirect output to %s: %s", optarg, strerror(errno));
 	        exit(SEXIT_FAILURE);
 	    }
+	    break;
+	case 'O':
+	    if (!optarg || !*optarg) {
+		print_err("missing output file name for -O");
+		exit(SEXIT_FAILURE);
+	    }
+	    streamdata_file = fopen(optarg, "w");
+	    if (!streamdata_file) {
+		print_err("could not create file %s: %s", optarg, strerror(errno));
+		exit(SEXIT_FAILURE);
+	    }
+	    streamdata_path = strdup(optarg);
 	    break;
 	case '4':
 	    family = 4;
@@ -176,6 +244,29 @@ int main(int argc, char **argv) {
 	    break;
 	case 'r':
 	    report_mode = atoi(optarg);
+	    break;
+	case 's':
+	    samplingperiod = atoi(optarg);
+	    break;
+	case 'S':
+	    statsoversampling = atoi(optarg);
+	    break;
+	case 'X':
+	    /* param=value pairs separated by C locale isspace() or ; */
+	    if (optarg) {
+		char *strtokp = NULL;
+		char *subopt = strtok_r(optarg, " \t\v\f\n\r;", &strtokp);
+		while (subopt && *subopt) {
+		    int r = cmdline_extended_param(&ctx, subopt);
+		    if (r < 0) {
+			print_err("invalid extended parameter: %s", subopt);
+		    }
+		    if (r) {
+			exit(SEXIT_BADCMDLINE);
+		    }
+		    subopt = strtok_r(NULL, " \t\v\f\n\r;", &strtokp);
+		}
+	    }
 	    break;
 	case 'h':
 	    print_usage(progname, 1);
@@ -208,20 +299,21 @@ int main(int argc, char **argv) {
 	print_msg(MSG_DEBUG, "generated session id: %s", token);
     }
 
-    MeasureContext ctx = {
-	.agent_id = agent_id,
-	.host_name = NULL,
-	.port = NULL,
-	.control_url = control_url,
-	.token = token,
-	.family = family,
-	.report_mode = report_mode,
-	.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test,
-	.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams,
-	.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght,
-	.sessionid = NULL,
-	.sample_period_ms = 500U,
-    };
+    ctx.agent_id = agent_id;
+    ctx.host_name = NULL;
+    ctx.port = NULL;
+    ctx.control_url = control_url;
+    ctx.token = token;
+    ctx.family = family;
+    ctx.report_mode = report_mode;
+    ctx.streamdata_path = streamdata_path;
+    ctx.streamdata_file = streamdata_file;
+    ctx.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test;
+    ctx.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams;
+    ctx.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght;
+    ctx.sessionid = NULL;
+    ctx.sample_period_ms = (samplingperiod < 50 || samplingperiod > 1000) ? 500 : (unsigned int) samplingperiod;
+    ctx.stats_oversampling = (statsoversampling < 0 || statsoversampling > 50 || (statsoversampling > 0 && samplingperiod / statsoversampling < 10)) ? 1 : (unsigned int)statsoversampling;
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
 
@@ -230,6 +322,7 @@ int main(int argc, char **argv) {
     if (value != 0)
         print_err("TCP CLIENT RUN ERROR");
 
+    free(streamdata_path);
     free(token);
 
     return value;
