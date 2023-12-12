@@ -1,0 +1,16 @@
+#!/bin/sh
+# SIMET-MA systemd-networkd dispatcher script, routable.d
+# Copytight (c) 2023 NIC.br <medicoes@simet.nic.br>
+#
+# Distributed under the GPLv3+ license with additional terms and permissions
+# Refer to the COPYING file on the program source for details
+
+export LC_ALL=C
+
+[ "$IFACE" = "lo" ] && exit 0
+test -x /opt/simet/bin/simet_register_ma.sh || exit 0
+
+start-stop-daemon -b -c nicbr-simet --start --name simet_reg_ma \
+	--startas /opt/simet/bin/simet_register_ma.sh \
+	-- --boot >/dev/null </dev/null 2>&1 || :
+:
