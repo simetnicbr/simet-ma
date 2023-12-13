@@ -26,7 +26,7 @@ set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 
-umask 0022
+umask 0002
 
 RC=1
 OUTFILE=
@@ -106,7 +106,7 @@ write_lmap_agent() {
 		[ x"$HASHOLD" != x"$HASHNEW" ] && {
 			LMAP_AGENT_DIR=$(dirname "$LMAP_AGENT_FILE")
 			[ -d "$LMAP_AGENT_DIR" ] || mkdir -m 0755 -p "$LMAP_AGENT_DIR"
-			cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
+			cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod og+rw "$LMAP_AGENT_FILE"
 		}
 	fi
 	:
