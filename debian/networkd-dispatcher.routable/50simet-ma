@@ -13,4 +13,6 @@ test -x /opt/simet/bin/simet_register_ma.sh || exit 0
 start-stop-daemon -b -c nicbr-simet --start --name simet_reg_ma \
 	--startas /opt/simet/bin/simet_register_ma.sh \
 	-- --boot >/dev/null </dev/null 2>&1 || :
+
+invoke-rc.d simet-ma start >/dev/null 2>&1 || :
 :
