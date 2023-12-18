@@ -204,6 +204,13 @@ simet_lmap_download_schedule() {
 	:
 }
 
+# WARNING: we might be run from inside lmapd, which in turn
+# could signal us with SIGTERM when we send it a configuration
+# reload signal (or worse: restart it).
+#
+# Thus, queue calls to simet_restart_services() via an EXIT
+# trap.  Do not call it inline.
+
 #overridable
 simet_lmap_reload_config() {
 	if [ -n "$LMAP_RECONFIG" ] ; then

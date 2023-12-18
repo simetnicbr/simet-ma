@@ -7,6 +7,8 @@
     "program":"@BINDIR@/simet_report-queue-flush.sh" },
   { "name":"simet.nic.br_reschedule",
     "program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
+  { "name":"simet.nic.br_register",
+    "program":"@BINDIR@/simet_register_ma.sh" },
   { "name":"simet.nic.br_agent-info",
     "tag":["simet.nic.br_engine-name:@SIMET_ENGINE_NAME@",
 	   "simet.nic.br_engine-version:@PACKAGEVERSION@",

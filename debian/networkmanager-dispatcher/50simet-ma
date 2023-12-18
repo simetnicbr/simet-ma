@@ -1,0 +1,18 @@
+#!/bin/sh
+# SIMET-MA NetworkManager dispatcher script
+# Copytight (c) 2023 NIC.br <medicoes@simet.nic.br>
+#
+# Distributed under the GPLv3+ license with additional terms and permissions
+# Refer to the COPYING file on the program source for details
+
+export LC_ALL=C
+test -x /opt/simet/bin/simet_register_ma.sh || exit 0
+
+[ "$2" = "connectivity-change" ] && [ "$CONNECTIVITY_STATE" = "FULL" ] || exit 0
+
+start-stop-daemon -b -c nicbr-simet --start --name simet_reg_ma \
+	--startas /opt/simet/bin/simet_register_ma.sh \
+	-- --boot >/dev/null </dev/null 2>&1 || :
+
+invoke-rc.d simet-ma start >/dev/null 2>&1 || :
+:

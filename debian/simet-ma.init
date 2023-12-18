@@ -91,25 +91,36 @@ do_start_prepare() {
 	# used for the geolocation cache and ephemeral tokens
 	[ -n "$SIMET_RUNSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_RUNSTATE_DIR" && \
-		chgrp $SGROUP "$SIMET_RUNSTATE_DIR" && \
-		chmod 0770 "$SIMET_RUNSTATE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_RUNSTATE_DIR" && \
+		chmod 2770 "$SIMET_RUNSTATE_DIR" && \
+		find "$SIMET_RUNSTATE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
 	[ -n "$SIMET_VARSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_VARSTATE_DIR" && \
-		chgrp $SGROUP "$SIMET_VARSTATE_DIR" && \
-		chmod 0770 "$SIMET_VARSTATE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_VARSTATE_DIR" && \
+		chmod 2770 "$SIMET_VARSTATE_DIR" && \
+		find "$SIMET_VARSTATE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
 	[ -n "$SIMET_CACHE_DIR" ] && [ "$SIMET_CACHE_DIR" != "$SIMET_VARSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_CACHE_DIR" && \
-		chgrp $SGROUP "$SIMET_CACHE_DIR" && \
-		chmod 0770 "$SIMET_CACHE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_CACHE_DIR" && \
+		chmod 2770 "$SIMET_CACHE_DIR" && \
+		find "$SIMET_CACHE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
 	[ -n "$SIMET_PUBRUNSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_PUBRUNSTATE_DIR" && \
-		chgrp $SGROUP "$SIMET_PUBRUNSTATE_DIR" && \
-		chmod 0775 "$SIMET_PUBRUNSTATE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_PUBRUNSTATE_DIR" && \
+		chmod 0775 "$SIMET_PUBRUNSTATE_DIR" && \
+		find "$SIMET_PUBRUNSTATE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+
 	# locks and pidfiles
 	[ -n "$SIMET_LOCK_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_LOCK_DIR" && \
-		chgrp $SGROUP "$SIMET_LOCK_DIR" && \
-		chmod 0770 "$SIMET_LOCK_DIR"
+		chgrp -R "$SGROUP" "$SIMET_LOCK_DIR" && \
+		chmod 2770 "$SIMET_LOCK_DIR" && \
+		find "$SIMET_LOCK_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+
+	# Registration information (heal permissions)
+	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$AGENT_VIEW_CREDENTIALS_FILE" "$LMAP_AGENT_FILE" ; do
+		[ -n "$i" ] && find "$i" -type f ! -perm -0660 -exec chmod ug+rw '{}' \; 2>/dev/null || true
+	done
 
 	# Create virtual label if one does not exist.  If you want to
 	# disable it, use an empty file or one containing DISABLED
@@ -157,10 +168,29 @@ do_start_cmd_override() {
 	    $START_ARGS \
 	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
 	  || return 1
+
+	# fail early the most common reasons for inetup to refuse to start
+	[ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] \
+	  && return 2
+
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
 	    $START_ARGS \
 	    --startas $DAEMON --name "${COMMAND_NAME}" -- $DAEMON_ARGS \
 	  || return 2
+
+	# detect most cases of early exit.  Wait 1s for start-stop-daemon
+	# implementations that could return too early.  Needed because we
+	# use start-stop-daemon --background
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
+	  || return 0
+	sleep 1
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
+	  || return 0
+	return 2
 }
 
 # init-d-script do_status() is broken when PIDFILE is set due to a bug

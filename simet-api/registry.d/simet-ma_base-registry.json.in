@@ -3,6 +3,7 @@
  "tasks":{"task":[
   { "name":"simet.nic.br_agent-info","version":"@PACKAGEVERSION@","program":"@LMAPBINDIR@/simet2-agent-info.sh" },
   { "name":"simet.nic.br_reschedule","version":"@PACKAGEVERSION@","program":"@BINDIR@/@SBPREFIX@_lmap-fetch-schedule.sh" },
+  { "name":"simet.nic.br_register","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_register_ma.sh" },
   { "name":"simet.nic.br_geolocation","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_geolocation.sh" },
   { "name":"simet.nic.br_basic-tests","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet-ma_run.sh" },
   { "name":"simet.nic.br_srvlist-mp-latency","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet-ma_run.sh" },
