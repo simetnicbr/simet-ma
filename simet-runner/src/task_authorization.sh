@@ -32,6 +32,7 @@ authorization() {
 
   curl \
     --request GET \
+    --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $_agent_token" \
     --silent \
     --show-error \

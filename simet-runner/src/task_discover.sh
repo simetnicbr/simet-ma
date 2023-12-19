@@ -94,6 +94,7 @@ discover_init() {
   local _curl1_pid
   curl \
     --request GET \
+    --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
@@ -107,6 +108,7 @@ discover_init() {
   local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
   curl \
     --request GET \
+    --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
@@ -116,12 +118,27 @@ discover_init() {
     --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
   & _curl2_pid=$!
 
+  local _curl3_pid
+  local _curl3_endpoint="$API_MSMT_PROFILE"
+  curl \
+    --request GET \
+    --user-agent "$SIMET_USERAGENT" \
+    --header "Authorization: Bearer $AGENT_TOKEN" \
+    --silent \
+    --fail \
+    --location \
+    --connect-timeout 10 \
+    --max-time 15 \
+    --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY;engine_name=$SIMET_ENGINE_NAME" > "$BASEDIR/msmt_profiles.json" \
+  & _curl3_pid=$!
+
   rc=0
   wait $_curl1_pid || {
     log_error "failed to retrieve list of measurement peers"
     rc=1
   }
   wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
+  wait $_curl3_pid && log_debug "Measurement profiles received"
 
   return $rc
 }
