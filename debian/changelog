@@ -1,3 +1,14 @@
+simet-ma (0.18.6) unstable; urgency=medium
+
+  * simet-ma version 0.18.6
+  * simet-runner: retrieve measurement profiles when available
+  * simet-runner: use the median RTT from TWAMP to select the
+    TCPBW measurement parameters from a measurement profile
+  * simet-runner: use simet_lib.sh
+  * simet-runner: send User-Agent header on all http requests
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 19 Dec 2023 15:04:59 -0300
+
 simet-ma (0.18.5.1) unstable; urgency=medium
 
   * simet-ma version 0.18.5.1
