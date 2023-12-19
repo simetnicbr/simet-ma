@@ -25,12 +25,12 @@ ma_environment() {
   }
 
   # fallback
-  agentinfo || return "$?"
+  [ -z "$SIMET_ENGINE_NAME" ] || [ -z "$SIMET2_AGENT_FAMILY" ] || [ -z "$PACKAGE_VERSION" ] && return 1
   cat << EOF1AGITEMPLATE
 {
   "function": [ { "uri": "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_AgentInfo__Multiple_Singleton" } ],
   "column": [ "engine_name", "engine_version", "agent_family", "agent_environment_name", "agent_environment_version" ],
-  "row": [ { "value": [ "$SIMET_ENGINE_NAME", "$_task_version", "$_agent_family", "$_agent_envname", "$_agent_envversion" ] } ]
+  "row": [ { "value": [ "$SIMET_ENGINE_NAME", "$(simet_jo "$PACKAGE_VERSION")", "$SIMET2_AGENT_FAMILY", "$(simet_jo "$SIMET2_AGENT_ENVNAME")", "$(simet_jo "$SIMET2_AGENT_ENVVERSION")" ] } ]
 }
 EOF1AGITEMPLATE
 }

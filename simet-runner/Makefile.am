@@ -17,12 +17,13 @@ simetconfdir=$(sysconfdir)/simet
 simetlibdir=$(libdir)/simet
 simetlmapbindir=$(simetlibdir)/lmap/bin
 
+## FIXME: autoconfize this
+simetenginename=nic_simet2_simet-ma
+
 if SIMETBOX_BUILD
 usetheshell=/bin/sh
-agentinfo=src/simetbox_agentinfo.sh
 else
 usetheshell=/bin/bash
-agentinfo=src/lsb_agentinfo.sh
 endif
 
 dist_bin_SCRIPTS = simet-ma_run.sh
@@ -42,6 +43,7 @@ version: $(top_srcdir)/version.sh
 	    -e "s!@JSONFILTER@!$(jsonfilter)!g" \
 	    -e "s!@RUNNERNAME@!$(PACKAGE_NAME)!g" -e "s!@RUNNERVERSION@!$(PACKAGE_VERSION)!g" \
 	    -e "s!@RUNNERSTRING@!$(PACKAGE_STRING)!g" \
+	    -e "s!@SIMET_ENGINE_NAME@!$(simetenginename)!g" \
 	    "$^" > "$@"
 
 simetma_sources = src/defines.sh \
@@ -52,7 +54,6 @@ simetma_sources = src/defines.sh \
 		src/task_discover.sh \
 		src/subtask_serversel.sh \
 		src/task_geolocation.sh \
-		$(agentinfo) \
 		src/task_environment.sh \
 		src/task_traceroute.sh \
 		src/templates.sh \
@@ -61,7 +62,7 @@ simetma_sources = src/defines.sh \
 simet-ma_run.sh: $(simetma_sources)
 	( echo "#!$(usetheshell)" ; cat $^ ) > "$@" && chmod +x "$@"
 
-EXTRA_DIST += $(simetma_sources) src/simetbox_agentinfo.sh src/lsb_agentinfo.sh src/defines.sh.in
+EXTRA_DIST += $(simetma_sources) src/defines.sh.in
 CLEANFILES = simet-ma_run.sh src/defines.sh
 
 .PHONY: help
