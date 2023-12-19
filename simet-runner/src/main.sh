@@ -251,6 +251,7 @@ _main_orchestrate(){
     log_info "LMAPSENDREPORT config missing, trying a direct submission"
     _resp=$(curl \
       --request POST \
+      --user-agent "$SIMET_USERAGENT" \
       --header "Content-Type: application/yang.data+json" \
       --header "Authorization: Bearer $AGENT_TOKEN" \
       --data "@$_report_dir/result.json"  \

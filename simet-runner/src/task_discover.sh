@@ -94,6 +94,7 @@ discover_init() {
   local _curl1_pid
   curl \
     --request GET \
+    --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
@@ -107,6 +108,7 @@ discover_init() {
   local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
   curl \
     --request GET \
+    --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
