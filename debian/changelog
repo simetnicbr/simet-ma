@@ -1,3 +1,13 @@
+simet-ma (0.18.6.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.1
+  * deb: provide hook for dhcpdc (dhclient), pppd
+    Add hook for dhcpdc (dhclient) and pppd with the same functionality as
+    the already provided ones for NetworkManager, networkd-dispatcherd and
+    ifupdown (refer to simet-ma 0.18.5.1).
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 21 Dec 2023 15:35:00 -0300
+
 simet-ma (0.18.6) unstable; urgency=medium
 
   * simet-ma version 0.18.6
