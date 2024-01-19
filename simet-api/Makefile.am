@@ -51,8 +51,8 @@ endif
 
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
 
-dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh simet_view_results.sh
-EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in simet_view_results.sh.in
+dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh simet_view_results.sh simet_qrcode.sh
+EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in simet_view_results.sh.in simet_qrcode.sh.in
 dist_bin_SCRIPTS += simet_report-queue-flush.sh simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
 EXTRA_DIST += simet_report-queue-flush.sh.in simet_lmap-send-report.sh.in simet_lmap-stdout-wrapper.sh.in
 
@@ -60,8 +60,8 @@ if SIMETBOX_BUILD
 dist_bin_SCRIPTS +=
 EXTRA_DIST +=
 else
-dist_bin_SCRIPTS += simet_issuebanner-generator.sh simet_qrcode.sh
-EXTRA_DIST += simet_issuebanner-generator.sh.in simet_qrcode.sh.in
+dist_bin_SCRIPTS += simet_issuebanner-generator.sh
+EXTRA_DIST += simet_issuebanner-generator.sh.in
 endif
 
 if SIMET_SPOOFER

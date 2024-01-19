@@ -6,6 +6,7 @@
 
 # Parameters:
 # --png <path>  : Outputs PNG version to <path>
+# --svg <path>  : Outputs SVG version to <path>
 # --text <path> : Outputs text version to <path>
 #
 # --url         : QRCode is pairing URL
@@ -21,6 +22,9 @@
 # --issue overrides defaults for glue that handles /etc/issue and is usually
 # used alone.  Always use it before all other options so that behavior can
 # be predicable.
+#
+# Notes: --png unavailable in several OpenWRT versions, due
+# to lack of support in qrencode, but --svg *is* supported.
 
 set -e
 
@@ -28,6 +32,7 @@ set -e
 
 DOTXT=0
 DOPNG=0
+DOSVG=0
 DOURL=0
 T_TM=UTF8
 
@@ -46,6 +51,7 @@ while [ $# -gt 0 ] ; do
 	case "$1" in
 	--issue)
 		DOPNG=0
+		DOSVG=0
 		DOURL=0
 		DOTXT=1
 		TXTFILE="-"
@@ -54,6 +60,11 @@ while [ $# -gt 0 ] ; do
 	--png)
 		PNGFILE="$2"
 		DOPNG=1
+		shift
+		;;
+	--svg)
+		SVGFILE="$2"
+		DOSVG=1
 		shift
 		;;
 	--text)
@@ -80,7 +91,7 @@ while [ $# -gt 0 ] ; do
 	shift
 done
 
-[ "$DOTXT" -eq 0 ] && [ "$DOPNG" -eq 0 ] && {
+[ "$DOTXT" -eq 0 ] && [ "$DOPNG" -eq 0 ] && [ "$DOSVG" -eq 0 ] && {
 	DOTXT=1
 	TXTFILE='-'
 }
@@ -107,6 +118,12 @@ fi
 [ "$DOPNG" -ne 0 ] && {
 	printf '%s' "$LTEXT" | qrencode -t PNG -o "$PNGFILE" || {
 		printf "%s: failed to render QRcode to %s\n" "$0" "$PNGFILE" >&2
+		exit 1
+	}
+}
+[ "$DOSVG" -ne 0 ] && {
+	printf '%s' "$LTEXT" | qrencode -t SVG -o "$SVGFILE" || {
+		printf "%s: failed to render QRcode to %s\n" "$0" "$SVGFILE" >&2
 		exit 1
 	}
 }
