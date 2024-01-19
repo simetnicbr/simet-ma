@@ -20,8 +20,10 @@
 
 #include <inttypes.h>
 
-#include <sys/types.h>
-#include <arpa/inet.h>
+#include <time.h>      /* for struct timespec */
+#include <sys/time.h>  /* for struct timeval, suseconds_t */
+
+#include <arpa/inet.h> /* for hton* */
 
 /* Timestamp is NTP time (RFC1305).
  * Should be in network byte order!      */

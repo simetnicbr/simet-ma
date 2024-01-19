@@ -18,10 +18,6 @@
 #include "twampc_config.h"
 #include "timestamp.h"
 
-#include <inttypes.h>
-
-#include <arpa/inet.h>
-
 Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, const struct timespec * const ts_offset)
 {
     Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
