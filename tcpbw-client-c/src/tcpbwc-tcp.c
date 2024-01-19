@@ -38,7 +38,6 @@
 #include <fcntl.h>
 
 #include <arpa/inet.h>
-#include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
