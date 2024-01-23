@@ -13,6 +13,8 @@
 ## General Public License and the COPYING file in the program Source
 ## for details.
 
+SUBDIRS = utils
+
 # Note: if the defines below are modified, please grep -r all the
 # simet-ma source to ensure they are in sync everywhere!
 simetconfdir=$(sysconfdir)/simet
