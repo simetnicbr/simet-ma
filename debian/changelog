@@ -1,3 +1,12 @@
+simet-ma (0.18.6.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.2
+  * Add simet_gen_vlabel to generate "N0 format" virtual labels
+  * Add SVG support to simet_qrcode.sh, for OpenWRT use, and ship it
+    in SIMETBox builds.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 24 Jan 2024 14:45:28 -0300
+
 simet-ma (0.18.6.1) unstable; urgency=medium
 
   * simet-ma version 0.18.6.1
