@@ -33,7 +33,7 @@ static inline void store_be32(void *ptr, uint32_t value)
 	p[3] = value & 0xffU;
 }
 
-void SHA256_init(SHA256_CTX *ctx)
+void SHA256_Init(SHA256_CTX *ctx)
 {
 	ctx->offset = 0;
 	ctx->size = 0;
@@ -82,7 +82,7 @@ static inline uint32_t gamma1(uint32_t x)
 	return ror(x, 17) ^ ror(x, 19) ^ (x >> 10);
 }
 
-static void SHA256_transform(SHA256_CTX *ctx, const uint8_t *buf)
+static void SHA256_Transform(SHA256_CTX *ctx, const uint8_t *buf)
 {
 
 	uint32_t S[8], W[64], t0, t1;
@@ -176,7 +176,7 @@ static void SHA256_transform(SHA256_CTX *ctx, const uint8_t *buf)
 		ctx->state[i] += S[i];
 }
 
-void SHA256_update(SHA256_CTX *ctx, const void *data, size_t len)
+void SHA256_Update(SHA256_CTX *ctx, const void *data, size_t len)
 {
 	unsigned int len_buf = ctx->size & 63;
 
@@ -193,10 +193,10 @@ void SHA256_update(SHA256_CTX *ctx, const void *data, size_t len)
 		data = ((const char *)data + left);
 		if (len_buf)
 			return;
-		SHA256_transform(ctx, ctx->buf);
+		SHA256_Transform(ctx, ctx->buf);
 	}
 	while (len >= 64) {
-		SHA256_transform(ctx, data);
+		SHA256_Transform(ctx, data);
 		data = ((const char *)data + 64);
 		len -= 64;
 	}
@@ -204,7 +204,7 @@ void SHA256_update(SHA256_CTX *ctx, const void *data, size_t len)
 		memcpy(ctx->buf, data, len);
 }
 
-void SHA256_final(uint8_t digest[SHA256_DIGESTSZ], SHA256_CTX *ctx)
+void SHA256_Final(uint8_t digest[SHA256_DIGEST_LENGTH], SHA256_CTX *ctx)
 {
 	static const unsigned char pad[64] = { 0x80 };
 	unsigned int padlen[2];
@@ -215,8 +215,8 @@ void SHA256_final(uint8_t digest[SHA256_DIGESTSZ], SHA256_CTX *ctx)
 	padlen[1] = htonl((uint32_t)(ctx->size << 3));
 
 	i = ctx->size & 63;
-	SHA256_update(ctx, pad, 1 + (63 & (55 - i)));
-	SHA256_update(ctx, padlen, 8);
+	SHA256_Update(ctx, pad, 1 + (63 & (55 - i)));
+	SHA256_Update(ctx, padlen, 8);
 
 	/* copy output */
 	for (i = 0; i < 8; i++, digest += sizeof(uint32_t))
@@ -225,7 +225,7 @@ void SHA256_final(uint8_t digest[SHA256_DIGESTSZ], SHA256_CTX *ctx)
 
 
 /* HMAC-SHA256 */
-void HMAC_SHA256(uint8_t digest[SHA256_DIGESTSZ],
+void HMAC_SHA256(uint8_t digest[SHA256_DIGEST_LENGTH],
 		 const void * const key_in, const size_t key_len,
 		 const void * const data, const size_t data_len)
 {
@@ -238,9 +238,9 @@ void HMAC_SHA256(uint8_t digest[SHA256_DIGESTSZ],
 	/* RFC 2104 2. (1) */
 	memset(key, 0, SHA256_BLKSIZE);
 	if (SHA256_BLKSIZE < key_len) {
-	        SHA256_init(&ctx);
-		SHA256_update(&ctx, key_in, key_len);
-		SHA256_final(key, &ctx);
+	        SHA256_Init(&ctx);
+		SHA256_Update(&ctx, key_in, key_len);
+		SHA256_Final(key, &ctx);
 	} else {
 		memcpy(key, key_in, key_len);
 	}
@@ -252,19 +252,19 @@ void HMAC_SHA256(uint8_t digest[SHA256_DIGESTSZ],
 	}
 
 	/* RFC 2104 2. (3) & (4) */
-	SHA256_init(&ctx);
-	SHA256_update(&ctx, k_ipad, sizeof(k_ipad));
-	SHA256_update(&ctx, data, data_len);
-	SHA256_final(digest, &ctx);
+	SHA256_Init(&ctx);
+	SHA256_Update(&ctx, k_ipad, sizeof(k_ipad));
+	SHA256_Update(&ctx, data, data_len);
+	SHA256_Final(digest, &ctx);
 
 	/* RFC 2104 2. (6) & (7) */
-	SHA256_init(&ctx);
-	SHA256_update(&ctx, k_opad, sizeof(k_opad));
-	SHA256_update(&ctx, digest, SHA256_DIGESTSZ);
-	SHA256_final(digest, &ctx);
+	SHA256_Init(&ctx);
+	SHA256_Update(&ctx, k_opad, sizeof(k_opad));
+	SHA256_Update(&ctx, digest, SHA256_DIGEST_LENGTH);
+	SHA256_Final(digest, &ctx);
 }
 
-int HMAC_SHA256_from_fd(uint8_t digest[SHA256_DIGESTSZ],
+int HMAC_SHA256_from_fd(uint8_t digest[SHA256_DIGEST_LENGTH],
 		 const void * const key_in, size_t key_len,
 		 const int fd)
 {
@@ -281,9 +281,9 @@ int HMAC_SHA256_from_fd(uint8_t digest[SHA256_DIGESTSZ],
 	/* RFC 2104 2. (1) */
 	memset(key, 0, SHA256_BLKSIZE);
 	if (SHA256_BLKSIZE < key_len) {
-	        SHA256_init(&ctx);
-		SHA256_update(&ctx, key_in, key_len);
-		SHA256_final(key, &ctx);
+	        SHA256_Init(&ctx);
+		SHA256_Update(&ctx, key_in, key_len);
+		SHA256_Final(key, &ctx);
 	} else {
 		memcpy(key, key_in, key_len);
 	}
@@ -295,26 +295,26 @@ int HMAC_SHA256_from_fd(uint8_t digest[SHA256_DIGESTSZ],
 	}
 
 	/* RFC 2104 2. (3) & (4) */
-	SHA256_init(&ctx);
-	SHA256_update(&ctx, k_ipad, sizeof(k_ipad));
+	SHA256_Init(&ctx);
+	SHA256_Update(&ctx, k_ipad, sizeof(k_ipad));
 
 	do {
 	    res = read(fd, &io_buf, sizeof(io_buf));
 	    if (res > 0) {
-	        SHA256_update(&ctx, &io_buf, (size_t)res);
+	        SHA256_Update(&ctx, &io_buf, (size_t)res);
 	    }
 	} while (res > 0 || (res == -1 && (errno == EINTR || errno == EAGAIN)));
 	if (res) {
 	    /* errno set */
 	    return -1;
 	}
-	SHA256_final(digest, &ctx);
+	SHA256_Final(digest, &ctx);
 
 	/* RFC 2104 2. (6) & (7) */
-	SHA256_init(&ctx);
-	SHA256_update(&ctx, k_opad, sizeof(k_opad));
-	SHA256_update(&ctx, digest, SHA256_DIGESTSZ);
-	SHA256_final(digest, &ctx);
+	SHA256_Init(&ctx);
+	SHA256_Update(&ctx, k_opad, sizeof(k_opad));
+	SHA256_Update(&ctx, digest, SHA256_DIGEST_LENGTH);
+	SHA256_Final(digest, &ctx);
 
 	return 0;
 }

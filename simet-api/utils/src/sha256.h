@@ -1,8 +1,8 @@
 #ifndef SHA256_H
 #define SHA256_H
 
-#define SHA256_BLKSIZE   64
-#define SHA256_DIGESTSZ  32
+#define SHA256_BLKSIZE        64
+#define SHA256_DIGEST_LENGTH  32
 
 #include <stdint.h>
 #include <stddef.h>
@@ -15,11 +15,11 @@ struct SHA256_CTX {
 };
 
 typedef struct SHA256_CTX SHA256_CTX;
-typedef uint8_t SHA256_DIGEST[SHA256_DIGESTSZ];
+typedef uint8_t SHA256_DIGEST[SHA256_DIGEST_LENGTH];
 
-void SHA256_init(SHA256_CTX *ctx);
-void SHA256_update(SHA256_CTX *ctx, const void *data, size_t len);
-void SHA256_final(SHA256_DIGEST digest, SHA256_CTX *ctx);
+void SHA256_Init(SHA256_CTX *ctx);
+void SHA256_Update(SHA256_CTX *ctx, const void *data, size_t len);
+void SHA256_Final(SHA256_DIGEST digest, SHA256_CTX *ctx);
 
 /* HMAC-SHA256 */
 void HMAC_SHA256(SHA256_DIGEST digest,
