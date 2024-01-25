@@ -11,10 +11,8 @@
 #include <arpa/inet.h> /* htonl() */
 
 /*
- * let the compiler do a decent job of optimizing this
- * into proper ASM, better slow than incorrect here
+ * Let the compiler optimize these, it does a better job.
  */
-
 static inline uint32_t load_be32(const void *ptr)
 {
 	const uint8_t *p = ptr;
@@ -23,7 +21,6 @@ static inline uint32_t load_be32(const void *ptr)
 		(uint32_t)p[2] <<  8 |
 		(uint32_t)p[3];
 }
-
 static inline void store_be32(void *ptr, uint32_t value)
 {
 	uint8_t *p = ptr;
@@ -223,24 +220,26 @@ void SHA256_Final(uint8_t digest[SHA256_DIGEST_LENGTH], SHA256_CTX *ctx)
 		store_be32(digest, ctx->state[i]);
 }
 
-
 /* HMAC-SHA256 */
-void HMAC_SHA256(uint8_t digest[SHA256_DIGEST_LENGTH],
-		 const void * const key_in, const size_t key_len,
-		 const void * const data, const size_t data_len)
+
+typedef struct HMAC_SHA256_CTX {
+	uint8_t k_opad[SHA256_BLKSIZE];
+	SHA256_CTX hctx;
+} HMAC_SHA256_CTX;
+
+static inline void HMAC_SHA256_Init(HMAC_SHA256_CTX *hmctx,
+		 const void * const key_in, const size_t key_len)
 {
 	uint8_t key[SHA256_BLKSIZE];
 	uint8_t k_ipad[SHA256_BLKSIZE];
-	uint8_t k_opad[SHA256_BLKSIZE];
-	SHA256_CTX ctx;
 	int i;
 
 	/* RFC 2104 2. (1) */
 	memset(key, 0, SHA256_BLKSIZE);
 	if (SHA256_BLKSIZE < key_len) {
-	        SHA256_Init(&ctx);
-		SHA256_Update(&ctx, key_in, key_len);
-		SHA256_Final(key, &ctx);
+	        SHA256_Init(&hmctx->hctx);
+		SHA256_Update(&hmctx->hctx, key_in, key_len);
+		SHA256_Final(key, &hmctx->hctx);
 	} else {
 		memcpy(key, key_in, key_len);
 	}
@@ -248,73 +247,67 @@ void HMAC_SHA256(uint8_t digest[SHA256_DIGEST_LENGTH],
 	/* RFC 2104 2. (2) & (5) */
 	for (i = 0; i < SHA256_BLKSIZE; i++) {
 		k_ipad[i] = key[i] ^ 0x36;
-		k_opad[i] = key[i] ^ 0x5c;
+		hmctx->k_opad[i] = key[i] ^ 0x5c;
 	}
 
-	/* RFC 2104 2. (3) & (4) */
-	SHA256_Init(&ctx);
-	SHA256_Update(&ctx, k_ipad, sizeof(k_ipad));
-	SHA256_Update(&ctx, data, data_len);
-	SHA256_Final(digest, &ctx);
+	/* RFC 2104 2. (3) & (4), first part */
+	SHA256_Init(&hmctx->hctx);
+	SHA256_Update(&hmctx->hctx, k_ipad, sizeof(k_ipad));
+}
+
+static inline void HMAC_SHA256_Update(HMAC_SHA256_CTX *hmctx,
+		 const void * const data, const size_t data_len)
+{
+	/* RFC 2104 2. (3) & (4), second part */
+	SHA256_Update(&hmctx->hctx, data, data_len);
+}
+
+static inline void HMAC_SHA256_Final(HMAC_SHA256_CTX *hmctx, uint8_t digest[SHA256_DIGEST_LENGTH])
+{
+	/* RFC 2104 2. (3) & (4), third part */
+	SHA256_Final(digest, &hmctx->hctx);
 
 	/* RFC 2104 2. (6) & (7) */
-	SHA256_Init(&ctx);
-	SHA256_Update(&ctx, k_opad, sizeof(k_opad));
-	SHA256_Update(&ctx, digest, SHA256_DIGEST_LENGTH);
-	SHA256_Final(digest, &ctx);
+	SHA256_Init(&hmctx->hctx);
+	SHA256_Update(&hmctx->hctx, hmctx->k_opad, sizeof(hmctx->k_opad));
+	SHA256_Update(&hmctx->hctx, digest, SHA256_DIGEST_LENGTH);
+	SHA256_Final(digest, &hmctx->hctx);
+}
+
+void HMAC_SHA256(uint8_t digest[SHA256_DIGEST_LENGTH],
+		 const void * const key_in, const size_t key_len,
+		 const void * const data, const size_t data_len)
+{
+	HMAC_SHA256_CTX hmctx;
+
+	HMAC_SHA256_Init(&hmctx, key_in, key_len);
+	HMAC_SHA256_Update(&hmctx, data, data_len);
+	HMAC_SHA256_Final(&hmctx, digest);
 }
 
 int HMAC_SHA256_from_fd(uint8_t digest[SHA256_DIGEST_LENGTH],
 		 const void * const key_in, size_t key_len,
 		 const int fd)
 {
-	uint8_t key[SHA256_BLKSIZE];
-	uint8_t k_ipad[SHA256_BLKSIZE];
-	uint8_t k_opad[SHA256_BLKSIZE];
+	HMAC_SHA256_CTX hmctx;
 	uint8_t io_buf[SHA256_BLKSIZE];
-	SHA256_CTX ctx;
-	int i;
 	ssize_t res;
 
+	HMAC_SHA256_Init(&hmctx, key_in, key_len);
+
+	/* RFC 2104 2. (3) & (4), second part */
 	memset(io_buf, 0, SHA256_BLKSIZE);
-
-	/* RFC 2104 2. (1) */
-	memset(key, 0, SHA256_BLKSIZE);
-	if (SHA256_BLKSIZE < key_len) {
-	        SHA256_Init(&ctx);
-		SHA256_Update(&ctx, key_in, key_len);
-		SHA256_Final(key, &ctx);
-	} else {
-		memcpy(key, key_in, key_len);
-	}
-
-	/* RFC 2104 2. (2) & (5) */
-	for (i = 0; i < SHA256_BLKSIZE; i++) {
-		k_ipad[i] = key[i] ^ 0x36;
-		k_opad[i] = key[i] ^ 0x5c;
-	}
-
-	/* RFC 2104 2. (3) & (4) */
-	SHA256_Init(&ctx);
-	SHA256_Update(&ctx, k_ipad, sizeof(k_ipad));
-
 	do {
 	    res = read(fd, &io_buf, sizeof(io_buf));
 	    if (res > 0) {
-	        SHA256_Update(&ctx, &io_buf, (size_t)res);
+	        HMAC_SHA256_Update(&hmctx, &io_buf, (size_t)res);
 	    }
 	} while (res > 0 || (res == -1 && (errno == EINTR || errno == EAGAIN)));
 	if (res) {
 	    /* errno set */
 	    return -1;
 	}
-	SHA256_Final(digest, &ctx);
 
-	/* RFC 2104 2. (6) & (7) */
-	SHA256_Init(&ctx);
-	SHA256_Update(&ctx, k_opad, sizeof(k_opad));
-	SHA256_Update(&ctx, digest, SHA256_DIGEST_LENGTH);
-	SHA256_Final(digest, &ctx);
-
+	HMAC_SHA256_Final(&hmctx, digest);
 	return 0;
 }
