@@ -31,4 +31,12 @@ int HMAC_SHA256_from_fd(SHA256_DIGEST digest,
 		 const void * key_in, size_t key_len,
 		 int fd);
 
+/* PBKDF2-HMAC-SHA256 */
+
+/* returns 0 (ok), -1 (error), errno set */
+int pbkdf2_hmac_sha256(const uint8_t *pw, size_t pw_len,
+			const uint8_t *salt, size_t salt_len,
+			uint32_t iterations,
+			uint8_t *key_out, size_t key_out_len);
+
 #endif

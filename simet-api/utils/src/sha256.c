@@ -10,6 +10,9 @@
 #include <errno.h>
 #include <arpa/inet.h> /* htonl() */
 
+/* not side-effect safe! */
+#define MIN(a, b) ((a) > (b)) ? (b) : (a)
+
 /*
  * Let the compiler optimize these, it does a better job.
  */
@@ -314,3 +317,117 @@ int HMAC_SHA256_from_fd(uint8_t digest[SHA256_DIGEST_LENGTH],
 	HMAC_SHA256_Final(&hmctx, digest);
 	return 0;
 }
+
+/* PBKDF2-HMAC-SHA256 */
+
+/* this auto-vectorizes, memcpy() might not */
+static inline void SHA256_scpy(SHA256_CTX * restrict out,
+			const SHA256_CTX * restrict in)
+{
+	out->state[0] = in->state[0];
+	out->state[1] = in->state[1];
+	out->state[2] = in->state[2];
+	out->state[3] = in->state[3];
+	out->state[4] = in->state[4];
+	out->state[5] = in->state[5];
+	out->state[6] = in->state[6];
+	out->state[7] = in->state[7];
+}
+static inline void SHA256_sxor(SHA256_CTX * restrict out,
+			const SHA256_CTX * restrict in)
+{
+	out->state[0] ^= in->state[0];
+	out->state[1] ^= in->state[1];
+	out->state[2] ^= in->state[2];
+	out->state[3] ^= in->state[3];
+	out->state[4] ^= in->state[4];
+	out->state[5] ^= in->state[5];
+	out->state[6] ^= in->state[6];
+	out->state[7] ^= in->state[7];
+}
+static inline void SHA256_extract(const SHA256_CTX * restrict ctx,
+			 uint8_t * restrict out)
+{
+	store_be32(out     , ctx->state[0]);
+	store_be32(out +  4, ctx->state[1]);
+	store_be32(out +  8, ctx->state[2]);
+	store_be32(out + 12, ctx->state[3]);
+	store_be32(out + 16, ctx->state[4]);
+	store_be32(out + 20, ctx->state[5]);
+	store_be32(out + 24, ctx->state[6]);
+	store_be32(out + 28, ctx->state[7]);
+}
+
+/* FastPBKDF2 optimization by Joseph Birr-Pixton <jpixton@gmail.com> */
+static inline void pbkdf2_hmac_sha256_f(HMAC_SHA256_CTX *hmctx,
+			uint32_t counter,
+			const uint8_t *salt, size_t salt_len,
+			uint32_t iterations,
+			uint8_t *block)
+{
+
+	uint8_t  padded[SHA256_BLKSIZE];
+	uint32_t count_be;
+	uint32_t i;
+
+	store_be32(&count_be, counter);
+
+	/* Invariant padding */
+	memset(&padded[SHA256_DIGEST_LENGTH], 0, SHA256_BLKSIZE - SHA256_DIGEST_LENGTH - 4);
+	padded[SHA256_DIGEST_LENGTH] = 0x80;
+	store_be32(&padded[SHA256_BLKSIZE - sizeof(uint32_t)], (SHA256_BLKSIZE + SHA256_DIGEST_LENGTH) * 8);
+
+	/* First iteraction, U_1 = PRF(P, S || count_be) */
+	HMAC_SHA256_CTX uctx = *hmctx;
+	HMAC_SHA256_Update(&uctx, salt, salt_len);
+	HMAC_SHA256_Update(&uctx, &count_be, sizeof(count_be));
+	HMAC_SHA256_Final(&uctx, padded);
+
+	SHA256_CTX hctx_result = uctx.hctx_outer;
+
+	/* Subsequent iteractions, U_c = PRF(P, U_{c-1}) */
+	for (i = 1; i < iterations; ++i) {
+	    /* Complete inner hash with previous iteraction */
+	    SHA256_scpy(&uctx.hctx_inner, &hmctx->hctx_inner);
+	    SHA256_Transform(&uctx.hctx_inner, padded);
+	    SHA256_extract(&uctx.hctx_inner, padded);
+	    /* Complete outer hash with inner output */
+	    SHA256_scpy(&uctx.hctx_outer, &hmctx->hctx_outer);
+	    SHA256_Transform(&uctx.hctx_outer, padded);
+	    SHA256_extract(&uctx.hctx_outer, padded);
+
+	    SHA256_sxor(&hctx_result, &uctx.hctx_outer);
+	}
+
+	SHA256_extract(&hctx_result, block);
+}
+
+int pbkdf2_hmac_sha256(const uint8_t *pw, size_t pw_len,
+			const uint8_t *salt, size_t salt_len,
+			uint32_t iterations,
+			uint8_t *key_out, size_t key_out_len)
+{
+	HMAC_SHA256_CTX hmctx;
+	uint32_t blocks_needed;
+	uint32_t counter;
+
+	if (!pw || !pw_len || !salt || !salt_len || !key_out || !key_out_len || !iterations) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	HMAC_SHA256_Init(&hmctx, pw, pw_len);
+
+	blocks_needed = (uint32_t)(key_out_len + SHA256_DIGEST_LENGTH - 1) / SHA256_DIGEST_LENGTH;
+	for (counter = 1; counter <= blocks_needed; ++counter) {
+		uint8_t block[SHA256_DIGEST_LENGTH];
+		pbkdf2_hmac_sha256_f(&hmctx, counter, salt, salt_len, iterations, block);
+
+		size_t offset = (counter - 1) * SHA256_DIGEST_LENGTH;
+		size_t taken = MIN(key_out_len - offset, SHA256_DIGEST_LENGTH);
+		memcpy(key_out + offset, block, taken);
+	}
+
+	return 0;
+}
+
