@@ -1,6 +1,6 @@
 /*
  * Base64 encoding/decoding (RFC4648)
- * Copyright (c) 2023 NIC.br
+ * Copyright (c) 2023,2024 NIC.br
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -102,17 +102,17 @@ ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint
     if (!src || !src_len)
         return 0; /* no input data to process */
 
-    if (src_len % 4 != 0)
-	return -EINVAL; /* required input padding missing */
-
-    /* code from this point on assumes src_len >= 4 and multiple of 4 */
+    if (src_len < 2 || src_len % 4 == 1) {
+	   return -EINVAL;
+    }
 
     const uint8_t *inbuf = (const uint8_t *)src;
-    const bool pad1 = (char)inbuf[src_len - 1] == '=';
+    const bool skip_pad = (src_len % 4 != 0);
+    const bool pad1 = !skip_pad && (char)inbuf[src_len - 1] == '=';
     const bool pad2 = pad1 && (char)inbuf[src_len - 2] == '=';
 
     const size_t in_len = src_len - pad1 - pad2;
-    const size_t out_len = ((src_len / 4U) * 3U) - pad1 - pad2;
+    const size_t out_len = ((src_len / 4U) * 3U) - pad1 - pad2 + skip_pad * (src_len % 4 - 1);
 
     if (out_len > max_dst_len)
 	return -ENOSPC;
@@ -122,7 +122,7 @@ ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint
      * error explicitly */
 
     size_t i = 0, o = 0;
-    while (i < in_len && ((o + 3) <= out_len)) {
+    while (i + 4 <= in_len && ((o + 3) <= out_len)) {
 	union {
 	    uint32_t u32;
 	    uint8_t  b[4];
@@ -140,23 +140,23 @@ ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint
 	dst[o++] = (n >> 8U) & 0xffU;
 	dst[o++] = n & 0xffU;
     }
-    if (pad1 && o <= out_len) {
+    if (i + 2 <= in_len && (skip_pad || pad1) && o < out_len) {
 	union {
-	    uint16_t u16[2];
+	    uint32_t u32;
 	    uint8_t  b[4];
 	} u;
 
 	u.b[0] = b64dec[inbuf[i++]];
 	u.b[1] = b64dec[inbuf[i++]];
-	u.b[2] = b64dec[inbuf[i++]];
+	u.b[2] = (i < in_len && !pad2)? b64dec[inbuf[i++]] : 0;
 	u.b[3] = 0; /* known to be '=' */
-	if ((u.u16[0] & 0x8080U) != 0 || (!pad2 && ((u.b[2] & 0x80U) != 0)))
+	if ((u.u32 & 0x80808080U) != 0)
 	    return -EINVAL;
 
 	uint32_t n = ((uint32_t)u.b[0] << 18U) | ((uint32_t)u.b[1] << 12U) | ((uint32_t)u.b[2] << 6U);
 	dst[o++] = (n >> 16U) & 0xffU;
 
-	if (!pad2 && o <= out_len) {
+	if (!pad2 && o < out_len) {
 	    dst[o++] = (n >> 8U) & 0xffU;
 	}
     }
@@ -178,14 +178,26 @@ static const char b64safe_table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno
  *
  * Encodes a buffer to a C-strig in base64, with padding.
  */
-static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len, char * restrict dst, const size_t max_dst_len, const char b64table[64])
+static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len,
+			char * restrict dst, const size_t max_dst_len,
+			const char b64table[64], const int pad)
 {
     char * orig_dst = dst;
 
-    if (max_dst_len < 4)
+    if (!src || src_len < 1) {
+	if (dst && max_dst_len > 0) {
+	    *dst = '\0';
+	}
+	return 0;
+    }
+    if (!dst) {
 	return -ENOSPC;
+    }
 
-    size_t dst_len = 4 * ((src_len + 2)/3) + 1;
+    const size_t groups = src_len / 3;
+    const size_t remain = src_len % 3;
+    size_t dst_len = 4 * groups + ((remain > 0) * (4 - (!pad) * remain)) + 1;
+
     if (dst_len > max_dst_len)
 	return -ENOSPC;
     if (dst_len > SSIZE_MAX)
@@ -202,16 +214,16 @@ static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len, char *
         src += 3;
     }
 
-    if (src < src_end && dst <= dst_end - 4) {
+    if (src < src_end && dst < dst_end) {
         *dst++ = b64table[src[0] >> 2];
-	if (src_end - src == 1) {
+	if (src_end - src == 1 && dst < dst_end) {
             *dst++ = b64table[(src[0] & 0x03) << 4];
-            *dst++ = '=';
-        } else {
+            if (pad && dst < dst_end) *dst++ = '=';
+        } else if (dst + 1 < dst_end) {
             *dst++ = b64table[((src[0] & 0x03) << 4) | (src[1] >> 4)];
             *dst++ = b64table[(src[1] & 0x0f) << 2];
         }
-        *dst++ = '=';
+        if (pad && dst < dst_end) *dst++ = '=';
     }
 
     if (dst < dst_end) {
@@ -222,13 +234,13 @@ static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len, char *
 }
 
 
-ssize_t base64_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len)
+ssize_t base64_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len, const int pad)
 {
-    return xx_b64encode(src, src_len, dst, max_dst_len, b64_table);
+    return xx_b64encode(src, src_len, dst, max_dst_len, b64_table, pad);
 }
 
-ssize_t base64safe_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len)
+ssize_t base64safe_encode(const uint8_t * const restrict src, const size_t src_len, char * restrict dst, const size_t max_dst_len, const int pad)
 {
-    return xx_b64encode(src, src_len, dst, max_dst_len, b64safe_table);
+    return xx_b64encode(src, src_len, dst, max_dst_len, b64safe_table, pad);
 }
 

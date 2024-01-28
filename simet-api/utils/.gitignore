@@ -21,3 +21,4 @@ version
 err.log
 src/*.o
 src/simet_gen_vlabel
+src/base64_test

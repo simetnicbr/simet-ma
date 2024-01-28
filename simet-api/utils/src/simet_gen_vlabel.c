@@ -172,13 +172,14 @@ static int simet_do_vlN0(const char *seed, unsigned int keylen, uint32_t iteract
     /* N0 format:
      * "N0" BASE64_URL(<key> .. CRC16(<key>)), where key has 16 bytes
      * CRC16 is stored in network byte order.
+     * Base64 padding removed.
      */
     unsigned int crc = crc_16((void *)&keyout, keylen);
     keyout[keylen]     = (crc >> 8) & 0xffU;
     keyout[keylen + 1] = crc & 0xffU;
 
     char outbuf[50]; /* Enough for base64 of 256-bit value, plus 16-bit CRC */
-    ssize_t outsz = base64safe_encode((void *)&keyout, keylen + 2, (void *)outbuf, sizeof(outbuf));
+    ssize_t outsz = base64safe_encode((void *)&keyout, keylen + 2, (void *)outbuf, sizeof(outbuf), 1);
     if (outsz < 24 || outsz >= 50) {
         print_err("N0: internal error during base64 encoding");
         exit(SEXIT_TMP_FAILURE);
