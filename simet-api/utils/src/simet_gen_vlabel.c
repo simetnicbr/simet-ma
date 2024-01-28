@@ -179,7 +179,7 @@ static int simet_do_vlN0(const char *seed, unsigned int keylen, uint32_t iteract
     keyout[keylen + 1] = crc & 0xffU;
 
     char outbuf[50]; /* Enough for base64 of 256-bit value, plus 16-bit CRC */
-    ssize_t outsz = base64safe_encode((void *)&keyout, keylen + 2, (void *)outbuf, sizeof(outbuf), 1);
+    ssize_t outsz = base64safe_encode((void *)&keyout, keylen + 2, (void *)outbuf, sizeof(outbuf), 0);
     if (outsz < 24 || outsz >= 50) {
         print_err("N0: internal error during base64 encoding");
         exit(SEXIT_TMP_FAILURE);
