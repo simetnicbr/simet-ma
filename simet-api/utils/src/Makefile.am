@@ -5,4 +5,6 @@ simet_gen_vlabel_SOURCES = crc16.h crc16.c \
 			   base64.h base64.c \
 			   simet_gen_vlabel.c
 
-EXTRA_DIST = base64_test.c
+# "make check" and run manually for now
+check_PROGRAMS = base64_test
+base64_test_SOURCES = base64.h base64.c base64_test.c
