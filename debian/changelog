@@ -1,3 +1,11 @@
+simet-ma (0.18.6.3) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.3
+  * simet_gen_vlabel: use PBKDF2-HMAC-SHA2 for "N0 format"
+  * simet_gen_vlabel: remove base64safe padding from vlabel
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 31 Jan 2024 13:04:13 -0300
+
 simet-ma (0.18.6.2) unstable; urgency=medium
 
   * simet-ma version 0.18.6.2
