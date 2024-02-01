@@ -95,33 +95,44 @@ do_start_prepare() {
 		mkdir -m 0770 -p "$SIMET_RUNSTATE_DIR" && \
 		chgrp -R "$SGROUP" "$SIMET_RUNSTATE_DIR" && \
 		chmod 2770 "$SIMET_RUNSTATE_DIR" && \
-		find "$SIMET_RUNSTATE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+		find "$SIMET_RUNSTATE_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 	[ -n "$SIMET_VARSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_VARSTATE_DIR" && \
 		chgrp -R "$SGROUP" "$SIMET_VARSTATE_DIR" && \
 		chmod 2770 "$SIMET_VARSTATE_DIR" && \
-		find "$SIMET_VARSTATE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+		find "$SIMET_VARSTATE_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 	[ -n "$SIMET_CACHE_DIR" ] && [ "$SIMET_CACHE_DIR" != "$SIMET_VARSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_CACHE_DIR" && \
 		chgrp -R "$SGROUP" "$SIMET_CACHE_DIR" && \
 		chmod 2770 "$SIMET_CACHE_DIR" && \
-		find "$SIMET_CACHE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+		find "$SIMET_CACHE_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 	[ -n "$SIMET_PUBRUNSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_PUBRUNSTATE_DIR" && \
 		chgrp -R "$SGROUP" "$SIMET_PUBRUNSTATE_DIR" && \
-		chmod 0775 "$SIMET_PUBRUNSTATE_DIR" && \
-		find "$SIMET_PUBRUNSTATE_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+		chmod 2775 "$SIMET_PUBRUNSTATE_DIR" && \
+		find "$SIMET_PUBRUNSTATE_DIR" -type f ! -perm 0664 -exec chmod 0664 '{}' +
 
 	# locks and pidfiles
 	[ -n "$SIMET_LOCK_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_LOCK_DIR" && \
 		chgrp -R "$SGROUP" "$SIMET_LOCK_DIR" && \
 		chmod 2770 "$SIMET_LOCK_DIR" && \
-		find "$SIMET_LOCK_DIR" -type f ! -perm -0660 -exec chmod og+rw '{}' +
+		find "$SIMET_LOCK_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 
 	# Registration information (heal permissions)
-	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$AGENT_VIEW_CREDENTIALS_FILE" "$LMAP_AGENT_FILE" ; do
-		[ -n "$i" ] && find "$i" -type f ! -perm -0660 -exec chmod ug+rw '{}' \; 2>/dev/null || true
+	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE" ; do
+		[ -n "$i" ] && {
+			find "$i" -type f ! -perm -0660 -exec chmod ug+rw,o-w '{}' \; 2>/dev/null || true
+			d=$(dirname "$i") && [ -d "$d" ] && \
+				find "$d" -type d -maxdepth 0 ! -perm -0770 -exec chmod ug+rwx,o= '{}' \; 2>/dev/null || true
+		}
+	done
+	for i in "$AGENT_VIEW_CREDENTIALS_FILE" ; do
+		[ -n "$i" ] && {
+			find "$i" -type f ! -perm 0664 -exec chmod 0664 '{}' \; 2>/dev/null || true
+			d=$(dirname "$i") && [ -d "$d" ] && \
+				find "$d" -type d -maxdepth 0 ! -perm -0775 -exec chmod ug+rwx,o+rx-w '{}' \; 2>/dev/null || true
+		}
 	done
 
 	# Create virtual label if one does not exist.  If you want to

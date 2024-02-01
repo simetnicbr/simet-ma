@@ -53,7 +53,7 @@ do_start_prepare() {
 	chgrp "$SGROUP" "$LMAP_SCHEDULE_DIR" && chmod 02770 "$LMAP_SCHEDULE_DIR"
 	# don't mess with not-files, like symlinks. chown must run before chmod.
 	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown "$SUSER:$SGROUP" '{}' +)
-	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod og+rw '{}' +)
+	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod ug+rw,o= '{}' +)
 
 	# setup the emergency schedule if there is no schedule
 	# might race a schedule download, we don't want to clobber the
