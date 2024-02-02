@@ -1,3 +1,15 @@
+simet-ma (0.18.6.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.4
+  * simet-api: simet_lmap-fetch_schedule: ensure schedule file will be
+    group-writeable
+  * simet-api: simet_register_ma.sh: fix filesystem permissions for
+    LMAP_AGENT_FILE (harmless) and /var/run/simet_public
+  * deb: simet-ma.init, simet-lmapd.init: correct the filesystem permissions
+    of several objects
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 02 Feb 2024 15:34:40 -0300
+
 simet-ma (0.18.6.3) unstable; urgency=medium
 
   * simet-ma version 0.18.6.3
