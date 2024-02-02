@@ -63,7 +63,7 @@ fix_traceroute() {
 # due to several issues in many versions of the Linux kernels, it
 # has to already start big.  And we need some tricks because /bin/sh
 # "read" cannot reliably cope with /proc
-do_update_proc_triplet() {
+do_update_proc_triplet() (
 	F="$1"
 	P1="$2"
 	P2="$3"
@@ -72,12 +72,14 @@ do_update_proc_triplet() {
 	OIFS="$IFS"
 	IFS="$(printf ' \t\n')" set -- $P
 	IFS="$OIFS"
+	O="$1 $2 $3"
 	[ "$P1" -lt "$1" ] 2>/dev/null && P1="$1"
 	[ "$P2" -lt "$2" ] 2>/dev/null && P2="$2"
 	[ "$P3" -lt "$3" ] 2>/dev/null && P3="$3"
+	[ "$P1 $P2 $P3" != "$O" ] || return 0
 	printf "%d %d %d\n" "$P1" "$P2" "$P3" > "$F" || return 1
 	:
-}
+)
 fix_tcp() {
 	do_update_proc_triplet /proc/sys/net/ipv4/tcp_rmem 4096 1048576 16777216 && \
 	do_update_proc_triplet /proc/sys/net/ipv4/tcp_wmem 4096 1048576 16777216 || {
