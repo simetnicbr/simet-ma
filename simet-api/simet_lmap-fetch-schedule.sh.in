@@ -117,22 +117,18 @@ simet_gen_local_schedule() {
 	# Last resort config and/or defaults
 	T_PERIODIC_TEST_SPREAD="${SIMET_PERIODIC_TEST_SPREAD_SECONDS:-300}"
 	T_PERIODIC_GWP_SPREAD="${SIMET_PERIODIC_GWPING_SPREAD_SECONDS:-300}"
-	T_PERIODIC_IXBRP_SPREAD="${SIMET_PERIODIC_IXBRPING_SPREAD_SECONDS:-300}"
 	T_PERIODIC_SPOOFER_SPREAD="${SIMET_PERIODIC_SPOOFER_SPREAD_SECONDS:-300}"
 
 	T_PERIODIC_TEST_PERIOD="${SIMET_PERIODIC_TEST_PERIOD_MINUTES:-240}"
 	T_PERIODIC_GWP_PERIOD="${SIMET_PERIODIC_GWPING_PERIOD_MINUTES:-60}"
-	T_PERIODIC_IXBRP_PERIOD="${SIMET_PERIODIC_IXBRPING_PERIOD_MINUTES:-720}"
 	T_PERIODIC_SPOOFER_PERIOD="${SIMET_PERIODIC_SPOOFER_PERIOD_MINUTES:-720}"
 
 	T_PERIODIC_GWP_PERIOD_S=$((T_PERIODIC_GWP_PERIOD * 60))
 	T_PERIODIC_TEST_PERIOD_S=$((T_PERIODIC_TEST_PERIOD * 60))
-	T_PERIODIC_IXBRP_PERIOD_S=$((T_PERIODIC_IXBRP_PERIOD * 60))
 	T_PERIODIC_SPOOFER_PERIOD_S=$((T_PERIODIC_SPOOFER_PERIOD * 60))
 
 	T_PERIODIC_TEST_SPREAD=$(__clamp_spread "$T_PERIODIC_TEST_PERIOD" "$T_PERIODIC_TEST_SPREAD")
 	T_PERIODIC_GWP_SPREAD=$(__clamp_spread "$T_PERIODIC_GWP_PERIOD" "$T_PERIODIC_GWP_SPREAD")
-	T_PERIODIC_IXBRP_SPREAD=$(__clamp_spread "$T_PERIODIC_IXBRP_PERIOD" "$T_PERIODIC_IXBRP_SPREAD")
 	T_PERIODIC_SPOOFER_SPREAD=$(__clamp_spread "$T_PERIODIC_SPOOFER_PERIOD" "$T_PERIODIC_SPOOFER_SPREAD")
 
 	T_PERIODIC_GWP_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_GWP_PERIOD" "$RND2") \
@@ -141,9 +137,6 @@ simet_gen_local_schedule() {
 	T_PERIODIC_TEST_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_TEST_PERIOD" "$RND1") \
 	  && T_PERIODIC_TEST_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_TEST_PERIOD" "$RND1") \
 	  || { T_PERIODIC_TEST_HOURS="1,5,9,13,17,21" ; T_PERIODIC_TEST_MINUTES=39 ; }
-	T_PERIODIC_IXBRP_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_IXBRP_PERIOD" "$RND1") \
-	  && T_PERIODIC_IXBRP_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_IXBRP_PERIOD" "$RND1") \
-	  || { T_PERIODIC_IXBRP_HOURS="2,14" ; T_PERIODIC_IXBRP_MINUTES=21 ; }
 	T_PERIODIC_SPOOFER_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_SPOOFER_PERIOD" "$RND1") \
 	  && T_PERIODIC_SPOOFER_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_SPOOFER_PERIOD" "$RND1") \
 	  || { T_PERIODIC_SPOOFER_HOURS="3,15" ; T_PERIODIC_SPOOFER_MINUTES=23 ; }
@@ -156,10 +149,6 @@ simet_gen_local_schedule() {
 	    -e "s/@PERIODIC_TEST_MINUTES@/$T_PERIODIC_TEST_MINUTES/g" \
 	    -e "s/@PERIODIC_TEST_SPREAD@/$T_PERIODIC_TEST_SPREAD/g" \
 	    -e "s/@PERIODIC_TEST_PERIOD@/$T_PERIODIC_TEST_PERIOD_S/g" \
-	    -e "s/@PERIODIC_IXBRP_HOURS@/$T_PERIODIC_IXBRP_HOURS/g" \
-	    -e "s/@PERIODIC_IXBRP_MINUTES@/$T_PERIODIC_IXBRP_MINUTES/g" \
-	    -e "s/@PERIODIC_IXBRP_SPREAD@/$T_PERIODIC_IXBRP_SPREAD/g" \
-	    -e "s/@PERIODIC_IXBRP_PERIOD@/$T_PERIODIC_IXBRP_PERIOD_S/g" \
 	    -e "s/@PERIODIC_SPOOFER_HOURS@/$T_PERIODIC_SPOOFER_HOURS/g" \
 	    -e "s/@PERIODIC_SPOOFER_MINUTES@/$T_PERIODIC_SPOOFER_MINUTES/g" \
 	    -e "s/@PERIODIC_SPOOFER_SPREAD@/$T_PERIODIC_SPOOFER_SPREAD/g" \
@@ -215,6 +204,13 @@ simet_lmap_download_schedule() {
 	:
 }
 
+# WARNING: we might be run from inside lmapd, which in turn
+# could signal us with SIGTERM when we send it a configuration
+# reload signal (or worse: restart it).
+#
+# Thus, queue calls to simet_restart_services() via an EXIT
+# trap.  Do not call it inline.
+
 #overridable
 simet_lmap_reload_config() {
 	if [ -n "$LMAP_RECONFIG" ] ; then
@@ -255,7 +251,7 @@ activateschedule() {
 		}
 
 		[ -L "$OUTFILE" ] || {
-			chmod 0644 "$OUTFILE" || return 1
+			chmod 0664 "$OUTFILE" || return 1
 		}
 		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
 		force_reload=1
@@ -309,7 +305,7 @@ getschedule() {
 	if [ ! -s "$LMAP_SCHEDULE_FILE" ] || grep -q -s -F "ma-local_emergency-schedule" "$LMAP_SCHEDULE_FILE" ; then
 		call simet_gen_local_schedule && {
 			# must displace target, either mv-f or rm-f+cp/cat>
-			chmod 0644 "$OUTFILE" \
+			chmod 0664 "$OUTFILE" \
 			  && mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
 			  && LMAPD_NEED_RELOAD=1 \
 			  && simet_log simet-ma daemon.info "SIMET local schedule created"

@@ -21,6 +21,7 @@ AGENT_PARTICIPANT_INFO="$SIMET_RUNSTATE_DIR/agent-owner-info"
 
 SIMET_PUBRUNSTATE_DIR=@SIMETPUBRUNDIR@
 AGENT_VIEW_CREDENTIALS_FILE="$SIMET_PUBRUNSTATE_DIR/view-credentials"
+URL_AGENT_INTERACTIVE_PAIRING="https://simet.nic.br/ativar"
 
 LMAP_AGENT_FILE=@SIMETCONFDIR@/lmap/agent-id.json
 LMAP_CHANNEL_URL=https://api.simet.nic.br/controller
@@ -41,6 +42,8 @@ GEOLOC_CACHE="$SIMET_CACHE_DIR/geoloc-cache.txt"
 
 LMAP_COLLECTOR=https://api.simet.nic.br/collector/measure
 API_SERVICE_DISCOVERY="https://api.simet.nic.br/service-list/services?filter%5Bservices%5D=serverMonitor,twamp,tcpbw,collector"
+API_SERVER_SELECTION="https://api.simet.nic.br/server_selection_measurement"
+API_MSMT_PROFILE="https://api.simet.nic.br/msmt_profile"
 LMAP_SCHEDULE="anatel-resolution-574"
 LMAP_TASK_NAME_PREFIX="simet.nic.br_"
 GEOLOCATE=@BINDIR@/simet_geolocation.sh

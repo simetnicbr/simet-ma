@@ -59,30 +59,93 @@ fix_traceroute() {
     :
 }
 
+# We *really* need bigger buffers for high-BDP, and unfortunately
+# due to several issues in many versions of the Linux kernels, it
+# has to already start big.  And we need some tricks because /bin/sh
+# "read" cannot reliably cope with /proc
+do_update_proc_triplet() (
+	F="$1"
+	P1="$2"
+	P2="$3"
+	P3="$4"
+	P=$(cat "$F") || P=
+	OIFS="$IFS"
+	IFS="$(printf ' \t\n')" set -- $P
+	IFS="$OIFS"
+	O="$1 $2 $3"
+	[ "$P1" -lt "$1" ] 2>/dev/null && P1="$1"
+	[ "$P2" -lt "$2" ] 2>/dev/null && P2="$2"
+	[ "$P3" -lt "$3" ] 2>/dev/null && P3="$3"
+	[ "$P1 $P2 $P3" != "$O" ] || return 0
+	printf "%d %d %d\n" "$P1" "$P2" "$P3" > "$F" || return 1
+	:
+)
+fix_tcp() {
+	do_update_proc_triplet /proc/sys/net/ipv4/tcp_rmem 4096 1048576 16777216 && \
+	do_update_proc_triplet /proc/sys/net/ipv4/tcp_wmem 4096 1048576 16777216 || {
+		logger -t simet-ma -p daemon.warning "SIMET-MA: failed to increase socket buffer size limits, bandwidth measurements might be too low" >/dev/null 2>&1 || true
+	}
+	:
+}
+
 # not called by default init-d-script reload/restart
 do_start_prepare() {
 	# used for the geolocation cache and ephemeral tokens
 	[ -n "$SIMET_RUNSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_RUNSTATE_DIR" && \
-		chgrp $SGROUP "$SIMET_RUNSTATE_DIR" && \
-		chmod 0770 "$SIMET_RUNSTATE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_RUNSTATE_DIR" && \
+		chmod 2770 "$SIMET_RUNSTATE_DIR" && \
+		find "$SIMET_RUNSTATE_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 	[ -n "$SIMET_VARSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_VARSTATE_DIR" && \
-		chgrp $SGROUP "$SIMET_VARSTATE_DIR" && \
-		chmod 0770 "$SIMET_VARSTATE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_VARSTATE_DIR" && \
+		chmod 2770 "$SIMET_VARSTATE_DIR" && \
+		find "$SIMET_VARSTATE_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 	[ -n "$SIMET_CACHE_DIR" ] && [ "$SIMET_CACHE_DIR" != "$SIMET_VARSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_CACHE_DIR" && \
-		chgrp $SGROUP "$SIMET_CACHE_DIR" && \
-		chmod 0770 "$SIMET_CACHE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_CACHE_DIR" && \
+		chmod 2770 "$SIMET_CACHE_DIR" && \
+		find "$SIMET_CACHE_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 	[ -n "$SIMET_PUBRUNSTATE_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_PUBRUNSTATE_DIR" && \
-		chgrp $SGROUP "$SIMET_PUBRUNSTATE_DIR" && \
-		chmod 0775 "$SIMET_PUBRUNSTATE_DIR"
+		chgrp -R "$SGROUP" "$SIMET_PUBRUNSTATE_DIR" && \
+		chmod 2775 "$SIMET_PUBRUNSTATE_DIR" && \
+		find "$SIMET_PUBRUNSTATE_DIR" -type f ! -perm 0664 -exec chmod 0664 '{}' +
+
 	# locks and pidfiles
 	[ -n "$SIMET_LOCK_DIR" ] && \
 		mkdir -m 0770 -p "$SIMET_LOCK_DIR" && \
-		chgrp $SGROUP "$SIMET_LOCK_DIR" && \
-		chmod 0770 "$SIMET_LOCK_DIR"
+		chgrp -R "$SGROUP" "$SIMET_LOCK_DIR" && \
+		chmod 2770 "$SIMET_LOCK_DIR" && \
+		find "$SIMET_LOCK_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
+
+	# Registration information (heal permissions)
+	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE" ; do
+		[ -n "$i" ] && {
+			find "$i" -type f ! -perm -0660 -exec chmod ug+rw,o-w '{}' \; 2>/dev/null || true
+			d=$(dirname "$i") && [ -d "$d" ] && \
+				find "$d" -type d -maxdepth 0 ! -perm -0770 -exec chmod ug+rwx,o= '{}' \; 2>/dev/null || true
+		}
+	done
+	for i in "$AGENT_VIEW_CREDENTIALS_FILE" ; do
+		[ -n "$i" ] && {
+			find "$i" -type f ! -perm 0664 -exec chmod 0664 '{}' \; 2>/dev/null || true
+			d=$(dirname "$i") && [ -d "$d" ] && \
+				find "$d" -type d -maxdepth 0 ! -perm -0775 -exec chmod ug+rwx,o+rx-w '{}' \; 2>/dev/null || true
+		}
+	done
+
+	# Create virtual label if one does not exist.  If you want to
+	# disable it, use an empty file or one containing DISABLED
+	log_action_begin_msg "Verifying SIMET pairing label"
+	RC=0
+	VLABEL=$(/opt/simet/bin/simet_create_vlabel.sh) || RC=$?
+	if [ "$RC" -eq 0 ] ; then
+		log_action_end_msg 0 "$VLABEL"
+		logger -t simet-ma -p daemon.notice "SIMET-MA: agent virtual label is: $VLABEL" >/dev/null 2>&1 || true
+	else
+		log_action_end_msg "$RC" "unavailable"
+	fi
 
 	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
 	# --name doesn't matter, as long as it doesn't match, and not too long
@@ -91,6 +154,7 @@ do_start_prepare() {
 }
 
 do_reload() {
+	fix_tcp
 	invoke-rc.d simet-lmapd reload || true
 
 	log_daemon_msg "Reloading $DESC agent-id and credentials" "$NAME"
@@ -111,15 +175,35 @@ do_stop_cmd_override() {
 #   2 if daemon could not be started
 do_start_cmd_override() {
 	fix_traceroute
+	fix_tcp
 
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
 	    $START_ARGS \
 	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
 	  || return 1
+
+	# fail early the most common reasons for inetup to refuse to start
+	[ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] \
+	  && return 2
+
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
 	    $START_ARGS \
 	    --startas $DAEMON --name "${COMMAND_NAME}" -- $DAEMON_ARGS \
 	  || return 2
+
+	# detect most cases of early exit.  Wait 1s for start-stop-daemon
+	# implementations that could return too early.  Needed because we
+	# use start-stop-daemon --background
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
+	  || return 0
+	sleep 1
+	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
+	    $START_ARGS \
+	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
+	  || return 0
+	return 2
 }
 
 # init-d-script do_status() is broken when PIDFILE is set due to a bug

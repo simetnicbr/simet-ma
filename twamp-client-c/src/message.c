@@ -154,6 +154,7 @@ ssize_t message_start_ack(const int socket, const int timeout, StartAck * const 
 ssize_t message_send(const int socket, const int timeout, void * const message, const size_t len) {
     fd_set wset, wset_master;
     struct timeval tv_timeo;
+    int err;
 
     if (!message || socket < 0 || len >= SSIZE_MAX) {
 	errno = EINVAL;
@@ -161,7 +162,7 @@ ssize_t message_send(const int socket, const int timeout, void * const message, 
     }
 
     FD_ZERO(&wset_master);
-    FD_SET((unsigned long)socket, &wset_master);
+    FD_SET(socket, &wset_master);
 
     tv_timeo.tv_sec = timeout;
     tv_timeo.tv_usec = 0;
@@ -202,7 +203,9 @@ ssize_t message_send(const int socket, const int timeout, void * const message, 
     return (ssize_t) total_sent; /* verified, len < SSIZE_MAX, total_sent <= len */
 
 err_exit:
-    print_err("error sending data to server: %s", strerror(errno));
+    err = errno;
+    print_err("error sending data to server: %s", strerror(err));
+    errno = err;
     return -1;
 }
 
@@ -216,6 +219,26 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings) {
         print_msg(MSG_IMPORTANT, "the server does not wish to communicate");
         return -1;
     }
+    if ((srvGreetings->Modes & 1) != 1) {
+	print_msg(MSG_IMPORTANT, "the server does not support unauthenticated mode");
+	return -1;
+    }
+
+    if ((srvGreetings->Modes & 64) != 64) {
+	print_msg(MSG_IMPORTANT, "the server seems not to support symmetric mode, measurement may fail");
+
+	/* We just warn about it because older versions of the SIMET2
+	 * server did not set this bit correctly.  The perfSonar server
+	 * doesn't announce symmetric mode support either, and yet
+	 * replies with symmetric-compatible packets just like we used
+	 * to.
+	 *
+	 * For that reason, it is best if we simply try the measurement,
+	 * we can add heuristics that abort with the appropriate error
+	 * when we discard an incorrectly-sized reply if bit 6 is
+	 * unset...
+	 */
+    }
 
     return 0;
 }
@@ -225,28 +248,45 @@ int message_validate_server_greetings(ServerGreeting *srvGreetings) {
 /***********************/
 
 int message_format_setup_response(ServerGreeting *srvGreetings, SetupResponse *stpResponse) {
-    stpResponse->Mode = srvGreetings->Modes & (01);
-    stpResponse->Mode = htonl(stpResponse->Mode);
+    /* We want TWAMP unauthenticated mode, and RFC-6038 symmetric packets */
+
+    /* note: older SIMET2 twamp reflectors do not set bit 6 but always operate in symmetric mode */
+    stpResponse->Mode = htonl(srvGreetings->Modes & (0b1000001U));
 
     return 0;
 }
 
-int message_format_request_session(int ipvn, uint16_t sender_port, RequestSession *rqtSession) {
+int message_format_request_session(int ipvn, size_t padding_size, uint16_t sender_port, RequestSession *rqtSession) {
     rqtSession->Type = 5;
 
-    // Set 0 as default
+    /* redundant, all zeroes already */
     rqtSession->ConfSender = 0;
     rqtSession->ConfReceiver = 0;
     rqtSession->SlotsNo = 0;
     rqtSession->PacketsNo = 0;
-    rqtSession->IPVN = (uint8_t)ipvn;
-    rqtSession->PaddingLength = htonl(TST_PKT_SIZE - 14); /* FIXME */
 
+    rqtSession->IPVN = (uint8_t)ipvn;
+
+    uint16_t size;
+    if (padding_size > MAX_TSTPKT_SIZE || padding_size > UINT16_MAX) {
+	size = MAX_TSTPKT_SIZE;
+    } else if (padding_size < MIN_TSTPKT_SIZE) {
+	size = MIN_TSTPKT_SIZE;
+    } else {
+	size = (uint16_t)padding_size;
+    }
+    rqtSession->PaddingLength = htonl(size - OWAMP_PAD_OFFSET); /* FIXME: auth packet changes this */
+
+    /* redundant, all zeroes already */
     rqtSession->SenderAddress = htonl(0);
     rqtSession->ReceiverAddress = htonl(0);
 
     rqtSession->SenderPort = htons(sender_port);
     rqtSession->ReceiverPort = htons(862);
+
+    /* Timeout and StartTime are already all-zeroes timestamps,
+     * and this is correct for TWAMP.  We do not need any wait
+     * after we issue the Stop Sessions command */
 
     return 0;
 }

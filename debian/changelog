@@ -1,11 +1,319 @@
-simet-ma (0.17.9.1+simetas1) unstable; urgency=medium
+simet-ma (0.18.6.4+simetas1) unstable; urgency=medium
 
   * SIMET-AS variant
   * enable simet-spoofer, recommend simet-nping
   * change download directory to not update to regular simet-ma.
   * include beta version of the top.nic.br/internet.nl client
 
- -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 25 Oct 2022 14:48:14 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 19 Feb 2024 11:04:53 -0300
+
+simet-ma (0.18.6.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.4
+  * simet-api: simet_lmap-fetch_schedule: ensure schedule file will be
+    group-writeable
+  * simet-api: simet_register_ma.sh: fix filesystem permissions for
+    LMAP_AGENT_FILE (harmless) and /var/run/simet_public
+  * deb: simet-ma.init, simet-lmapd.init: correct the filesystem permissions
+    of several objects
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 02 Feb 2024 15:34:40 -0300
+
+simet-ma (0.18.6.3) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.3
+  * simet_gen_vlabel: use PBKDF2-HMAC-SHA2 for "N0 format"
+  * simet_gen_vlabel: remove base64safe padding from vlabel
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 31 Jan 2024 13:04:13 -0300
+
+simet-ma (0.18.6.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.2
+  * Add simet_gen_vlabel to generate "N0 format" virtual labels
+  * Add SVG support to simet_qrcode.sh, for OpenWRT use, and ship it
+    in SIMETBox builds.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 24 Jan 2024 14:45:28 -0300
+
+simet-ma (0.18.6.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.1
+  * deb: provide hook for dhcpdc (dhclient), pppd
+    Add hook for dhcpdc (dhclient) and pppd with the same functionality as
+    the already provided ones for NetworkManager, networkd-dispatcherd and
+    ifupdown (refer to simet-ma 0.18.5.1).
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 21 Dec 2023 15:35:00 -0300
+
+simet-ma (0.18.6) unstable; urgency=medium
+
+  * simet-ma version 0.18.6
+  * simet-runner: retrieve measurement profiles when available
+  * simet-runner: use the median RTT from TWAMP to select the
+    TCPBW measurement parameters from a measurement profile
+  * simet-runner: use simet_lib.sh
+  * simet-runner: send User-Agent header on all http requests
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 19 Dec 2023 15:04:59 -0300
+
+simet-ma (0.18.5.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.5.1
+  * simet-api: simet_register_ma: clean up temp files on exit due to signals
+  * simet-api: simet_register_ma: set umask to 0002
+  * simet-api: minor documentation updates
+  * simet-api: lastrun timestamp for simet_register_ma.sh --boot
+    Run only once every 24H when in "--boot" mode
+  * deb: run simet_register_ma.sh as user nicbr-simet in daily cronjob.
+    The daily cronjob would run simet_register_ma.sh as the root user, which
+    is undesireable for many reasons
+  * deb: simet-ma.init: fix file ownership and permissions at start.
+  * deb: hook simet-register-ma to network state dispatchers
+    Try to ensure simet-register-ma will have a chance to run when network
+    goes online.  Add hooks for Debian-style ifupdown (if-up), Network Manager
+    (online), systemd-networkd (routable).
+  * deb: start measurement engine on network state dispatcher hooks
+    This needs to be done to bring up "inetup" when we switch from a "no
+    registration information" -- in which case "inetup" fails to start -- to
+    "registered", but it might be required on other cases as well.  If you
+    want to stop the measurement engine, disable it properly using the
+    initscripts layer (service X disable / systemctl mask X).
+  * simet-api: simet_register_ma: delay simet-lmapd reload to EXIT
+  * lmap: add simet.nic.br_register task/capability
+  * deb: control: add pre-depends on dh's misc:Pre-Depends substvar
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 18 Dec 2023 14:53:35 -0300
+
+simet-ma (0.18.5) unstable; urgency=medium
+
+  * simet-ma version 0.18.5
+  * tcpbw: early-free JSON report data structures
+  * tcpbw: add sampling control, and extended performance sampling
+    * Add CLI option -s to adjust the base sampling period (default 500ms)
+    * Add CLI option -S to enable tcp_info sampling (expensive)
+    * Add CLI option -O to enable and output json data with the per-stream
+      data samples, socket buffer state (skmem), and per-stream TCP state
+  * tcpbw: MSS awareness, enable TCP_CORK mode
+  * tcpbw: RTT awareness: delay stream start-of-transmission
+    Delay the start of the data transmission on each measurement stream
+    using a stair pattern, where just one stream starts transmitting data at
+    first, and then other streams start transmitting one by one, separated
+    by a configurable delay
+  * tcpbw: implement kernel-assisted tcp pacing control (disabled by default)
+  * simet-runner: silence errors from curl in task_discovery.sh
+  * tcpbw: change default number of streams to 6
+  * tcpbw: early exit if peer closes every stream
+  * tcpbw: abort measurement on measurement connection fail
+  * tcpbw: default IO size changed to 1MiB
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 08 Dec 2023 11:17:19 -0300
+
+simet-ma (0.18.4.5) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.5
+  * tcpbw: use the default automatic socket buffer limit
+  * deb: increase system socket buffer size limits
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 04 Dec 2023 15:43:01 -0300
+
+simet-ma (0.18.4.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.4
+  * simet-api: simetbox: local measurement periodicty configuration fixes
+  * simet-api: remove local schedule remants of fping-to-ixbr
+  * simet-runner: discover_init() errorpath fixes
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 28 Nov 2023 17:08:28 -0300
+
+simet-ma (0.18.4.3) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.3
+  * simet-api: detect pairing status even without a vlabel
+  * simet-api: handle MA transitioning to unpaired
+  * deb: simet-ma.cron.weekly: update all simet* packages
+    Use dpkg-query to find all installed simet* packages (which includes the
+    new simetbox-deb* series of packages), and update them all.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 10 Oct 2023 11:34:19 -0300
+
+simet-ma (0.18.4.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.2
+  * simet-api: update interactive pairing URL for QRcode and /etc/issue
+  * tcpbw: avoid double slashs when composing URLs.
+  * tcpbw: fix benign leaks to avoid false-postives from valgrind
+  * tcpbw: report aborted measurement as errors, not as warnings.
+  * simet-api: support simet_get_mac_address.sh, simet_get_model.sh.
+    Note that we do not provide a default simet_get_mac_address.sh or
+    simet_get_device_model.sh outside of SIMETBox.  They are provided by
+    vendor-specific or platform-specific supplementary packages.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 04 Oct 2023 14:25:35 -0300
+
+simet-ma (0.18.4.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.4.1
+  * simet-api: add QRcode and /etc/issue generators
+    Inactive by default, you have to explicitly call the scripts.
+    Requires package "qrencode" to work (added to Suggests).
+  * simet-api: hook support for simet_create_vlabel (non-OpenWRT version)
+  * tcpbw: update request/session API call to use & as the field-separator
+  * debian: move simet_create_vlabel call from postinst to initscript
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 27 Jun 2023 08:28:50 -0300
+
+simet-ma (0.18.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.4
+  * simet-api: remove fping-to-ixbr measurement
+  * tcpbw: use uncompressible payloads by default (not on SIMETBox)
+  * debian: attempt to update the simet-ma and simet-lmapd packages in
+    cron.weekly, regardless of automated-upgrades.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 15 Jun 2023 14:46:01 -0300
+
+simet-ma (0.18.3.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.3.1
+  * simet-runner: remove harmless left-over call to _report_servicelist_output.
+  * simet-runner: avoid failing the entire latency-based peer selection
+    process when there is no global IPv6 connectivity, but IPv6 packets were
+    sucessfully sent.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 30 May 2023 13:52:43 -0300
+
+simet-ma (0.18.3) unstable; urgency=medium
+
+  * simet-ma version 0.18.3
+  * simet-runner: shorten max-wait for API calls to 15s
+  * simet-runner: change how latency-based server selection orders
+    peers to not reorder across Service List peer groups.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 25 May 2023 08:48:30 -0300
+
+simet-ma (0.18.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.2
+  * twamp: fix issue introduced in 0.18.0 that resulted in early termination
+    of the receive thread, and a false report of dropped (lost) packets.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 23 May 2023 08:36:30 -0300
+
+simet-ma (0.18.1.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.1.1
+  * source: modernize C support in autotools.
+  * source: unbreak openwrt 15 build.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 18 May 2023 14:55:14 -0300
+
+simet-ma (0.18.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.1
+  * twamp: send test packets with TTL 255.
+    The RFCs mandate for a TTL of 255 when sending TWAMP/OWAMP-TEST packets,
+    and STAMP doesn't say anything.  Use TTL 255 by default on TEST packets.
+  * twamp: major code refactoring, many minor fixes and warning removals
+  * twamp: add twamp-light support with SIMET extensions
+  * twamp: add measurement summary report
+  * simet-runner: limit wait for server-monitor reply
+    Limit attempts to talk to each location's server-monitor to 15s for TCP
+    connect, and 30s for API reply.
+  * simet-runner: add network-RTT (latency) based server selection
+    Measure RTT to the candidate servers using TWAMP-light and few
+    packets.  Skip servers that don't reply, and order the resulting set
+    by median RTT.
+  * deb: update APT repository keys.
+  * inetup: silence harmless warning.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 16 May 2023 12:16:46 -0300
+
+simet-ma (0.18.0) unstable; urgency=medium
+
+  * simet-ma version 0.18.0
+  * twamp: code cleanups and minor refactoring
+  * twamp: restore MSG_TRUNC for recv() to better detect invalid packets
+  * twamp: implement configurable payload size
+    Add the -s option to configure the payload size.  We accept payload
+    sizes 128 to 65400 in the client, however the server will impose its
+    own limits
+  * twamp: implement RFC6038 symmetric mode
+    Request symmetric mode from the server (if it offers that option).
+    This client has always required it, and both perfSonar and SIMET2
+    TWAMP servers/reflectors always operate in symmetric mode.  If the
+    server ignores the twamp option, output an warning but try the
+    measurement anyway, as it will likely succeed.
+  * twamp: add twamp-light mode (experimental).
+  * twamp: implement source address binding for twamp-light.
+  * twamp: abort measurement on too many message_send() errors
+  * twamp: finish measurement early when a fatal error happens
+  * twamp: finish measurement early when only corrupt packets are received
+    This is important for twamp-light in unauthenticated mode.
+  * twamp: change systematic send error into jitter
+    Switch to (where available) clock_nanosleep() with TIMER_ABSTIME, which
+    changes some of the the systematic error we had on the packet send
+    schedule (always a bit more than the desired interval, thus further
+    deviating from the desired packet train) into sending jitter.
+    With this change, it is possible for the interpacket delay in the packet
+    train to be a bit less than the desired target, instead of always being
+    a bit more than the desired target.
+  * twamp: round to nearest when converting to/from ntp-v3 timestamps
+  * tcpbw: code cleanups and minor refactoring
+  * tcpbw: LFN support
+    + use highest socket buffer size as a hint for send()/recv() size
+    + try to request very large socket buffers (on non-SIMETBox builds)
+      Ask for 32MiB worth of send and receive socket buffers before connect,
+      so that TCP window scale can handle LFNs (think 100Mbps @ 500ms RTT).
+      Otherwise, the number of concurrent connections required to saturate
+      a LFN (high-bandwidth, high-delay network) is too high.  Also helps
+      with large-throughput low-delay networks.
+  * tcpbw: increase the limit for concurrent connections in the client.
+    The server will impose its own limits, though.
+  * tcpbw: properly detect recv() errors during download measurement
+    Abort download measurement on recv() errors, instead of generating an
+    erroneus report with spurious *very* large spikes.  Note that this
+    kind of misbehavior is detected by the SIMET2 data pipeline, so such
+    measurements have always been discarded by SIMET2.
+  * tcpbw: during download measurement, fully drain stream before going for
+    the next one.  This improves throughput on LFNs.
+  * tcpbw: address several warnings, fixing a few potential issues
+  * tcpbw: refactor sampling loops
+    + Improve receive sampling control, it is now far more stable and
+      accurate
+    + Avoid a pontential sampling error related to very low reception
+      rates and data arriving *only* just at the beginning of the sampling
+      window.
+    + Use CLOCK_MONOTONIC instead of CLOCK_REALTIME for sampling control
+  * simet-runner: tcpbw: enable very verbose output in --debug mode
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 14 Feb 2023 15:03:22 -0300
+
+simet-ma (0.17.9.4) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.4
+  * simetbox: fix vlabel generation for some devices with UBIFS, and also
+    ignore the "factory" partition on Ubiquiti devices (needed on ubnt-erx).
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 03 Feb 2023 13:59:27 -0300
+
+simet-ma (0.17.9.3) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.3
+  * inetup: fix double-free on error path
+  * inetup: avoid SIGSEGV with 64-bit time_t on 32-bit
+  * simet-api: simetbox: reload lmapd through lmapctl, instead of initscript
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 26 Jan 2023 15:40:39 -0300
+
+simet-ma (0.17.9.2) unstable; urgency=medium
+
+  * simet-ma version 0.17.9.2
+  * twampc: really implement connection timeout cli parameter
+  * inetup: several minor fixes
+  * inetup: tcpaq refactoring
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 24 Nov 2022 20:33:32 -0300
 
 simet-ma (0.17.9.1) unstable; urgency=medium
 

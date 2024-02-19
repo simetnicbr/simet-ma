@@ -40,6 +40,11 @@ simet_log() {
 [ -z "$SIMET_CFG_LOAD_ERROR" ] || \
 	simet_log simet-ma daemon.crit "SIMET-MA configuration has syntax errors, malfunction is likely"
 
+[ -z "$SIMET_MAC_LABEL" ] && [ -x "@BINDIR@/simet_get_mac_address.sh" ] && {
+	#shellcheck disable=SC2018,SC2019
+	SIMET_MAC_LABEL="$(@BINDIR@/simet_get_mac_address.sh 2>/dev/null | tr -dc '0-9a-zA-Z' | tr A-Z a-z )" || SIMET_MAC_LABEL=
+}
+
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
 get_http_useragent()
@@ -62,8 +67,9 @@ simet2_agentinfo() {
 		SIMET2_MAHOSTNAME=$(sed -n 'p;q' /etc/hostname || hostname --fqdn) 2>/dev/null || SIMET2_MAHOSTNAME=
 	}
 	# SIMET2_MADESCRIPTION from config file
-	# SIMET2_DEVICE_MODEL empty for now
-	SIMET2_DEVICE_MODEL=
+	[ -z "$SIMET2_DEVICE_MODEL" ] && [ -x "@BINDIR@/simet_get_device_model.sh" ] && {
+		SIMET2_DEVICE_MODEL=$(@BINDIR@/simet_get_device_model.sh 2>/dev/null | tr -s '_' ' ') || SIMET2_DEVICE_MODEL=
+	}
 	:
 }
 

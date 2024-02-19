@@ -34,6 +34,19 @@ abend() {
 
 SIMETBOX_VERSION=$(get_simet_box_version.sh 2>/dev/null) || SIMETBOX_VERSION="unknown"
 
+openwrt_vendor_mtd_filter() {
+  model=$(get_model.sh 2>/dev/null | tr A-Z a-z) || model=
+  case "$model" in
+    ubnt_*|ubiquiti_*)
+      # EdgeRouter X v2.x bootloader changes factory partition
+      # to handle primary/secondary kernel partition lifecycle.
+      # assume other models will do the same.
+      printf "%s" '/[" ]factory[" ]/ d'
+    ;;
+  esac
+  :
+}
+
 #FIXME: use a real KDF
 openwrt_read_invariant_seed() {
   # See if we can get something stable from the platform vendor
@@ -52,7 +65,7 @@ openwrt_read_invariant_seed() {
 
     # note: this can be quite expensive in CPU and wall time
 
-    P=$( sed -En -e '/^mtd[0-9]/! d' -e '/rootfs|firmware|kernel/ d' -e 's#(mtd[^:]+).*#/dev/\1ro# ; p' < /proc/mtd ) \
+    P=$( sed -En -e '/^mtd[0-9]/! d' -e '/[" ](rootfs|firmware|kernel|ubi)/ d' -e "$(openwrt_vendor_mtd_filter)" -e 's#(mtd[^:]+).*#/dev/\1ro# ; p' < /proc/mtd ) \
       || RC=3 abend "failed to parse /proc/mtd"
     [ -z "$P" ] \
       && RC=3 abend "no useful partitions in /proc/mtd to generate a stable secret"

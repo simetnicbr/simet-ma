@@ -42,7 +42,6 @@ AC_ARG_ENABLE([extend-flags],
         enable_cflags_setting=yes
         enable_cppflags_setting=yes
         enable_ldflags_setting=yes
-        enable_extend_flags=yes
     ],
     [
         AC_MSG_CHECKING([whether configure.ac should try to override CFLAGS])
@@ -74,23 +73,18 @@ dnl Before we get to the C compiler...
 AC_USE_SYSTEM_EXTENSIONS
 
 dnl Checks for programs
-AC_PROG_CC_STDC
+AC_PROG_CC
 
-dnl Checks for headers
-AC_HEADER_STDC
-dnl AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h unistd.h time.h cpuid.h])
-
-# Checks for typedefs, structures, and compiler characteristics.
-AC_C_INLINE
-AC_TYPE_INT32_T
-AC_TYPE_SIZE_T
-AC_TYPE_SSIZE_T
-AC_TYPE_UINT16_T
-AC_TYPE_UINT32_T
-AC_TYPE_UINT8_T
+dnl Try to ask for C11, required on ancient OpenWRT
+AX_CHECK_COMPILE_FLAG([-std=gnu11],
+    [AX_APPEND_FLAG([-std=gnu11])],
+    [AX_CHECK_COMPILE_FLAG([-std=c11],
+	[AX_APPEND_FLAG([-std=c11])],
+	[AC_MSG_WARN([Could not enforce a C11 or later compiler mode for C, compilation may fail])
+	 AC_PROG_CC_STDC])
+])
 
 # Checks for library functions.
-AC_FUNC_MALLOC
 dnl AC_FUNC_REALLOC
 dnl AC_FUNC_STAT
 dnl AC_CHECK_FUNCS([memset strcasecmp strdup strerror strrchr strtoul timegm])
@@ -106,6 +100,14 @@ dnl AC_CHECK_FUNCS([flockfile fgets_unlocked])
 dnl -----------------
 dnl Configure options
 dnl -----------------
+
+AC_ARG_ENABLE([incompressible-payload],
+    [AS_HELP_STRING([--disable-incompressible-payload],
+		    [do not try to defeat link compression])],
+    [enable_incpayload="$enableval"],
+    [enable_incpayload="yes"])
+AS_IF([test "x$enable_incpayload" != "xno"],
+               [AC_DEFINE(TCPBW_DEFEAT_COMPRESSION, [], [Use incompressible payloads])])
 
 AC_ARG_ENABLE([valgrind-build],
     [AS_HELP_STRING([--enable-valgrind-build],
@@ -128,6 +130,18 @@ AC_SUBST(JSON_LIBS)
 
 LIBCURL_CHECK_CONFIG([yes],[],[],[AC_MSG_ERROR([Could not find working libcurl])])
 
+dnl check level of struct tcp_info support...
+AC_CHECK_MEMBERS([struct tcp_info.tcpi_fastopen_client_fail, struct tcp_info.tcpi_snd_wnd, struct tcp_info.tcpi_rcv_wnd],
+    [], [],
+    [#include <linux/tcp.h>])
+
+dnl check for SK_MEMINFO_*, SO_MEMINFO
+AC_CHECK_DECLS([SK_MEMINFO_VARS, SK_MEMINFO_DROPS, SO_MEMINFO], [], [],
+    [
+         #include <sys/socket.h>
+         #include <linux/sock_diag.h>
+    ])
+
 dnl -------------------------------------------
 dnl Override hardcoded *FLAGS for GCC and Clang
 dnl If this breaks your platform, file a bug
@@ -145,12 +159,6 @@ dnl if test "${GCC}${enable_cppflags_setting}" = "yesyes" ; then
 dnl     CPPFLAGS="<whatever>"
 dnl fi
 if test "x${GCC}${enable_cflags_setting}" = "xyesyes" ; then
-    dnl in "extend mode", we will get either user-supplied,
-    dnl or the autoconf-default CFLAGS
-    if test "x${enable_extend_flags}" != "xyes"; then
-        CFLAGS="-O3 -g"
-    fi
-
     dnl We need to detect -Wunknown-warning without the use of -Werror.
     dnl -Werror would be unsafe, as it might eventually trigger on the
     dnl test source code.
@@ -173,7 +181,7 @@ if test "x${GCC}${enable_cflags_setting}" = "xyesyes" ; then
 
     dnl gcc and clang warnings the code is not supposed to trigger...
     AX_APPEND_COMPILE_FLAGS(
-        [-Wall -Wextra -Wformat=2 -Werror=format-security dnl
+        [-O3 -Wall -Wextra -Wformat=2 -Werror=format-security dnl
          -Wformat-signedness -Wformat-overflow=2 -Wformat-truncation=2 dnl
          -Wtrampolines -Wcast-align -Wsign-conversion -Wnull-dereference dnl
          -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations dnl

@@ -3,4 +3,7 @@ debian/etc.apt.conf.d/* etc/apt/apt.conf.d/
 debian/etc.apt.sources.list.d/*list etc/apt/sources.list.d/
 debian/*.desktop usr/share/applications/
 debian/simetnicbr.svg /usr/share/icons/hicolor/scalable/apps/
+debian/networkd-dispatcher.routable/* /usr/lib/networkd-dispatcher/routable.d/
+debian/networkmanager-dispatcher/* /etc/NetworkManager/dispatcher.d/
+debian/dhclient-exit-hook/simet-ma /etc/dhcp/dhclient-exit-hooks.d/
 opt/

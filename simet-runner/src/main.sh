@@ -150,6 +150,8 @@ _main_run(){
   log_notice "measurement peer: $_auth_endpoint"
   [ -n "$_tstid_prefix" ] && log_debug "measurement prefix for report: $_tstid_prefix"
 
+  TWAMP_MEDIANRTT=
+
   ## if RUN_ONLY_TASK is set, we only run that one
   # 4. task twamp + traceroute
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
@@ -190,7 +192,10 @@ _main_orchestrate(){
   local _loopcounter=1
   local _collector_endpoint=
 
-  discover_init
+  discover_init && {
+    subtask_serverselection || :
+    report_servicelist_output
+  }
   discover_next_peer
   while [ $? -eq 0 ]; do
     local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
@@ -251,6 +256,7 @@ _main_orchestrate(){
     log_info "LMAPSENDREPORT config missing, trying a direct submission"
     _resp=$(curl \
       --request POST \
+      --user-agent "$SIMET_USERAGENT" \
       --header "Content-Type: application/yang.data+json" \
       --header "Authorization: Bearer $AGENT_TOKEN" \
       --data "@$_report_dir/result.json"  \
@@ -351,13 +357,14 @@ _task_twamp(){
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
+
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TWAMPC $_twamp_opts -$_af -p $_port $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/twamp.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TWAMPC $_twamp_opts -R lmap,summary -O "$_task_dir/twamp_summary.json" -$_af -p $_port $_host 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/twamp.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TWAMPC $_twamp_opts -$_af -p $_port $_host >\"$_task_dir/tables/twamp.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TWAMPC $_twamp_opts -R lmap,summary -O "$_task_dir/twamp_summary.json" -$_af -p $_port $_host >\"$_task_dir/tables/twamp.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -371,6 +378,23 @@ _task_twamp(){
     rm -f "$_task_dir/tables/stderr.txt"
   fi
   task_template > "$_task_dir/result.json"
+
+  # TWAMP_MEDIANRTT calculation
+  if [ "$_task_status" -eq 0 ] && [ -s "$_task_dir/twamp_summary.json" ] ; then
+    local amedianrtt
+    amedianrtt=$("$JSONFILTER" -i "$_task_dir/twamp_summary.json" \
+      -e "@.results_summary.rtt.rtt_median_us" ) || amedianrtt=
+    if [ "$amedianrtt" -ge 0 ] 2>/dev/null ; then
+      log_debug "TWAMP: median RTT $amedianrtt us"
+      [ -z "$TWAMP_MEDIANRTT" ] || [ "$amedianrtt" -lt "$TWAMP_MEDIANRTT" ] && {
+	TWAMP_MEDIANRTT="$amedianrtt"
+        log_debug "TWAMP: lowest RTT so far"
+      }
+    else
+     log_debug "TWAMP: missing or invalid median RTT in summary"
+    fi
+  fi
+
   log_debug "End Task TWAMP ${_tst_prefix}IPv$_af"
 }
 
@@ -385,6 +409,7 @@ _task_tcpbw(){
     log_info "Skipping task TCPBW IPv$_af"
     return 0
   fi
+
   log_measurement "TCPBW ${_tst_prefix}IPv$_af"
   local _host="ipv$_af.$( discover_service TCPBW HOST )"
   local _port=$( discover_service TCPBW PORT )
@@ -400,6 +425,18 @@ _task_tcpbw(){
   export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
+
+  local _tcpbw_perstream=
+  local _tcpbwv=
+  if [[ "$DEBUG" = "true" ]] ; then
+	  _tcpbwv="-v -v"
+	  _tcpbw_perstream="-O \"${_task_dir}/perstream_data.json\""
+  fi
+
+  TCPBW_MSMT_PARAMS=
+  subtask_msmtprofile_tcpbw || \
+    log_error "failed to parse TCPBW measurement parameters, using defaults"
+
   if [ -n "$AUTHORIZATION_TOKEN" ] ; then
     tcpbwauth="-j $AUTHORIZATION_TOKEN"
   else
@@ -407,11 +444,11 @@ _task_tcpbw(){
   fi
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC $TCPBW_MSMT_PARAMS $_tcpbw_perstream $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/tcpbw.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$TCPBWC -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$TCPBWC $TCPBW_MSMT_PARAMS $_tcpbw_perstream $_tcpbwv -$_af -d $AGENT_ID $tcpbwauth https://${_host}:${_port}/${_path} >\"$_task_dir/tables/tcpbw.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

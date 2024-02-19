@@ -28,7 +28,7 @@
 # done
 #
 # function discover_init() 
-#  - input var: SERVICE_DISCOVERY_ENDPOINT
+#  - input var: SERVICE_DISCOVERY_ENDPOINT, AGENT_ID, AGENT_TOKEN
 #
 # function discover_next_peer()
 #  - out status 0, if next peer exists
@@ -47,7 +47,7 @@
 #
 ################################################################################
 
-_report_servicelist_output() {
+report_servicelist_output() {
   export _task_name="${LMAP_TASK_NAME_PREFIX}servicelist-output"
   export _task_version="$PACKAGE_VERSION"
   export _task_dir="$BASEDIR/report/0metadata-servicelist"
@@ -59,13 +59,17 @@ _report_servicelist_output() {
   export _task_status="0"
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
-  task_json_template "$BASEDIR/services.json" \
-	  "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_ServiceList-output__Multiple_Raw" \
-	  "services_json" > "$_task_dir/result.json" || :
+  task_json_template "urn:ietf:metrics:perf:Priv_SPMonitor_Passive_ServiceList-output__Multiple_Raw" \
+      "$BASEDIR/services.json" "services_json" \
+      "$BASEDIR/services_reorder.json" "reordering_map" \
+    > "$_task_dir/result.json" || :
 }
 
 discover_init() {
   GLOBAL_STATE_CURRENT_PEER=-1
+  # GLOBAL_STATE_PEER_IDXMAP should be either empty, or space-separated list of indexes
+  # a negative value or invalid number must signal the end of the IDXMAP
+  GLOBAL_STATE_PEER_IDXMAP=
   if [ -n "$SIMET_SERVICELIST_OVERRIDE" ] ; then
     cp "$SIMET_SERVICELIST_OVERRIDE" "$BASEDIR/services.json" || {
       log_error "Failed when trying to override services.json from --services command line option"
@@ -74,12 +78,83 @@ discover_init() {
     log_debug "Overriding services.json by command line request"
     return    
   fi
-  curl -L -s "$API_SERVICE_DISCOVERY" > "$BASEDIR/services.json" && _report_servicelist_output
+
+  # Do we have the memory budget to run many twampc in parallel ?
+  [ -z "$GLOBAL_SERIALIZE_SERVERSEL" ] && {
+    GLOBAL_SERIALIZE_SERVERSEL=$(awk \
+      'BEGIN                 { NOTENOUGH=0 ; MAV=0 } ;
+       /^MemAvailable:.*kB$/ { MAV=$2 } ;
+       END                   { if (MAV < 25000) NOTENOUGH=1 ; print NOTENOUGH }' \
+      /proc/meminfo) \
+    || GLOBAL_SERIALIZE_SERVERSEL=0
+  }
+
+  mkdir -p "$BASEDIR/serversel"
+
+  local _curl1_pid
+  curl \
+    --request GET \
+    --user-agent "$SIMET_USERAGENT" \
+    --header "Authorization: Bearer $AGENT_TOKEN" \
+    --silent \
+    --fail \
+    --location \
+    --connect-timeout 10 \
+    --max-time 15 \
+    --url "$API_SERVICE_DISCOVERY" > "$BASEDIR/services.json" \
+  & _curl1_pid=$!
+
+  local _curl2_pid
+  local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
+  curl \
+    --request GET \
+    --user-agent "$SIMET_USERAGENT" \
+    --header "Authorization: Bearer $AGENT_TOKEN" \
+    --silent \
+    --fail \
+    --location \
+    --connect-timeout 10 \
+    --max-time 15 \
+    --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
+  & _curl2_pid=$!
+
+  local _curl3_pid
+  local _curl3_endpoint="$API_MSMT_PROFILE"
+  curl \
+    --request GET \
+    --user-agent "$SIMET_USERAGENT" \
+    --header "Authorization: Bearer $AGENT_TOKEN" \
+    --silent \
+    --fail \
+    --location \
+    --connect-timeout 10 \
+    --max-time 15 \
+    --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY;engine_name=$SIMET_ENGINE_NAME" > "$BASEDIR/msmt_profiles.json" \
+  & _curl3_pid=$!
+
+  rc=0
+  wait $_curl1_pid || {
+    log_error "failed to retrieve list of measurement peers"
+    rc=1
+  }
+  wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
+  wait $_curl3_pid && log_debug "Measurement profiles received"
+
+  return $rc
 }
 
 discover_next_peer() {
   local _peer="undefined"
-  GLOBAL_STATE_CURRENT_PEER=$(( $GLOBAL_STATE_CURRENT_PEER + 1 ))
+  if [ -n "$GLOBAL_STATE_PEER_IDXMAP" ] ; then
+    log_debug "current server-selection map: $GLOBAL_STATE_PEER_IDXMAP"
+    GLOBAL_STATE_CURRENT_PEER="${GLOBAL_STATE_PEER_IDXMAP%% *}"
+    GLOBAL_STATE_PEER_IDXMAP="${GLOBAL_STATE_PEER_IDXMAP#* }"
+    # end of list? negative or empty, note that empty is not supposed to be possible
+    [ -n "$GLOBAL_STATE_CURRENT_PEER" ] && [ "$GLOBAL_STATE_CURRENT_PEER" -ge 0 ] \
+      || return 1
+  else
+    GLOBAL_STATE_CURRENT_PEER=$(( GLOBAL_STATE_CURRENT_PEER + 1 ))
+  fi
   log_debug "Probing for peer at list position: $GLOBAL_STATE_CURRENT_PEER"
   _peer=$($JSONFILTER -i "$BASEDIR/services.json" -t "@[$GLOBAL_STATE_CURRENT_PEER]")
   if [ "$_peer" != "" ]; then

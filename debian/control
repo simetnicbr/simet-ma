@@ -10,9 +10,10 @@ Vcs-Git: https://github.com/simetnicbr/simet-ma.git
 
 Package: simet-ma
 Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, lsb-release, curl, cron | cron-daemon, gawk | mawk, simet-lmapd (>= 0.15.0~), lsb-base
 Recommends: apt-utils, unattended-upgrades, apt-transport-https, iproute2, iw, fping, iputils-ping, traceroute (>= 1:2.0), libcap2-bin, dnsutils | ldnsutils, simet-nping
-Suggests: xdg-utils | sensible-utils
+Suggests: xdg-utils | sensible-utils, qrencode
 Breaks: sysvinit (<< 2.88dsf-52~)
 Description: NIC.br SIMET Measurement Agent
  This is the Measurement Agent for the SIMET system from NIC.br.  It

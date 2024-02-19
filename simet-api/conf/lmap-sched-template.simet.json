@@ -40,23 +40,6 @@
        "destination":["ma-local_periodic_report"]}
     ]
   },
-  { "name":"ma-local_periodic-ixbr-ping",
-    "tag":["simet.nic.br_ev-period:@PERIODIC_IXBRP_PERIOD@"],
-    "start":"ma-local_ev-periodic-ixbr-ping",
-    "execution-mode":"sequential",
-    "action":[
-      {"name":"simet.nic.br_agent-info","task":"simet.nic.br_agent-info",
-       "destination":["ma-local_periodic_report"]},
-      {"name":"simet.nic.br_geolocation","task":"simet.nic.br_geolocation",
-       "destination":["ma-local_periodic_report"]},
-      {"name":"simet.nic.br_ixbr-ping_ip4","task":"simet.nic.br_fping-to-ixbr",
-       "option":[{"id":"ixbrpip4","value":"-4"}],
-       "destination":["ma-local_periodic_report"]},
-      {"name":"simet.nic.br_ixbr-ping_ip6","task":"simet.nic.br_fping-to-ixbr",
-       "option":[{"id":"ixbrpip6","value":"-6"}],
-       "destination":["ma-local_periodic_report"]}
-    ]
-  },
   { "name":"ma-local_default-periodic-test-run",
     "tag":["simet.nic.br_ev-period:@PERIODIC_TEST_PERIOD@"],
     "start":"ma-local_ev-default-periodic-test-run",
@@ -88,12 +71,6 @@
     "calendar":{
       "month":["*"],"day-of-month":["*"],"day-of-week":["*"],
       "hour":[@PERIODIC_SPOOFER_HOURS@],"minute":[@PERIODIC_SPOOFER_MINUTES@],"second":[0]
-    }},
-  { "name":"ma-local_ev-periodic-ixbr-ping",
-    "random-spread":@PERIODIC_IXBRP_SPREAD@,
-    "calendar":{
-      "month":["*"],"day-of-month":["*"],"day-of-week":["*"],
-      "hour":[@PERIODIC_IXBRP_HOURS@],"minute":[@PERIODIC_IXBRP_MINUTES@],"second":[0]
     }},
   { "name":"immediate","immediate":[null] },
   { "name":"startup-delayed","random-spread":300,"startup":[null] },

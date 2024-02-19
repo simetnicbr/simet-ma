@@ -18,6 +18,7 @@ bin_PROGRAMS = twampc
 twampc_SOURCES = libubox/usock.h libubox/usock.c \
 		 logger.h simet_err.h \
 				twamp.h twamp.c \
+				base64.h base64.c \
 				message.h message.c \
 				timestamp.h timestamp.c \
 				report.h report.c \
@@ -25,6 +26,8 @@ twampc_SOURCES = libubox/usock.h libubox/usock.c \
 twampc_CFLAGS = -I .. -pthread -L json
 twampc_LDFLAGS = -pthread -L json
 twampc_LDADD = ${JSON_LIBS}
+
+EXTRA_DIST = base64_test.c
 
 #valgrind: twampc
 #	valgrind --leak-check=full --track-origins=yes --xml-file=twampc_log.xml --xml=yes ./$(TWAMP_CLI)

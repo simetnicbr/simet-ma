@@ -20,6 +20,7 @@
 #define TCP_H_
 
 #include <sys/types.h>
+#include <stdio.h>
 
 /* TCP measure context struct */
 typedef struct measure_context {
@@ -31,10 +32,18 @@ typedef struct measure_context {
     char *sessionid;
     int family;
     int report_mode;
+    char *streamdata_path;
+    FILE *streamdata_file;
     unsigned int timeout_test;
     unsigned int numstreams;
     unsigned int test_duration;
     unsigned int sample_period_ms;
+    unsigned int stats_oversampling;
+    int stream_start_delay;   /* n < 0: RTT/-n*stream_count; n >= 0: delay (us) */
+    unsigned int max_pacing_rate; /* 0: system default */
+
+    size_t outgoing_mss;
+    unsigned int rtt; /* smallest RTT (microseconds) */
 } MeasureContext;
 
 struct MemoryStruct {
@@ -45,6 +54,6 @@ struct MemoryStruct {
 
 int tcp_client_run(MeasureContext);
 
-#define MAX_CONCURRENT_SESSIONS 10U
+#define MAX_CONCURRENT_SESSIONS 50
 
 #endif /* TCP_H_ */

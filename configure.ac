@@ -26,7 +26,7 @@ AC_CONFIG_AUX_DIR([.])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 tar-pax gnu no-dist-gzip dist-xz -Wall])
 AC_CONFIG_FILES([Makefile simet-api/Makefile cmake-projects/Makefile])
-AC_CONFIG_SUBDIRS([twamp-client-c tcpbw-client-c inetup-client-c simet-runner])
+AC_CONFIG_SUBDIRS([twamp-client-c tcpbw-client-c inetup-client-c simet-runner simet-api/utils])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
 
 dnl MKDIR_P is used by our makefiles
@@ -47,7 +47,7 @@ AM_COND_IF([SIMETBOX_BUILD],
 
 AC_ARG_ENABLE([simet-spoofer],
     [AC_HELP_STRING([--enable-simet-spoofer],
-        [disable simet_spoofer measurement])],
+        [enable simet_spoofer measurement])],
     [case "${enableval}" in
         yes) simetspoofer=true ;;
         no)  simetspoofer=false ;;

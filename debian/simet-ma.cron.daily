@@ -6,13 +6,17 @@
 # Refer to the COPYING file on the program source for details
 
 # Refresh agent registry in case it has to change auth tokens
-test -f /opt/simet/bin/simet_register_ma.sh && /opt/simet/bin/simet_register_ma.sh >/dev/null
+test -f /opt/simet/bin/simet_register_ma.sh && {
+	start-stop-daemon -c nicbr-simet --start --name simet_reg_ma \
+		--startas /opt/simet/bin/simet_register_ma.sh \
+		-- --boot >/dev/null 2>&1 || true
 
-# Attempt to contact the controller if the schedule is too old
-. /opt/simet/lib/simet/simet_lib_config.sh \
-	&& [ -n "$LMAP_SCHEDULE_FILE" ] \
-	&& [ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
-	&& [ -n "$(find $LMAP_SCHEDULE_FILE -mtime +1)" ] \
-	&& /opt/simet/bin/simet_lmap-fetch-schedule.sh \
-	&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
+	# Attempt to contact the controller if the schedule is too old
+	. /opt/simet/lib/simet/simet_lib_config.sh \
+		&& [ -n "$LMAP_SCHEDULE_FILE" ] \
+		&& [ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
+		&& [ -n "$(find $LMAP_SCHEDULE_FILE -mtime +1)" ] \
+		&& /opt/simet/bin/simet_lmap-fetch-schedule.sh \
+		&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
+}
 :

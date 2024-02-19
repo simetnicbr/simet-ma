@@ -13,6 +13,8 @@
 ## General Public License and the COPYING file in the program Source
 ## for details.
 
+SUBDIRS = utils
+
 # Note: if the defines below are modified, please grep -r all the
 # simet-ma source to ensure they are in sync everywhere!
 simetconfdir=$(sysconfdir)/simet
@@ -51,10 +53,18 @@ endif
 
 EXTRA_DIST += simetbox_lmap-fetch-schedule.sh.in simet_lmap-fetch-schedule.sh.in
 
-dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh simet_view_results.sh
-EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in simet_view_results.sh.in
+dist_bin_SCRIPTS += simet_register_ma.sh simet_geolocation.sh simet_view_results.sh simet_qrcode.sh
+EXTRA_DIST += simet_register_ma.sh.in simet_geolocation.sh.in simet_view_results.sh.in simet_qrcode.sh.in
 dist_bin_SCRIPTS += simet_report-queue-flush.sh simet_lmap-send-report.sh simet_lmap-stdout-wrapper.sh
 EXTRA_DIST += simet_report-queue-flush.sh.in simet_lmap-send-report.sh.in simet_lmap-stdout-wrapper.sh.in
+
+if SIMETBOX_BUILD
+dist_bin_SCRIPTS +=
+EXTRA_DIST +=
+else
+dist_bin_SCRIPTS += simet_issuebanner-generator.sh
+EXTRA_DIST += simet_issuebanner-generator.sh.in
+endif
 
 if SIMET_SPOOFER
 dist_bin_SCRIPTS += simet_spoofer.sh
@@ -86,8 +96,8 @@ endif
 
 dist_simetlmapbin_SCRIPTS = lmap-tasks/lmap-wrapper.sh lmap-tasks/simet2-agent-info.sh lmap-tasks/lmap-traceroute-wrapper.sh
 EXTRA_DIST += lmap-tasks/lmap-wrapper.sh.in lmap-tasks/simet2-agent-info.sh.in lmap-tasks/lmap-traceroute-wrapper.sh.in
-dist_simetlmapbin_SCRIPTS += lmap-tasks/simet_fping-to-ixbr.sh lmap-tasks/internetnl_connection_test.sh
-EXTRA_DIST += lmap-tasks/simet_fping-to-ixbr.sh.in lmap-tasks/internetnl_connection_test.sh.in
+dist_simetlmapbin_SCRIPTS += lmap-tasks/internetnl_connection_test.sh
+EXTRA_DIST += lmap-tasks/internetnl_connection_test.sh.in
 if SIMETBOX_BUILD
 dist_simetlmapbin_SCRIPTS += lmap-tasks/simetbox_fping-to-gateway.sh
 endif

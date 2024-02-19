@@ -18,6 +18,7 @@ bin_PROGRAMS = inetupc
 inetupc_SOURCES = ../simet-inetuptime_config.h simet_err.h \
 		  logger.h netinet-tcp-compat.h \
 		  sys-linux.h sys-linux.c \
+		  tcpaq.h tcpaq.c \
 		  simet-inetuptime.h simet-inetuptime.c
 
 inetupc_LDADD = ${JSON_LIBS}

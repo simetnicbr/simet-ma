@@ -3,10 +3,20 @@
 # Source code fraction, for license information refer to the
 # main program source code.
 
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
+SIMET_USERAGENT=$(get_http_useragent) || exit 3
+simet2_agentinfo || exit 3
+
+# defined at this point (empty for optional ones like SIMET_MAC_LABEL):
+# SIMET_USERAGENT, SIMET_MAC_LABEL
+# SIMET2_AGENT_FAMILY, SIMET2_AGENT_ENVNAME, SIMET2_AGENT_ENVVERSION
+# SIMET2_MAHOSTNAME, SIMET2_MADESCRIPTION, SIMET2_DEVICE_MODEL
+
 PACKAGE_NAME="@RUNNERNAME@"
 PACKAGE_VERSION="@RUNNERVERSION@"
 PACKAGE_STRING="@RUNNERSTRING@"
-SIMET_ENGINE_NAME="nic_simet2_simet-ma"
+SIMET_ENGINE_NAME="@SIMET_ENGINE_NAME@"
 SIMET_CONFIG_FILES="@SIMETLIBDIR@/simet-ma.conf @SIMETLIBDIR@/conf.d/*.conf @SIMETCONFDIR@/simet-ma.conf"
 TRACEROUTE_HELPER=$(find -L @SIMETLMAPBINDIR@ -type f -name '*traceroute' | sed -n -e '1 {p;q}' )
 AGENTINFO_HELPER="@SIMETLMAPBINDIR@/simet2-agent-info.sh"

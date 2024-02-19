@@ -17,6 +17,7 @@
 
 # parameters:
 #   --boot   (optional) shorten wait times and not restart the service
+#            do nothing if already sucessfully run in the last 24H.
 #
 # Pairing is disabled by having an empty virtual label (empty
 # contents inside the file referenced by $AGENT_VLABEL_FILE)
@@ -26,17 +27,27 @@ set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 
-umask 0022
+umask 0002
 
 RC=1
 OUTFILE=
+SIMETMA_UPDATE_LASTEXEC=
+update_lastrun() {
+	# note: remember to remove or zero-out this file when updating the package
+	[ -n "$SIMETMA_UPDATE_LASTEXEC" ] && {
+		date +%s -u > "$AGENT_LOCK" || :
+	}
+	:
+}
 abend() {
 	simet_log simet-ma daemon.err "error: $*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+	update_lastrun || :
 	exit "$RC"
 }
 clean_exit() {
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
+	update_lastrun || :
 	exit 0
 }
 run_trap() {
@@ -58,14 +69,23 @@ USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 4000"
 CURLOPT2=
 
+SIMETMA_BOOTMODE=
 case "$1" in
 	--boot)
 		shift
 		CURLOPT2="$CURLOPT --retry 3 --retry-max-time 30"
 		SIMETMA_RECONFIG=
+		SIMETMA_BOOTMODE=1
 	;;
 esac
 CURLOPT="$CURLOPT $CURLOPT2"
+
+# WARNING: we might be run from inside lmapd, which in turn
+# could signal us with SIGTERM when we send it a configuration
+# reload signal (or worse: restart it).
+#
+# Thus, queue calls to simet_restart_services() via an EXIT
+# trap.  Do not call it inline.
 
 #overridable
 simet_restart_services() {
@@ -98,8 +118,8 @@ write_lmap_agent() {
 		HASHNEW=$(__gethash "$OUTFILE") || return 1
 		[ x"$HASHOLD" != x"$HASHNEW" ] && {
 			LMAP_AGENT_DIR=$(dirname "$LMAP_AGENT_FILE")
-			[ -d "$LMAP_AGENT_DIR" ] || mkdir -m 0755 -p "$LMAP_AGENT_DIR"
-			cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && chmod +r "$LMAP_AGENT_FILE"
+			[ -d "$LMAP_AGENT_DIR" ] || mkdir -m 0770 -p "$LMAP_AGENT_DIR"
+			cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && { chmod 0660 "$LMAP_AGENT_FILE" 2>/dev/null || : ; }
 		}
 	fi
 	:
@@ -115,7 +135,7 @@ write_access_tokens() {
 	else
 		printf "%s" "$2" > "$AGENT_VTK_FILE"
 		VTK_CREDS_DIR=$(dirname "$AGENT_VIEW_CREDENTIALS_FILE")
-		[ -d "$AGENT_VIEW_CREDENTIALS_FILE" ] || mkdir -m 0755 -p "$VTK_CREDS_DIR"
+		[ -d "$AGENT_VIEW_CREDENTIALS_FILE" ] || mkdir -m 0775 -p "$VTK_CREDS_DIR"
 		printf '%s %s\n' "$1" "$2" > "$AGENT_VIEW_CREDENTIALS_FILE"
 		simet_log simet-ma daemon.info "SIMET: view_results token updated"
 	fi
@@ -195,6 +215,8 @@ __simet_create_agent_apicall() {
 }
 __simet_create_agent_common() {
 	APIRES=$(__simet_create_agent_apicall "$@") || return 1
+	[ "$APIRES" -eq 201 ] || [ "$APIRES" -eq 410 ] && \
+		SIMETMA_UPDATE_LASTEXEC=1
 	[ "$APIRES" -eq 201 ] || return 1
 	:
 }
@@ -351,6 +373,7 @@ simet_refresh_agent_status() {
 		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
 		;;
 	410)
+		SIMETMA_UPDATE_LASTEXEC=1
 		simet_log simet-ma deamon.err "server reports our agent-id is outdated or duplicated (was it cloned? or from an old backup?)"
 		# in case we fail to get a new one, ensure it is gone
 		__simet_invalidate_all agstat_410
@@ -360,9 +383,12 @@ simet_refresh_agent_status() {
 		return 0
 		;;
 	304)
+		# not clear what we should do here, really
+		SIMETMA_UPDATE_LASTEXEC=1
 		clean_exit
 		;;
 	500|400|404)
+		SIMETMA_UPDATE_LASTEXEC=
 		abend "SIMET2 agent registry service unavailable"
 		;;
         esac
@@ -476,18 +502,22 @@ simet_attempt_pairing_recovery() {
 simet_pairing_flow() {
 	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL=
 	[ "$SIMET2_VLABEL" = "DISABLED" ] && SIMET2_VLABEL=
-	[ -z "$SIMET2_VLABEL" ] && {
+	if [ -z "$SIMET2_VLABEL" ] ; then
 		# register as not available for pairing
 		call simet_register_vlabel || true
 		rm -f "$AGENT_PAIRBKP_FILE"
-		return 0
-	}
-
-	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
-		call simet_attempt_pairing_recovery && call simet_refresh_agent_status
-	fi
-	if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
-		call simet_register_vlabel || true
+		# We are no longer available for pairing, if we were in the
+		# first place.  But we MIGHT be paired for whatever reason: we
+		# did not request to remove an existing pairing above.
+		#
+		# PAIREDTO and PAIRED will be correctly set and up-to-date.
+	else
+		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+			call simet_attempt_pairing_recovery && call simet_refresh_agent_status
+		fi
+		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
+			call simet_register_vlabel || true
+		fi
 	fi
 
 	call simet_update_participant_info || \
@@ -503,6 +533,9 @@ simet_pairing_flow() {
 			[ x"$OLDPAIR" != x"$PAIREDTO" ] && echo "$PAIREDTO" > "$AGENT_PAIR_FILE"
 		}
 		call_hook pairing_paired
+	else
+		rm -f "$AGENT_PAIR_FILE"
+		call_hook pairing_unpaired
 	fi
 }
 
@@ -575,7 +608,20 @@ gettoken() {
 	AID=$OLDAID
 	AT=$OLDAT
 
+	[ -n "$SIMETMA_BOOTMODE" ] && {
+		# Read last *successful* execution time from lockfile
+		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
+		[ "$LASTEXEC" -ge 0 ] || LASTEXEC=0
+
+		# do nothing if time delta is less than 24h
+		TIMEDELTA=$(( $(date +%s -u) - LASTEXEC )) || TIMEDELTA=172800
+		[ "$TIMEDELTA" -ge 86400 ] || return 0
+	}
+
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
+
+	# don't leave behind tmpfiles
+	trap 'run_trap' INT TERM QUIT
 
 	VL_GOOD=1
 	[ -e "$SIMET_RUNSTATE_DIR/vlabel-was-foreign" ] && VL_GOOD=0
@@ -611,13 +657,15 @@ gettoken() {
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
 		simet_log simet-ma daemon.notice "SIMET: agent-id or authorization token has changed"
-		call simet_restart_services
+		trap 'trap "" TERM ; call simet_restart_services || true' EXIT
 		call_hook reginfo_changed
 	else
 		call_hook reginfo_unchanged
 	fi
 
 	simet_log simet-ma daemon.info "SIMET: LMAP measurement agent id: $AID"
+
+	update_lastrun || :
 	:
 }
 

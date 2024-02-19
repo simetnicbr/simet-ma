@@ -17,6 +17,7 @@
 
 #include "tcpbwc_config.h"
 #include "report.h"
+#include "timespec.h"
 
 #include "logger.h"
 
@@ -30,8 +31,9 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <netdb.h>
+
+#include "tcpinfo.h"
 
 struct tcpbw_report_private {
     json_object *root;
@@ -100,7 +102,7 @@ static int xx_nameinfo(struct sockaddr_storage *sa, socklen_t sl,
     return 0;
 }
 
-int report_socket_metrics(struct tcpbw_report *report, int sockfd, int proto)
+int report_socket_metrics(ReportContext *rctx, int sockfd, int proto)
 {
     char metric_name[256];
     const char *t_row[SOCK_TBL_COL_MAX];
@@ -108,9 +110,9 @@ int report_socket_metrics(struct tcpbw_report *report, int sockfd, int proto)
     socklen_t ss_len;
     int rc = ENOMEM;
 
-    if (!report)
+    if (!rctx || !rctx->report)
         return EINVAL;
-    struct tcpbw_report_private *rp = (struct tcpbw_report_private *)report;
+    struct tcpbw_report_private *rp = (struct tcpbw_report_private *)(rctx->report);
     if (!rp->root)
         return EINVAL;
 
@@ -212,6 +214,200 @@ static void xx_json_object_array_add_uint64_as_str(json_object *j, uint64_t v)
     json_object_array_add(j, json_object_new_string(buf));
 }
 
+static void xx_json_object_add_int(json_object *j, const char *field, int64_t value)
+{
+    json_object_object_add(j, field, json_object_new_int64(value));
+}
+
+static void xx_json_object_add_u64(json_object *j, const char *field, uint64_t value)
+{
+    json_object_object_add(j, field, json_object_new_int64(value & INT64_MAX));
+}
+
+#if HAVE_DECL_SK_MEMINFO_VARS != 0
+static json_object * render_skmem(const tcpbw_skmeminfo_t * const meminfo)
+{
+    if (!meminfo)
+	return NULL;
+
+    json_object *jo = json_object_new_object();
+    if (!jo)
+	return NULL;
+
+    xx_json_object_add_int(jo, "rmem_alloc", (*meminfo)[SK_MEMINFO_RMEM_ALLOC]);
+    xx_json_object_add_int(jo, "rcv_buf", (*meminfo)[SK_MEMINFO_RCVBUF]);
+    xx_json_object_add_int(jo, "wmem_alloc", (*meminfo)[SK_MEMINFO_WMEM_ALLOC]);
+    xx_json_object_add_int(jo, "snd_buf", (*meminfo)[SK_MEMINFO_SNDBUF]);
+    xx_json_object_add_int(jo, "fwd_alloc", (*meminfo)[SK_MEMINFO_FWD_ALLOC]);
+    xx_json_object_add_int(jo, "wmem_queued", (*meminfo)[SK_MEMINFO_WMEM_QUEUED]);
+    xx_json_object_add_int(jo, "opt_mem", (*meminfo)[SK_MEMINFO_OPTMEM]);
+    xx_json_object_add_int(jo, "backlog_mem", (*meminfo)[SK_MEMINFO_BACKLOG]);
+#if HAVE_DECL_SK_MEMINFO_DROPS != 0
+    xx_json_object_add_int(jo, "dropped_pkts", (*meminfo)[SK_MEMINFO_DROPS]);
+#endif
+
+    return jo;
+}
+#else /* HAVE_DECL_SK_MEMINFO_VARS */
+static json_object * render_skmem(const tcpbw_skmeminfo_t * const meminfo)
+{
+    (void) meminfo;
+    return NULL;
+}
+#endif /* HAVE_DECL_SK_MEMINFO_VARS */
+
+
+static json_object * render_tcpi(const struct simet_tcp_info * const tcpi)
+{
+    if (!tcpi)
+	return NULL;
+
+    json_object *jo = json_object_new_object();
+    if (!jo)
+	return NULL;
+
+    xx_json_object_add_int(jo, "state", tcpi->tcpi_state);
+    xx_json_object_add_int(jo, "ca_state", tcpi->tcpi_ca_state);
+    xx_json_object_add_int(jo, "retransmits", tcpi->tcpi_retransmits);
+    xx_json_object_add_int(jo, "probes", tcpi->tcpi_probes);
+    xx_json_object_add_int(jo, "backoff", tcpi->tcpi_backoff);
+    xx_json_object_add_int(jo, "options", tcpi->tcpi_options);
+    xx_json_object_add_int(jo, "snd_wscale", (uint8_t)tcpi->tcpi_snd_wscale);
+    xx_json_object_add_int(jo, "rcv_wscale", (uint8_t)tcpi->tcpi_rcv_wscale);
+    xx_json_object_add_int(jo, "delivery_rate_app_limited", (uint8_t)tcpi->tcpi_delivery_rate_app_limited);
+#ifdef HAVE_STRUCT_TCP_INFO_TCPI_FASTOPEN_CLIENT_FAIL
+    xx_json_object_add_int(jo, "fastopen_client_fail", (uint8_t)tcpi->tcpi_fastopen_client_fail);
+#endif
+    xx_json_object_add_int(jo, "rto", tcpi->tcpi_rto);
+    xx_json_object_add_int(jo, "ato", tcpi->tcpi_ato);
+    xx_json_object_add_int(jo, "snd_mss", tcpi->tcpi_snd_mss);
+    xx_json_object_add_int(jo, "rcv_mss", tcpi->tcpi_rcv_mss);
+    xx_json_object_add_int(jo, "unacked", tcpi->tcpi_unacked);
+    xx_json_object_add_int(jo, "sacked", tcpi->tcpi_sacked);
+    xx_json_object_add_int(jo, "lost", tcpi->tcpi_lost);
+    xx_json_object_add_int(jo, "retrans", tcpi->tcpi_retrans);
+    xx_json_object_add_int(jo, "fackets", tcpi->tcpi_fackets);
+    xx_json_object_add_int(jo, "last_data_sent", tcpi->tcpi_last_data_sent);
+    xx_json_object_add_int(jo, "last_ack_sent", tcpi->tcpi_last_ack_sent);
+    xx_json_object_add_int(jo, "last_data_recv", tcpi->tcpi_last_data_recv);
+    xx_json_object_add_int(jo, "last_ack_recv", tcpi->tcpi_last_ack_recv);
+    xx_json_object_add_int(jo, "pmtu", tcpi->tcpi_pmtu);
+    xx_json_object_add_int(jo, "rcv_ssthresh", tcpi->tcpi_rcv_ssthresh);
+    xx_json_object_add_int(jo, "rtt", tcpi->tcpi_rtt);
+    xx_json_object_add_int(jo, "rttvar", tcpi->tcpi_rttvar);
+    xx_json_object_add_int(jo, "snd_ssthresh", tcpi->tcpi_snd_ssthresh);
+    xx_json_object_add_int(jo, "snd_cwnd", tcpi->tcpi_snd_cwnd);
+    xx_json_object_add_int(jo, "advmss", tcpi->tcpi_advmss);
+    xx_json_object_add_int(jo, "reordering", tcpi->tcpi_reordering);
+    xx_json_object_add_int(jo, "rcv_rtt", tcpi->tcpi_rcv_rtt);
+    xx_json_object_add_int(jo, "rcv_space", tcpi->tcpi_rcv_space);
+    xx_json_object_add_int(jo, "total_retrans", tcpi->tcpi_total_retrans);
+    xx_json_object_add_u64(jo, "pacing_rate", tcpi->tcpi_pacing_rate);
+    if (tcpi->tcpi_max_pacing_rate < UINT64_MAX) /* if it is UINT64_MAX, it is disabled... */
+	xx_json_object_add_u64(jo, "max_pacing_rate", tcpi->tcpi_max_pacing_rate);
+    xx_json_object_add_u64(jo, "bytes_acked", tcpi->tcpi_bytes_acked);
+    xx_json_object_add_u64(jo, "bytes_received", tcpi->tcpi_bytes_received);
+    xx_json_object_add_int(jo, "segs_out", tcpi->tcpi_segs_out);
+    xx_json_object_add_int(jo, "segs_in", tcpi->tcpi_segs_in);
+    xx_json_object_add_int(jo, "notsent_bytes", tcpi->tcpi_notsent_bytes);
+    xx_json_object_add_int(jo, "min_rtt", tcpi->tcpi_min_rtt);
+    xx_json_object_add_int(jo, "data_segs_in", tcpi->tcpi_data_segs_in);
+    xx_json_object_add_int(jo, "data_segs_out", tcpi->tcpi_data_segs_out);
+    xx_json_object_add_u64(jo, "delivery_rate", tcpi->tcpi_delivery_rate);
+    xx_json_object_add_u64(jo, "busy_time", tcpi->tcpi_busy_time);
+    xx_json_object_add_u64(jo, "rwnd_limited", tcpi->tcpi_rwnd_limited);
+    xx_json_object_add_u64(jo, "sndbuf_limited", tcpi->tcpi_sndbuf_limited);
+    xx_json_object_add_int(jo, "delivered", tcpi->tcpi_delivered);
+    xx_json_object_add_int(jo, "delivered_ce", tcpi->tcpi_delivered_ce);
+    xx_json_object_add_u64(jo, "bytes_sent", tcpi->tcpi_bytes_sent);
+    xx_json_object_add_u64(jo, "bytes_retrans", tcpi->tcpi_bytes_retrans);
+    xx_json_object_add_int(jo, "dsack_dups", tcpi->tcpi_dsack_dups);
+    xx_json_object_add_int(jo, "reord_seen", tcpi->tcpi_reord_seen);
+    xx_json_object_add_int(jo, "rcv_ooopack", tcpi->tcpi_rcv_ooopack);
+    xx_json_object_add_int(jo, "snd_wnd", tcpi->tcpi_snd_wnd);
+
+    return jo;
+}
+
+/*
+ * { "stream_tcpi_upload": [
+ *     { "sample_id": <int>, "timestamp": <int64>, "stream_id": <int>, "tcp_info": { ... }, "skmem": { ... } }
+ *   ],
+ *  "stream_tcpi_download": [
+ *     { "sample_id": <int>, "timestamp": <int64>, "stream_id": <int>, "??": <int64>, "tcp_info": { ... }, "skmem": { ... } }
+ *   ],
+ *   "stream_skmem_upload": [
+ *     { "sample_id": <int>, "timestamp": <int64>, "stream_id": <int>, "skmem": { ... } }
+ *   ],
+ *   "stream_skmem_download": [
+ *     { "sample_id": <int>, "timestamp": <int64>, "stream_id": <int>, "skmem": { ... } }
+ *   ]
+ * }
+ */
+static json_object * render_tcpi_samples(const TcpInfoSample *samples, unsigned long int num_samples)
+{
+    unsigned int sc = 0;
+
+    json_object *ja = json_object_new_array();
+    if (!ja)
+	return NULL;
+
+    while (num_samples > 0) {
+	const int64_t ts = (int64_t)TIMESPEC_NANOSECONDS(samples->timestamp) / 1000;
+	json_object *jo = json_object_new_object();
+	if (jo) {
+	    json_object_object_add(jo, "sample_id", json_object_new_int64(sc));
+	    json_object_object_add(jo, "stream_id", json_object_new_int64(samples->stream_id));
+	    json_object_object_add(jo, "timestamp", json_object_new_int64(ts));
+	    json_object_object_add(jo, "tcp_info", render_tcpi(&samples->tcpi));
+	    json_object_array_add(ja, jo);
+	} else {
+	    goto err_exit;
+	}
+	samples++;
+	num_samples--;
+	sc++;
+    }
+
+    return ja;
+
+err_exit:
+    json_object_put(ja);
+    return NULL;
+}
+
+static json_object * render_skmem_samples(const SkmemSample *samples, unsigned long int num_samples)
+{
+    unsigned int sc = 0;
+
+    json_object *ja = json_object_new_array();
+    if (!ja)
+	return NULL;
+
+    while (num_samples > 0) {
+	const int64_t ts = (int64_t)TIMESPEC_NANOSECONDS(samples->timestamp) / 1000;
+	json_object *jo = json_object_new_object();
+	if (jo) {
+	    json_object_object_add(jo, "sample_id", json_object_new_int64(sc));
+	    json_object_object_add(jo, "stream_id", json_object_new_int64(samples->stream_id));
+	    json_object_object_add(jo, "timestamp", json_object_new_int64(ts));
+	    json_object_object_add(jo, "skmem", render_skmem(&samples->sk_meminfo));
+
+	    json_object_array_add(ja, jo);
+	} else {
+	    goto err_exit;
+	}
+	samples++;
+	num_samples--;
+	sc++;
+    }
+
+    return ja;
+
+err_exit:
+    json_object_put(ja);
+    return NULL;
+}
 
 /**
  * createReport - create the JSON LMAP-like report snippet
@@ -287,7 +483,8 @@ static json_object *createReport(json_object *jresults,
         xx_json_object_array_add_uint64_as_str(jrow, i + 1);
         xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].bytes * 8U);
         xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].nstreams);
-        xx_json_object_array_add_uint64_as_str(jrow, (uint64_t)downloadRes[i].interval / 1000UL);
+	/* round to nearest millisecond. this is important.  do it like lround() would. */
+        xx_json_object_array_add_uint64_as_str(jrow, downloadRes[i].interval_ns / 1000000UL + ((downloadRes[i].interval_ns % 1000000UL >= 500000UL)? 1 : 0));
         json_object_array_add(jrow, json_object_new_string("download"));
 
         /* add row to list of rows */
@@ -303,18 +500,17 @@ static json_object *createReport(json_object *jresults,
     return jtable;
 }
 
-int tcpbw_report(struct tcpbw_report *report,
-                 const char *upload_results_json,
-                 DownResult *downloadRes, uint32_t counter,
-                 MeasureContext *ctx)
+int tcpbw_report(ReportContext *rctx, const char *upload_results_json, MeasureContext *ctx)
 {
     struct tcpbw_report_private *rp;
-    assert(report && ctx);
 
-    rp = (struct tcpbw_report_private *)report;
+    if (!rctx || !rctx->report || !ctx)
+	return -EINVAL;
+
+    rp = (struct tcpbw_report_private *)(rctx->report);
 
     json_object *j_obj_upload = upload_results_json ? json_tokener_parse(upload_results_json) : NULL;
-    json_object *report_obj = createReport(j_obj_upload, downloadRes, counter, ctx);
+    json_object *report_obj = createReport(j_obj_upload, rctx->summary_samples, rctx->summary_sample_count, ctx);
 
     if (report_obj)
         json_object_array_add(rp->root, report_obj);
@@ -322,8 +518,8 @@ int tcpbw_report(struct tcpbw_report *report,
     if (!ctx->report_mode) {
         /* we need to serialize the root array, but we don't want to output its delimiters [ ],
          * and we need to omit the "," after the last member of the array */
-        int al = json_object_array_length(rp->root);
-        for (int i = 0; i < al ; i++) {
+        size_t al = json_object_array_length(rp->root);
+        for (size_t i = 0; i < al ; i++) {
             fprintf(stdout, "%s%s",
                       json_object_to_json_string_ext(json_object_array_get_idx(rp->root, i),
                                           JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
@@ -335,53 +531,102 @@ int tcpbw_report(struct tcpbw_report *report,
     }
     fflush(stdout);
 
+    /* free some RAM */
+    if (rp->sockrows)
+	json_object_put(rp->sockrows);
+    rp->sockrows = NULL;
+    if (rp->root)
+	json_object_put(rp->root);
+    rp->root = NULL;
+
+    if (ctx->streamdata_file) {
+	json_object *auxreport_obj = json_object_new_object();
+	if (auxreport_obj) {
+	    if (rctx->download_tcpi) {
+		json_object_object_add(auxreport_obj, "stream_tcpi_download",
+		    render_tcpi_samples(rctx->download_tcpi, rctx->download_tcpi_count));
+	    }
+	    if (rctx->upload_tcpi) {
+		json_object_object_add(auxreport_obj, "stream_tcpi_upload",
+		    render_tcpi_samples(rctx->upload_tcpi, rctx->upload_tcpi_count));
+	    }
+	    if (rctx->download_skmem) {
+		json_object_object_add(auxreport_obj, "stream_skmem_download",
+		    render_skmem_samples(rctx->download_skmem, rctx->download_skmem_count));
+	    }
+	    if (rctx->upload_skmem) {
+		json_object_object_add(auxreport_obj, "stream_skmem_upload",
+		    render_skmem_samples(rctx->upload_skmem, rctx->upload_skmem_count));
+	    }
+	    fprintf(ctx->streamdata_file, "%s", json_object_to_json_string_ext(auxreport_obj, JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
+	    json_object_put(auxreport_obj); auxreport_obj = NULL;
+	}
+    }
+
     return 0;
 }
 
 /**
- * tcpbw_report_init() - allocates and initializes a tcpbw_report struct
+ * tcpbw_report_init() - allocates and initializes a report context
  *
  * Returns NULL on ENOMEM.
  */
-struct tcpbw_report * tcpbw_report_init(void)
+ReportContext *tcpbw_report_init(void)
 {
-    struct tcpbw_report_private *p = malloc(sizeof(struct tcpbw_report_private));
+    struct tcpbw_report_private *rp = NULL;
     json_object *jo = NULL;
-    if (!p)
+
+    ReportContext *rctx = calloc(1, sizeof(ReportContext));
+    if (!rctx)
 	return NULL;
 
-    memset(p, 0, sizeof(struct tcpbw_report_private));
+    rp = calloc(1, sizeof(struct tcpbw_report_private));
+    if (!rp)
+	goto err_exit;
 
     jo = json_object_new_array();
     if (!jo)
 	goto err_exit;
-    p->root = jo;
+    rp->root = jo;
 
-    return (struct tcpbw_report *)p;
+    rctx->report = (struct tcpbw_report *)(rp);
+    return rctx;
 
 err_exit:
     free(jo);
-    free(p);
+    free(rp);
+    free(rctx);
+
     return NULL;
 }
 
 /**
- * tcpbw_report_done - deallocates a tcpbw_report struct
+ * tcpbw_report_done - deallocates a report context
  *
- * frees all substructures and private data
+ * frees all substructures and private data.
  *
  * Handles NULL structs just fine.
  */
-void tcpbw_report_done(struct tcpbw_report *r)
+void tcpbw_report_done(ReportContext *rctx)
 {
     struct tcpbw_report_private *rp;
-    if (r) {
-        rp = (struct tcpbw_report_private *)r;
-	if (rp->sockrows)
-            json_object_put(rp->sockrows);
-	if (rp->root)
-            json_object_put(rp->root);
+
+    if (rctx) {
+	if (rctx->report) {
+	    rp = (struct tcpbw_report_private *)(rctx->report);
+	    if (rp->sockrows)
+		json_object_put(rp->sockrows);
+	    if (rp->root)
+		json_object_put(rp->root);
+	    free(rctx->report);
+	}
+	free(rctx->download_tcpi);
+	free(rctx->upload_tcpi);
+	free(rctx->download_skmem);
+	free(rctx->upload_skmem);
+	free(rctx->summary_samples);
     }
-    free(r);
+
+    free(rctx);
 }
 
