@@ -25,4 +25,5 @@ simet_issuebanner-generator.sh
 simet_qrcode.sh
 simet_lib.sh*
 simet_lib_config.sh
+simet_lib_lmapd.sh
 lmap-tasks/*.sh
