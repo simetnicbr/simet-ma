@@ -25,14 +25,11 @@ SGROUP=$SUSER
 PID_DIR=/var/run/lmapd
 PIDFILE="${PID_DIR}/lmapd.pid"
 
-LMAPCTL="/opt/simet/bin/lmapctl -j"
-
 START_ARGS="-u $SUSER -c $SUSER --background"
 STOP_ARGS="-u $SUSER --retry 10"
-DAEMON_ARGS="-j"
+DAEMON_ARGS="-j -c+ -c /var/run/lmapd/lmap-schedule.json"
 
-# not called on default init-d-script do_restart/reload
-do_start_prepare() {
+do_prepare_common() {
 	# SIMET_CFG_LOAD_ERROR is also internally set in simet_lib_config.sh
 	SIMET_CFG_LOAD_ERROR=
 	. /opt/simet/lib/simet/simet_lib_config.sh || SIMET_CFG_LOAD_ERROR=1
@@ -40,20 +37,37 @@ do_start_prepare() {
 		echo "$0: syntax errors in the configuration files, aborting..." >&2
 		return 1
 	fi
-	if [ -z "$LMAP_QUEUE_DIR" ] || [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] ; then
+	. /opt/simet/lib/simet/simet_lib_lmapd.sh || {
+		echo "$0: failed to load simet_lib_lmapd.sh, aborting..." >&2
+		return 1
+	}
+}
+
+# not called on default init-d-script do_restart/reload
+do_start_prepare() {
+	do_prepare_common || return 1
+
+	if [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_AGENT_FILE" ] || [ -z "$LMAP_SPOOL_DIR" ] ; then
 		echo "$0: required configuration missing, aborting..." >&2
 		return 1
 	fi
 
-	mkdir -p "$PID_DIR"
-	chgrp $SGROUP "$PID_DIR" && chmod 02770 "$PID_DIR"
+	# FIXME: note that this is actually RUNDIR
+	mkdir -p "$PID_DIR" && chgrp $SGROUP "$PID_DIR" && chmod 02770 "$PID_DIR"
 
+	# FIXME: note that this is actually RUNDIR
 	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
-	mkdir -p "$LMAP_SCHEDULE_DIR"
-	chgrp "$SGROUP" "$LMAP_SCHEDULE_DIR" && chmod 02770 "$LMAP_SCHEDULE_DIR"
-	# don't mess with not-files, like symlinks. chown must run before chmod.
-	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chown "$SUSER:$SGROUP" '{}' +)
-	(cd "$LMAP_SCHEDULE_DIR" && find . -type f -name "*.json" -exec chmod ug+rw,o= '{}' +)
+	[ -n "$LMAP_SCHEDULE_DIR" ] || {
+		echo "$0: LMAP_SCHEDULE_DIR incorrect, aborting..." >&2
+		return 1
+	}
+	mkdir -p "$LMAP_SCHEDULE_DIR" && {
+		# mkdir -p also works as test -d
+		chgrp "$SGROUP" "$LMAP_SCHEDULE_DIR" && chmod 02770 "$LMAP_SCHEDULE_DIR"
+		# don't mess with not-files, like symlinks. chown must run before chmod.
+		find "$LMAP_SCHEDULE_DIR" -type f -name "*.json" -exec chown "$SUSER:$SGROUP" '{}' +
+		find "$LMAP_SCHEDULE_DIR" -type f -name "*.json" -exec chmod ug+rw,o= '{}' +
+	}
 
 	# setup the emergency schedule if there is no schedule
 	# might race a schedule download, we don't want to clobber the
@@ -64,11 +78,13 @@ do_start_prepare() {
 	# ensure the schedule has the correct owner
 	chown -h $SUSER:$SGROUP "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
 
-	mkdir -p "$LMAP_SPOOL_DIR"
-	chgrp $SGROUP "$LMAP_SPOOL_DIR" && chmod 02770 "$LMAP_SPOOL_DIR"
-	(cd "$LMAP_SPOOL_DIR" && mkdir -p queue reports && chmod 02770 queue reports)
-	(cd "$LMAP_SPOOL_DIR" && find . -type f -exec chown $SUSER:$SGROUP '{}' +)
-	(cd "$LMAP_SPOOL_DIR" && find . -type f -exec chmod g+r '{}' +)
+	mkdir -p "$LMAP_SPOOL_DIR" && {
+		# mkdir -p also works as test -d
+		chgrp $SGROUP "$LMAP_SPOOL_DIR" && chmod 02770 "$LMAP_SPOOL_DIR"
+		(cd "$LMAP_SPOOL_DIR" && mkdir -p queue reports && chmod 02770 queue reports)
+		find "$LMAP_SPOOL_DIR" -type f -exec chown $SUSER:$SGROUP '{}' +
+		find "$LMAP_SPOOL_DIR" -type f -exec chmod g+r '{}' +
+	}
 
 	start-stop-daemon -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	[ -r "$LMAP_AGENT_FILE" ] || {
@@ -102,12 +118,14 @@ do_start_cmd_override() {
 }
 
 do_reload() {
+	do_prepare_common || return 1
+
 	log_action_begin_msg "Validating $DESC configuration"
-	if $LMAPCTL validate >/dev/null 2>&1 ; then
+	if lmapd_lmapctl_validate "$LMAP_SCHEDULE_FILE" >/dev/null 2>&1 ; then
 		log_action_end_msg 0
 		log_daemon_msg "Reloading $DESC configuration files" "$NAME"
 		RETVAL=0
-		$LMAPCTL reload || RETVAL=$?
+		lmapd_lmapctl_reload main || RETVAL=$?
 		log_end_msg $RETVAL
 	else
 		log_action_end_msg 1 "not reloading"
@@ -122,7 +140,9 @@ do_stop_cmd_override() {
 }
 
 do_status_override() {
-	if $LMAPCTL running >/dev/null ; then
+	do_prepare_common
+
+	if lmapd_lmapctl_running main >/dev/null ; then
 		log_success_msg "$NAME is running"
 		return 0
 	else
