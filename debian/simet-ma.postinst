@@ -96,11 +96,16 @@ case "$1" in
 
 	# Remove any downloaded schedule, lastrun data
 	rm -f /var/run/lmapd/*.json
-	( . /opt/simet/lib/simet/simet_lib_config.sh \
-		&& ln -sf /opt/simet/lib/simet/lmap-emergency-schedule.json "$LMAP_SCHEDULE_FILE" \
-		&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" \
-		&& { test -s "${AGENT_LOCK}" && printf "0\n" > "${AGENT_LOCK}" || : ; }
-	) 2>/dev/null >/dev/null </dev/null || true
+	( . /opt/simet/lib/simet/simet_lib_config.sh && {
+		[ -n "$LMAP_SCHEDULE_FILE" ] \
+			&& ln -sf /opt/simet/lib/simet/lmap-emergency-schedule.json "$LMAP_SCHEDULE_FILE" \
+			&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" \
+			|| true
+		[ -n "$AGENT_LOCK" ] \
+			&& test -s "${AGENT_LOCK}" \
+			&& printf "0\n" > "${AGENT_LOCK}" \
+			|| true
+	} ) 2>/dev/null >/dev/null </dev/null || true
 
 	#FIXME:
 	# replace the [ -e ] test below if changes the contents of the
