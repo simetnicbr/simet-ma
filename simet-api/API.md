@@ -263,9 +263,6 @@ into some details of the SIMET2 web API.
   schedule to a default schedule.  It will also attempt to retrieve new
   schedules at every boot, as well as periodically.
 
-  <runstatedir>/lmap/lmap-schedule.json - variable schedule
-       received from the controller
-
   Tasks present in the schedule that are not defined anywhere will cause
   the schedule to be refused entirely.  Care must be taken for this to
   never happen to the default schedule (i.e. it must be fully compatible
@@ -284,6 +281,58 @@ into some details of the SIMET2 web API.
 
   For safety, security and resilience reasons, software/firmware auto
   update tasks must be completely independent of the lmap core.
+
+### Multiple LMAP scheduler support
+
+  There can be more than one instance of simet-lmapd running.  They all
+  share the same capabilities and base configuration, but have separate
+  schedules.  This is useful because when simet-lmapd applies an
+  schedule update, it stops (terminates) all running tasks.  Separate
+  simet-lmapd instances for, e.g., user-requested one-shot measurements
+  work around this deficiency.
+
+  Instances must be named using only lowercase ASCII letters and digits,
+  i.e. matching the regexp [a-z0-9]+
+
+  The main simet-lmapd instance is named "main", and will always be
+  present.  When multiple instances are not configured, this is the only
+  simet-lmapd instance that will be active.
+
+  Each simet-lmapd instance must have its own queue and runtime state
+  directories.
+
+  simet-lmapd runtime state includes the per-instance lmap schedule:
+
+  <runstatedir>/lmap/lmap-schedule.json - variable schedule
+       received from the controller, *for the main lmapd instance*
+
+  <runstatedir>/lmap/<instance>/lmap-schedule.json - variable schedule
+       received from the controller, *for lmapd <instance>*
+
+  The simet-lmapd *pidfile* and other internal files (e.g. *state* dumps
+  used by *lmapctl*) are also stored in <runstatedir>/lmap/ for the
+  "main" simet-lmapd instance, and <runstatedir>/lmap/<instance> for the
+  other instances.
+
+  Queue directories are also programatically generated based on the
+  instance name:
+
+  <spooldir>/reports - outgoing rendered report spool, common to all
+      instances
+
+  <spooldir>/queue - queue dir for main simet-lmapd instance
+
+  <spooldir>/queue-<instance> - queue dir for simet-lmapd <instance>
+
+  To enable multi-instance mode, set LMAP\_EXTRA\_INSTANCES to the
+  space-separated list of simet-lmapd instance names.  Do not include
+  the main instance.
+
+  For multiple instance mode to be useful, the LMAP controller must be
+  able to differentiate which simet-lmapd instance is talking to it.
+  Any instances of the string "{lmap\_instance}" in LMAP\_CHANNEL\_URL
+  will be replaced with the simet-lmapd instance.  "main" will be used
+  for the main simet-lmapd instance in that case.
 
 ### LMAP MA CAPABILITIES:
 
