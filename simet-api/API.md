@@ -211,7 +211,7 @@ into some details of the SIMET2 web API.
 
 ## LMAP scheduler API
 
-  Simet-lmapd is responsible for scheduling and running periodic and
+  simet-lmapd is responsible for scheduling and running periodic and
   bootup non-critical tasks.  A task is critical if it must be able to
   run even when simet-lmapd is non-functional, or if it must be able to
   run regardless of the Measurement Agent being registered.
@@ -341,13 +341,19 @@ into some details of the SIMET2 web API.
      take the shared lock to block measurements, take the exclusive
      lock to measure.
 
+     This lock is not an empty file, and its contents are an internal
+     API detail (relevant to simet\_register-ma.sh --boot).  It should
+     be truncated when software packages are updated, and it should be
+     volatile (lost at MA reboot/power down).
+
   $AGENT\_TOKEN\_LOCK   -  general config lock.  Protects agent-id,
      agent token, LMAP config, and so on.  Take the exclusive lock
      when doing a non-atomic update.
 
-  Locks are empty files, locked using flock(2).  Beware permission
-  issues with the lock directory and lock files when scripts are run
-  with different privilege levels (e.g. root and a non-privileged user).
+  Locks are empty files unless explicitly stated otherwise, and are
+  always locked using flock(2).  Beware permission issues with the
+  lock directory and lock files when scripts are run with different
+  privilege levels (e.g. root and a non-privileged user).
 
 
 ## Hooks
