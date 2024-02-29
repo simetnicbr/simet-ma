@@ -1,3 +1,16 @@
+simet-ma (0.18.7) unstable; urgency=medium
+
+  * simet-ma version 0.18.7
+  * Depends on simet-lmapd 0.15.3 or later
+    * -c+ CLI option support on lmapd, lmapctl
+    * built-in config_path without /var/run/lmapd/lmap-schedule.json
+  * deb, simet-api: support multiple instances of simet-lmapd
+    Not for SIMETBox yet
+  * deb: add several failsafes to find, chmod and chown calls, mostly
+    to safeguard against missing configuration
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 29 Feb 2024 20:14:27 -0300
+
 simet-ma (0.18.6.4) unstable; urgency=medium
 
   * simet-ma version 0.18.6.4
