@@ -34,6 +34,9 @@ run_trap() {
 # if this is missing, the MA will have *no* hardcoded schedule
 LMAP_DFLSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
 
+LMAP_SCHEDULE_FILE=$(lmapd_get_sched_filename main) \
+	|| abend "internal error: cannot obtain main schedule name"
+
 # OpenWRT 21+ is very broken and requires root to even *run* initscripts,
 # so just bypass it entirely.
 LMAP_RECONFIG=${LMAP_RECONFIG:-lmapd_lmapctl_reload main}
