@@ -122,16 +122,16 @@ do_start_prepare() {
 	# Registration information (heal permissions)
 	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE" ; do
 		[ -n "$i" ] && {
-			find "$i" -type f ! -perm -0660 -exec chmod ug+rw,o-w '{}' \; 2>/dev/null || true
+			find "$i" -maxdepth 0 -type f ! -perm -0660 -exec chmod ug+rw,o-w '{}' \; 2>/dev/null || true
 			d=$(dirname "$i") && [ -d "$d" ] && \
-				find "$d" -type d -maxdepth 0 ! -perm -0770 -exec chmod ug+rwx,o= '{}' \; 2>/dev/null || true
+				find "$d" -maxdepth 0 -type d ! -perm -0770 -exec chmod ug+rwx,o= '{}' \; 2>/dev/null || true
 		}
 	done
 	for i in "$AGENT_VIEW_CREDENTIALS_FILE" ; do
 		[ -n "$i" ] && {
-			find "$i" -type f ! -perm 0664 -exec chmod 0664 '{}' \; 2>/dev/null || true
+			find "$i" -maxdepth 0 -type f ! -perm 0664 -exec chmod 0664 '{}' \; 2>/dev/null || true
 			d=$(dirname "$i") && [ -d "$d" ] && \
-				find "$d" -type d -maxdepth 0 ! -perm -0775 -exec chmod ug+rwx,o+rx-w '{}' \; 2>/dev/null || true
+				find "$d" -maxdepth 0 -type d ! -perm -0775 -exec chmod ug+rwx,o+rx-w '{}' \; 2>/dev/null || true
 		}
 	done
 

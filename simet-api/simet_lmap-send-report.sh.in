@@ -39,6 +39,7 @@ set -e
 set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
+. @SIMETLIBDIR@/simet_lib_lmapd.sh || exit 3
 
 OUTFILE=
 abend() {
@@ -106,8 +107,6 @@ fi
 [ -d "$LMAP_REPORT_QUEUE_DIR" ] || mkdir -m 0770 -p "$LMAP_REPORT_QUEUE_DIR"
 [ -d "$LMAP_REPORT_QUEUE_DIR" ] || abend "could not access $LMAP_REPORT_QUEUE_DIR"
 
-LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
-
 [ -z "$COLLECTORS" ] &&	COLLECTORS="$LMAP_COLLECTOR"
 [ -z "$COLLECTORS" ] && abend "No LMAP collector specified"
 
@@ -150,7 +149,7 @@ send_report_to_collector() {
 
 render_report() {
     if [ "$DO_RENDER" -ne 0 ] ; then
-	(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report) > "$1" || return $?
+	(cd .. && call lmapd_lmapctl_report) > "$1" || return $?
     else
 	cat "$INPUT_REPORT" > "$1" || return $?
     fi

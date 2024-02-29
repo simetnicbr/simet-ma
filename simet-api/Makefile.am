@@ -198,16 +198,16 @@ install-exec-hook:
 conf/lmap-sched-template.json : conf/lmap-sched-template.$(sbprefix).json
 	cd conf && ln -sf lmap-sched-template.$(sbprefix).json lmap-sched-template.json
 
-dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-sched-template.json conf/lmap-emergency-schedule.json
+dist_simetlib_DATA = conf/simet-ma.conf agent-version.txt conf/lmap-sched-template.json conf/lmap-emergency-schedule.json conf/lmap-empty-schedule.json
 EXTRA_DIST += conf/simet-ma.conf.in conf/lmap-sched-template.simetbox.json conf/lmap-sched-template.simet.json
 CLEANFILES += conf/lmap-sched-template.json conf/simet-ma.conf agent-version.txt
 
 simet_lib.sh.in : simet_lib.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
 
-dist_simetlib_SCRIPTS = simet_lib.sh simet_lib_config.sh
-EXTRA_DIST += simet_lib.simetbox.sh.in  simet_lib.simet.sh.in simet_lib_config.sh.in
-CLEANFILES += simet_lib.sh simet_lib.sh.in simet_lib_config.sh
+dist_simetlib_SCRIPTS = simet_lib.sh simet_lib_config.sh simet_lib_lmapd.sh
+EXTRA_DIST += simet_lib.simetbox.sh.in  simet_lib.simet.sh.in simet_lib_config.sh.in simet_lib_lmapd.sh.in
+CLEANFILES += simet_lib.sh simet_lib.sh.in simet_lib_config.sh simet_lib_lmapd.sh
 
 dist_simetlmapregistry_DATA = registry.d/simet-ma_base-registry.json registry.d/simet-ma_tasklet-registry.json
 dist_simetlmapregistry_DATA += registry.d/simet.nic.br_subsystem-id.tag-registry.json

@@ -17,28 +17,70 @@
 
 # parameters:
 #   --boot   (optional) shorten wait times and not restart the service
+#
+#   [<lmap instance>...] - which instances to update (default: all)
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
+. @SIMETLIBDIR@/simet_lib_lmapd.sh || exit 3
 
 OUTFILE=
+RC=1
+
 abend() {
 	simet_log simet-lmapd daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-	exit 1
+	exit "$RC"
 }
 run_trap() {
 	abend "$0: received stop/interrupt signal"
 }
+lmapi_log() {
+	instance="$1"
+	pri="$2"
+	shift 2 || :
+	simet_log simet-lmapd "$pri" "lmap $instance:" "$*"
+}
+
+# either succeeds or aborts the whole program
+newoutfile() {
+	if [ -z "$OUTFILE" ] ; then
+		# shellcheck disable=SC2015
+		OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
+		  && [ -w "$OUTFILE" ] \
+		  || abend "failed to create tmpfile"
+	else
+		: > "$OUTFILE" || abend "failed to truncate tmpfile"
+	fi
+}
+
 
 # if this is missing, the MA will have *no* hardcoded schedule
-LMAP_DFLSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
+LMAP_MAINSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
 
-LMAP_RECONFIG=${LMAP_RECONFIG:-/etc/init.d/simet-lmapd reload}
-LMAPD=@BINDIR@/lmapd
-LMAPCTL=@BINDIR@/lmapctl
+LMAP_EMPTY_SCHEDULE=@SIMETLIBDIR@/lmap-empty-schedule.json
+LMAP_EMERGENCY_SCHEDULE=@SIMETLIBDIR@/lmap-emergency-schedule.json
+
+#shellcheck disable=SC2015
+[ -s "$LMAP_EMPTY_SCHEDULE" ] && [ -s "$LMAP_EMERGENCY_SCHEDULE" ] \
+	|| RC=3 abend "internal error: empty or emergency schedule missing"
+
+#shellcheck disable=SC2015
+LMAP_MAIN_SCHEDULE_FILE=$(lmapd_get_sched_filename main) && [ -n "$LMAP_MAIN_SCHEDULE_FILE" ] \
+	|| RC=3 abend "internal error: cannot obtain main schedule name"
+
+#shellcheck disable=SC2015
+[ -n "$LMAP_CHANNEL_URL" ] || RC=3 abend "internal error: cannot get LMAP controller URL for default instance"
+
+# -z skip reconfig, defined: use simet_lib_lmapd::lmapd_lmapctl_reload
+LMAP_RECONFIG=1
+
 
 # Load hooks and overrides
 simet_load_hooks lmap-fetch-schedule
+
+
+LMAP_INSTANCES=$(lmapd_get_instance_list)
+[ -z "$LMAP_INSTANCES" ] && RC=3 abend "internal error: main lmap instance missing"
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 1000000"
@@ -47,13 +89,41 @@ CURLOPT2=
 HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
 	|| RC=3 abend "neither md5sum nor sha256sum found!"
 
-case "$1" in
+APILV=1
+[ -z "$LMAP_EXTRA_INSTANCES" ] || APILV=2
+
+LMAP_REQUEST_INSTANCES=
+while [ $# -gt 0 ]; do
+	case "$1" in
 	--boot)
 		shift
 		CURLOPT2="--retry 3 --retry-max-time 30"
 		LMAP_RECONFIG=
-	;;
-esac
+		;;
+	-l1)
+		# will be removed in the future
+		APILV=1
+		;;
+	-l2)
+		# will be removed in the future
+		APILV=2
+		;;
+	-*)
+		RC=2 abend "unknown parameter: $1"
+		;;
+	*)
+		i=$(printf "%s" "$1" | tr -dc a-z0-9) || i=
+		[ -z "$i" ] || [ "$1" != "$i" ] \
+			&& RC=2 abend "invalid instance name in command line: $1"
+		printf " %s " "$LMAP_INSTANCES" | grep -q " $i " \
+			|| RC=2 abend "unknown LMAP instance: $i"
+		LMAP_REQUEST_INSTANCES="$LMAP_REQUEST_INSTANCES $i"
+		;;
+	esac
+	shift
+done
+
+[ -n "$LMAP_REQUEST_INSTANCES" ] && LMAP_INSTANCES="$LMAP_REQUEST_INSTANCES"
 
 # $1: max; $2 base_mult; $3 period; $4 offset
 __gen_seq() {
@@ -110,6 +180,9 @@ __clamp_spread() {
 simet_gen_local_schedule() {
 	local awkseed RND RND1 RND2
 
+	# local schedule only used on main instance
+	[ -n "$1" ] && [ "$1" != "main" ] && return 1
+
 	# stableish pseudo-random sequence for awk, fallback to time-based seed
 	awkseed=$($HASHSUM "$AGENT_ID_FILE" | sed -E -e '1 {s/^[^[:blank:]]*([^[:blank:]]{5})[[:blank:]].*/0x\1/;q}') || awkseed=
 	RND=$(awk "BEGIN { srand($awkseed); printf \"RND1=%d ; RND2=%d\",rand()*1440,rand()*1440 }") && eval "$RND"
@@ -131,12 +204,15 @@ simet_gen_local_schedule() {
 	T_PERIODIC_GWP_SPREAD=$(__clamp_spread "$T_PERIODIC_GWP_PERIOD" "$T_PERIODIC_GWP_SPREAD")
 	T_PERIODIC_SPOOFER_SPREAD=$(__clamp_spread "$T_PERIODIC_SPOOFER_PERIOD" "$T_PERIODIC_SPOOFER_SPREAD")
 
+	# shellcheck disable=SC2015
 	T_PERIODIC_GWP_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_GWP_PERIOD" "$RND2") \
 	  && T_PERIODIC_GWP_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_GWP_PERIOD" "$RND2") \
 	  || { T_PERIODIC_GWP_HOURS='"*"' ; T_PERIODIC_GWP_MINUTES=0 ; }
+	# shellcheck disable=SC2015
 	T_PERIODIC_TEST_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_TEST_PERIOD" "$RND1") \
 	  && T_PERIODIC_TEST_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_TEST_PERIOD" "$RND1") \
 	  || { T_PERIODIC_TEST_HOURS="1,5,9,13,17,21" ; T_PERIODIC_TEST_MINUTES=39 ; }
+	# shellcheck disable=SC2015
 	T_PERIODIC_SPOOFER_HOURS=$(__gen_seq 24 60 "$T_PERIODIC_SPOOFER_PERIOD" "$RND1") \
 	  && T_PERIODIC_SPOOFER_MINUTES=$(__gen_seq 60 1 "$T_PERIODIC_SPOOFER_PERIOD" "$RND1") \
 	  || { T_PERIODIC_SPOOFER_HOURS="3,15" ; T_PERIODIC_SPOOFER_MINUTES=23 ; }
@@ -153,21 +229,37 @@ simet_gen_local_schedule() {
 	    -e "s/@PERIODIC_SPOOFER_MINUTES@/$T_PERIODIC_SPOOFER_MINUTES/g" \
 	    -e "s/@PERIODIC_SPOOFER_SPREAD@/$T_PERIODIC_SPOOFER_SPREAD/g" \
 	    -e "s/@PERIODIC_SPOOFER_PERIOD@/$T_PERIODIC_SPOOFER_PERIOD_S/g" \
-		"$LMAP_DFLSCHED_TMPL" > "$OUTFILE" || return 1
+		"$LMAP_MAINSCHED_TMPL" > "$OUTFILE" || return 1
 	:
 }
 
 # overridable
+# $1 - lmapd instance, empty or main for default
+# $2.. API request
+lmap_channel_url() {
+	LMAP_INSTANCE="$1" ; shift
+	printf "%s%s" "$LMAP_CHANNEL_URL" "$*" | \
+		sed -e "s/[{]lmap_instance[}]/${LMAP_INSTANCE:-main}/g" || return 1
+	:
+}
+
+##
+## Controller API v1
+##
+
+# overridable
 simet_api_lmapputstate() {
+	CHANNEL_URL=$(call lmap_channel_url "$1" "/v1/agents/$OLDAID/reported-state") || return 1
+        [ -n "$CHANNEL_URL" ] || return 1
+	# shellcheck disable=SC2086
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
 		-T - -f -o "$OUTFILE" \
-		-H "Authorization: Bearer $OLDAT" \
-		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/reported-state"
+		-H "Authorization: Bearer $OLDAT" "$CHANNEL_URL"
 }
 
 # overridable
 simet_lmap_sendstate() {
-	$LMAPD -j -s | call simet_api_lmapputstate || return $?
+	call lmapd_lmapd_state "$1" | call simet_api_lmapputstate "$1" || return $?
 	:
 }
 
@@ -176,31 +268,111 @@ simet_lmap_sendstate() {
 # APIRES = 204 -> revert to default schedule
 # APIRES = 304 -> keep current schedule (may happen even without e-tags)
 simet_api_lmapgetsched() {
+	CHANNEL_URL=$(call lmap_channel_url "$1" "/v1/agents/$OLDAID/required-config") || return 1
+        [ -n "$CHANNEL_URL" ] || return 1
+	# shellcheck disable=SC2086
 	APIRES=$( curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-X GET -f -o "$OUTFILE" -w "%{http_code}" \
+		-o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
-		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config" ) || return 1
+		"${CHANNEL_URL}" ) || return 1
+	:
+}
+
+##
+## Controller API v2
+##
+
+#overridable
+# $1: instance. NULL == main
+simet_api_lmapgetsched_v2() {
+	CHANNEL_URL=$(call lmap_channel_url "$1" "/v2/agents/$OLDAID/{lmap_instance}") || return 1
+        [ -n "$CHANNEL_URL" ] || return 1
+	# GET would work as well, and could be used when there's no state to send
+	# shellcheck disable=SC2086
+	APIRES=$( call lmapd_lmapd_state "$1" | \
+		curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+		-T - -o "$OUTFILE" -w "%{http_code}" \
+		-H "Authorization: Bearer $OLDAT" \
+		"${CHANNEL_URL}" ) || return 1
+	:
+}
+
+##
+## common code
+##
+
+gethash() {
+	# $1 - file to hash
+	[ -r "$1" ] || {
+		echo ""
+		return 0
+	}
+	$HASHSUM "$1" | sed -n '1 { s/[[:blank:]].*// ; p ; q }' || :
+	return 0
+}
+
+
+# We might have to run *before* the initscript created dirs for some
+# reason. deal with it.  $1 - schedule filename
+ensure_sched_dir() {
+	# might race something, so tolerate failures
+	# whatever cares (such as simet-ma/simet-lmapd init scripts) will fix
+	# the onwership of LMAP_SCHEDULE_DIR as required.
+	[ -n "$1" ] && {
+		LMAP_SCHEDULE_DIR=$(dirname "$1") || return 0
+		[ -d "$LMAP_SCHEDULE_DIR" ] || \
+			mkdir -p -m 02770 "$LMAP_SCHEDULE_DIR" 2>/dev/null || true
+	}
 	:
 }
 
 #overridable
 #note: symlinks *must* have absolute paths as target
+#$1 - instance
 simet_lmap_download_schedule() {
-	call simet_lmap_sendstate || true
-	call simet_api_lmapgetsched || return $?
+	if [ "$APILV" -eq 1 ] ; then
+		call simet_lmap_sendstate "$1" || true
+		call simet_api_lmapgetsched "$1" || APIRES=9999
+	else
+		call simet_api_lmapgetsched_v2 "$1" || APIRES=9999
+	fi
+
 	case "$APIRES" in
+	9999)
+		lmapi_log "$1" daemon.err "connection to controller failed"
+		return 1
+		;;
+	200)
+		lmapi_log "$1" daemon.info "received a proposed schedule from controller"
+		;;
 	204)
-		simet_log simet-ma daemon.notice "controller ordered us to switch to local schedule"
-		call simet_gen_local_schedule || return 1
+		lmapi_log "$1" daemon.info "received a controller order to switch to local schedule"
+		call simet_gen_local_schedule "$1" || {
+			simet_log simet-ma daemon.err "failed to generate local schedule"
+			return 1
+		}
 		;;
 	304)
-		ln -sf "$LMAP_SCHEDULE_FILE" "$OUTFILE"
+		lmapi_log "$1" daemon.info "received a controller order to keep the current schedule"
+		OLDSCHED_FILE=$(lmapd_get_sched_filename "$1") \
+			|| RC=3 abend "failed to retrieve schedule filename for lmap instance $1"
+		# ensures same-hash, so no replacement. May fail due to directory not there yet
+		ln -sf "$OLDSCHED_FILE" "$OUTFILE" 2>/dev/null || :
+		;;
+	410)
+		# deny listed. stop doing anything.
+		lmapi_log "$1" daemon.notice "received a controller order to stop measuring"
+		ln -sf "@SIMETLIBDIR@/lmap-empty-schedule.json" "$OUTFILE"
 		;;
 	4*|5*)
+		lmapi_log "$1" daemon.info "received error status from controller"
+		return 1
+		;;
+	*)
+		lmapi_log "$1" daemon.err "received unexpected response status from controller"
 		return 1
 		;;
 	esac
-	simet_log simet-ma daemon.info "downloaded a proposed schedule from controller"
 	:
 }
 
@@ -214,62 +386,69 @@ simet_lmap_download_schedule() {
 #overridable
 simet_lmap_reload_config() {
 	if [ -n "$LMAP_RECONFIG" ] ; then
-		$LMAP_RECONFIG || true
+		call lmapd_lmapctl_reload main || true
 	fi
-}
-
-gethash() {
-	# $1 - file to hash
-	[ -r "$1" ] || {
-		echo ""
-		return 0
-	}
-	$HASHSUM "$1" | sed -n '1 { s/[[:blank:]].*// ; p ; q }' || :
-	return 0
 }
 
 #overridable
 simet_lmap_verifyconfig() {
-	# $* - config files/directories to validate
-	CFGS=
-	while [ $# -gt 0 ] ; do
-		CFGS="$CFGS -c $1"
-		shift
-	done
-	$LMAPCTL -j $CFGS validate || return 1
-	return 0
+	call lmapd_lmapctl_validate "$1" 2>/dev/null || return $?
+	:
 }
 
-activateschedule() {
+# $1 - instance
+activate_schedule() {
 	force_reload=0
-	[ "$1" -eq 1 ] && force_reload=1
+	# shellcheck disable=SC2015
+	SCHED_FILENAME=$(lmapd_get_sched_filename "$1") && [ -n "$SCHED_FILENAME" ] || {
+		lmapi_log "$1" daemon.err "internal error obtaining schedule name"
+		return 1
+	}
 	NEWSCHED_HASH=$(gethash "$OUTFILE")
+	OLDSCHED_HASH=
+	[ -r "$SCHED_FILENAME" ] && OLDSCHED_HASH=$(gethash "$SCHED_FILENAME") || OLDSCHED_HASH=
 	if [ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] ; then
-		call simet_lmap_verifyconfig "$LMAP_CONFIG_PATH" "$OUTFILE" || {
-			simet_log simet-lmapd daemon.err "proposed new SIMET schedule is invalid"
+		call simet_lmap_verifyconfig "$OUTFILE" || {
+			lmapi_log "$1" daemon.err "proposed new SIMET schedule is invalid, ignoring it"
 			return 1
 		}
 
 		[ -L "$OUTFILE" ] || {
-			chmod 0664 "$OUTFILE" || return 1
+			chmod 0660 "$OUTFILE" || {
+				simet_log simet-lmapd daemon.err "failed to adjust file permisions"
+				return 1
+			}
 		}
-		mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" || return 1
+		mv -f "$OUTFILE" "$SCHED_FILENAME" || {
+			lmapi_log "$1" daemon.err "failed to replace schedule"
+			return 1
+		}
 		force_reload=1
-		simet_log simet-ma daemon.notice "SIMET schedule has changed"
+		simet_log simet-ma daemon.notice "lmap $1: SIMET schedule has changed"
 	else
-		simet_log simet-ma daemon.info "SIMET schedule unchanged"
+		simet_log simet-ma daemon.info "lmap $1: SIMET schedule unchanged"
 	fi
+
 	[ $force_reload -eq 1 ] && {
-		trap 'trap "" TERM ; call simet_lmap_reload_config || true' EXIT
+		if [ -n "$1" ] && [ "$1" != "main" ] ; then
+			lmapd_lmapctl_reload "$1" \
+				&& lmapi_log "$1" daemon.notice "simet-lmapd reloaded"
+		else
+			# For the main lmap instance, queue through exit trap
+			LMAPD_NEED_MAIN_RELOAD=1
+		fi
 	}
 	:
 }
 
 getschedule() {
-	# Controller access API requirements:
+	# Controller access API requirements (v1)
 	#   First, PUT your current state so that controller knows it
 	#   Then,  GET your schedule (if PUT failed, you may get one based on ancient state)
 	#   Then,  PUT your new state, so that controller knows the schedule took
+	#
+	# Controller access API requirements (v2)
+	#   PUT your current state in request body (json), receive schedule in answer body
 
 	OLDAT=
 	OLDAID=
@@ -281,63 +460,62 @@ getschedule() {
 		abend "MA not registered yet, cannot contact controller"
 	fi
 
-	# Avoid massive problems on broken config
-	if [ -z "$LMAP_SCHEDULE_FILE" ] || [ -z "$LMAP_CHANNEL_URL" ] ; then
-		abend "missing essential data in simet-ma.conf, aborting"
-	fi
-
-	# might race something, so tolerate failures
-	# whatever cares (such as simet-ma/simet-lmapd init scripts) will fix
-	# the onwership of LMAP_SCHEDULE_DIR as required.
-	LMAP_SCHEDULE_DIR=$(dirname "$LMAP_SCHEDULE_FILE")
-	[ -d "$LMAP_SCHEDULE_DIR" ] || \
-		mkdir -p "$LMAP_SCHEDULE_DIR" 2>/dev/null || true
-
-	OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
-		|| abend "failed to create tmpfile"
-
 	# don't leave behind tmpfiles
 	trap 'run_trap' INT TERM QUIT
 
-	LMAPD_NEED_RELOAD=0
-	# Create a local schedule if there isn't any schedule yet.  We send it to
-	# the LMAP controller as "current".
-	if [ ! -s "$LMAP_SCHEDULE_FILE" ] || grep -q -s -F "ma-local_emergency-schedule" "$LMAP_SCHEDULE_FILE" ; then
-		call simet_gen_local_schedule && {
-			# must displace target, either mv-f or rm-f+cp/cat>
-			chmod 0664 "$OUTFILE" \
-			  && mv -f "$OUTFILE" "$LMAP_SCHEDULE_FILE" \
-			  && LMAPD_NEED_RELOAD=1 \
-			  && simet_log simet-ma daemon.info "SIMET local schedule created"
-			OUTFILE=
-		}
-	fi
-
-	[ -z "$OUTFILE" ] && {
-		OUTFILE=$(mktemp -q -t simet-lmap-fetchsched.$$.XXXXXXXXXX) \
-		  || abend "failed to create tmpfile"
+	LMAPD_NEED_MAIN_RELOAD=0
+	printf " %s " "$LMAP_INSTANCES" | grep -q " main " && {
+		# Create a local main schedule if there isn't any schedule yet.  We send it to
+		# the LMAP controller as "current" so that it can pick up some info from the tags
+		if [ ! -s "$LMAP_MAIN_SCHEDULE_FILE" ] || grep -q -s -F "ma-local_emergency-schedule" "$LMAP_MAIN_SCHEDULE_FILE" ; then
+			newoutfile
+			ensure_sched_dir "$LMAP_MAIN_SCHEDULE_FILE"
+			call simet_gen_local_schedule main && {
+				# must displace target, either mv-f or rm-f+cp/cat>
+				chmod 0664 "$OUTFILE" \
+				  && mv -f "$OUTFILE" "$LMAP_MAIN_SCHEDULE_FILE" \
+				  && LMAPD_NEED_MAIN_RELOAD=1 \
+				  && simet_log simet-ma daemon.info "SIMET local schedule created"
+				OUTFILE=
+			}
+		fi
 	}
 
-	OLDSCHED_HASH=
-	[ -r "$LMAP_SCHEDULE_FILE" ] && OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE")
+	# download and activate schedules
+	for lmap_instance in $LMAP_INSTANCES ; do
+		newoutfile
 
-	call simet_lmap_download_schedule && activateschedule "$LMAPD_NEED_RELOAD" || {
-		simet_log simet-ma daemon.err "failed to download or activate schedule from controller"
-		grep -q -s -F '"ma-local_locally-generated-schedule"' "$LMAP_SCHEDULE_FILE" && {
-			if call simet_gen_local_schedule && activateschedule "$LMAPD_NEED_RELOAD" ; then
-				simet_log simet-ma daemon.notice "using local schedule"
-			else
-				simet_log simet-ma daemon.err "failed to update or activate local schedule"
-			fi
+		#shellcheck disable=SC2015
+		call simet_lmap_download_schedule "$lmap_instance" && activate_schedule "$lmap_instance" || {
+			log_kept_same=1
+			grep -q -s -F '"ma-local_locally-generated-schedule"' "$OLDSCHED_FILE" && {
+				# refresh locally generated schedules
+				if call simet_gen_local_schedule "$lmap_instance" && activate_schedule "$lmap_instance" ; then
+					simet_log simet-ma daemon.notice "lmap $lmap_instance: using local schedule"
+					log_kept_same=0
+				else
+					simet_log simet-ma daemon.err "lmap $lmap_instance: failed to update or activate local schedule"
+				fi
+			}
+			[ "$log_kept_same" -eq 1 ] && \
+				lmapi_log "$lmap_instance" daemon.info "keeping the old schedule"
 		}
-	}
 
-	# always try to send state after downloading a schedule
-	call simet_lmap_sendstate \
-		|| simet_log simet-ma daemon.notice "failed to send state update to controller"
+		[ "$LMAPD_NEED_MAIN_RELOAD" -eq 1 ] && {
+			# queue reload of main lmapd instance via trap
+			trap 'trap "" TERM ; call simet_lmap_reload_config || true' EXIT
+			LMAPD_NEED_MAIN_RELOAD=0
+		}
 
-	[ -n "$OUTFILE" ] && rm -f "$OUTFILE"
-	OUTFILE=
+		# For API v1, always try to send state after downloading a schedule
+		[ "$APILV" -eq 1 ] && {
+			call simet_lmap_sendstate "$lmap_instance" \
+				|| lmapi_log "$lmap_instance" daemon.notice "failed to send state update to controller"
+		}
+
+		[ -n "$OUTFILE" ] && rm -f "$OUTFILE"
+		OUTFILE=
+	done
 }
 
 [ -r "$AGENT_TOKEN_LOCK" ] || touch "$AGENT_TOKEN_LOCK" || abend "cannot create $AGENT_TOKEN_LOCK"

@@ -11,12 +11,11 @@ test -f /opt/simet/bin/simet_register_ma.sh && {
 		--startas /opt/simet/bin/simet_register_ma.sh \
 		-- --boot >/dev/null 2>&1 || true
 
-	# Attempt to contact the controller if the schedule is too old
-	. /opt/simet/lib/simet/simet_lib_config.sh \
-		&& [ -n "$LMAP_SCHEDULE_FILE" ] \
-		&& [ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
-		&& [ -n "$(find $LMAP_SCHEDULE_FILE -mtime +1)" ] \
+	# Attempt to contact the controller if the main schedule is too old
+	[ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
+		&& [ -n "$(find /var/run/lmapd/lmap-schedule.json -maxdepth 0 -type f -mtime +1)" ] \
 		&& /opt/simet/bin/simet_lmap-fetch-schedule.sh \
-		&& chown -h nicbr-simet:nicbr-simet "$LMAP_SCHEDULE_FILE" 2>/dev/null || true
+		&& find /var/run/lmapd -maxdepth 2 \( -type f -o -type l \) -name lmap-schedule.json \
+			-exec chown -h nicbr-simet:nicbr-simet "{}" + 2>/dev/null || true
 }
 :
