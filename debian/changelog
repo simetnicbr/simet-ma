@@ -5,7 +5,7 @@ simet-ma (0.18.7+simetas1) unstable; urgency=medium
   * change download directory to not update to regular simet-ma.
   * include beta version of the top.nic.br/internet.nl client
 
- -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 19 Feb 2024 11:05:52 -0300
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 29 Feb 2024 20:45:16 -0300
 
 simet-ma (0.18.7) unstable; urgency=medium
 
