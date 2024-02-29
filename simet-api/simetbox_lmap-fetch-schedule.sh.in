@@ -19,6 +19,7 @@
 #   --boot   (optional) shorten wait times and not restart the service
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
+. @SIMETLIBDIR@/simet_lib_lmapd.sh || exit 3
 
 OUTFILE=
 abend() {
@@ -33,12 +34,12 @@ run_trap() {
 # if this is missing, the MA will have *no* hardcoded schedule
 LMAP_DFLSCHED_TMPL=@SIMETLIBDIR@/lmap-sched-template.json
 
-LMAPD=@BINDIR@/lmapd
-LMAPCTL=@BINDIR@/lmapctl
+LMAP_SCHEDULE_FILE=$(lmapd_get_sched_filename main) \
+	|| abend "internal error: cannot obtain main schedule name"
 
 # OpenWRT 21+ is very broken and requires root to even *run* initscripts,
 # so just bypass it entirely.
-LMAP_RECONFIG=${LMAP_RECONFIG:-$LMAPCTL reload}
+LMAP_RECONFIG=${LMAP_RECONFIG:-lmapd_lmapctl_reload main}
 
 USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 1000000"
@@ -170,7 +171,7 @@ simet_api_lmapputstate() {
 }
 
 simet_lmap_sendstate() {
-	$LMAPD -j -s | simet_api_lmapputstate || return $?
+	lmapd_lmapd_state main | simet_api_lmapputstate || return $?
 	:
 }
 
@@ -221,15 +222,8 @@ gethash() {
 	return 0
 }
 
-
 simet_lmap_verifyconfig() {
-	# $* - config files/directories to validate
-	CFGS=
-	while [ $# -gt 0 ] ; do
-		CFGS="$CFGS -c $1"
-		shift
-	done
-	$LMAPCTL -j $CFGS validate || return 1
+	lmapd_lmapctl_validate "$1" || return $?
 	return 0
 }
 
@@ -238,7 +232,7 @@ activateschedule() {
 	[ "$1" -eq 1 ] && force_reload=1
 	NEWSCHED_HASH=$(gethash "$OUTFILE")
 	if [ x"$NEWSCHED_HASH" != x"$OLDSCHED_HASH" ] ; then
-		simet_lmap_verifyconfig "$LMAP_CONFIG_PATH" "$OUTFILE" || {
+		simet_lmap_verifyconfig "$OUTFILE" || {
 			simet_log simet-lmapd daemon.err "proposed new SIMET schedule is invalid"
 			return 1
 		}
@@ -314,6 +308,7 @@ getschedule() {
 	OLDSCHED_HASH=
 	[ -r "$LMAP_SCHEDULE_FILE" ] && OLDSCHED_HASH=$(gethash "$LMAP_SCHEDULE_FILE")
 
+	#shellcheck disable=SC2015
 	simet_lmap_download_schedule && activateschedule "$LMAPD_NEED_RELOAD" || {
 		simet_log simet-ma daemon.err "failed to download or activate schedule from controller"
 		grep -q -s -F '"ma-local_locally-generated-schedule"' "$LMAP_SCHEDULE_FILE" && {

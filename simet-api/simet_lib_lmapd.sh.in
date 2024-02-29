@@ -1,0 +1,132 @@
+#!/bin/sh
+# SIMET-MA os-specific compatibility layer (shell script), lmapd API
+# Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+# LMAPD API
+# * Load simet_lib or simet_lib_config *first*!
+# * First parameter identifies the lmapd instance
+# * simet-api/ should use call lmapd_{lmapd, lmapctl, lmapctl_report}
+#
+# The default LMAP instance is called "main", and this is the instance
+# used if an empty string is passed as the instance name.
+#
+# Run dir:   .../run/lmapd/ (main instance)
+#            .../run/lmapd/<instance>/    (other instances in subdirs)
+# Queue dir: .../queue/ (main instance)
+#            .../queue-<instance>/ (other instances in the same level)
+#
+# schedule, state have the same filename on all instances, inside the
+# instance run dir.
+
+# Fail to load if required config missing
+[ -z "$LMAP_RUN_DIR_PREFIX" ] && return 3
+[ -z "$LMAP_QUEUE_DIR_PREFIX" ] && return 3
+
+# $1: instance, not overridable, tolerates call without the parameter
+# fails hard instead of returning insane crap
+lmapd_get_rundir() {
+	[ -z "$LMAP_RUN_DIR_PREFIX" ] && exit 3
+	case "$1" in
+	"" | "main")
+		printf "%s" "$LMAP_RUN_DIR_PREFIX"
+		;;
+	*)
+		[ -z "$1" ] && exit 3
+		printf "%s/%s" "$LMAP_RUN_DIR_PREFIX" "$1"
+		;;
+	esac
+	:
+}
+lmapd_get_queuedir() {
+	[ -z "$LMAP_QUEUE_DIR_PREFIX" ] && exit 3
+	case "$1" in
+	"" | "main")
+		printf "%s" "$LMAP_QUEUE_DIR_PREFIX"
+		;;
+	*)
+		[ -z "$1" ] && exit 3
+		printf "%s-%s" "$LMAP_QUEUE_DIR_PREFIX" "$1"
+		;;
+	esac
+	:
+}
+lmapd_get_sched_filename() {
+	printf "%s/lmap-schedule.json" "$(lmapd_get_rundir "$@")"
+}
+
+# suitable for shell for loops with IFS=" "
+lmapd_get_instance_list() {
+	[ -z "$LMAP_EXTRA_INSTANCES" ] && {
+		printf "main"
+		return 0
+	}
+	printf "main %s" "$LMAP_EXTRA_INSTANCES" | tr -dc 'a-z0-9 ' | sed -e 's/ \+/ /g' -e 's/^ \+//' -e 's/ \+$//'
+	:
+}
+
+# $1 - instance, $2..: lmapd/lmapctl args
+lmapd_lmapd()
+(
+	LMAP_INSTANCE="$1" ; shift || :
+	exec @BINDIR@/lmapd -j \
+		-q "$(lmapd_get_queuedir "$LMAP_INSTANCE")" \
+		-r "$(lmapd_get_rundir "$LMAP_INSTANCE")" \
+		-c+ -c "$(lmapd_get_sched_filename "$LMAP_INSTANCE")" \
+		"$@"
+)
+lmapd_lmapd_state()
+(
+	LMAP_INSTANCE="$1" ; shift || :
+	LMAP_SCHED=$(lmapd_get_sched_filename "$LMAP_INSTANCE") && [ -s "$LMAP_SCHED" ] || LMAP_SCHED=
+	exec @BINDIR@/lmapd -j \
+		-q "$(lmapd_get_queuedir "$LMAP_INSTANCE")" \
+		-r "$(lmapd_get_rundir "$LMAP_INSTANCE")" \
+		-c+ ${LMAP_SCHED:+-c} "$LMAP_SCHED" \
+		-s "$@"
+)
+lmapd_lmapctl()
+(
+	LMAP_INSTANCE="$1" ; shift || :
+	exec @BINDIR@/lmapctl -j \
+		-q "$(lmapd_get_queuedir "$LMAP_INSTANCE")" \
+		-r "$(lmapd_get_rundir "$LMAP_INSTANCE")" \
+		-c+ -c "$(lmapd_get_sched_filename "$LMAP_INSTANCE")" \
+		"$@"
+)
+lmapd_lmapctl_reload() {
+	@BINDIR@/lmapctl -j -r "$(lmapd_get_rundir "$1")" reload || return $?
+	:
+}
+lmapd_lmapctl_running() {
+	@BINDIR@/lmapctl -j -r "$(lmapd_get_rundir "$1")" running || return $?
+	:
+}
+# $1 is the file with the per-instance schedule to validate
+lmapd_lmapctl_validate() {
+	[ -z "$1" ] && return 1
+	@BINDIR@/lmapctl -j -c+ -c "$1" validate || return $?
+	:
+}
+lmapd_lmapctl_report()
+(
+	# -q, -r are not relevant for report rendering mode
+	# -c *is* relevant, but not the schedule, so we use the built-in path
+	TZ=UTC0
+	export TZ
+	exec @BINDIR@/lmapctl -j -i json report
+)
+
+:

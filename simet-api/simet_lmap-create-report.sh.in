@@ -28,6 +28,7 @@ set -e
 set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
+. @SIMETLIBDIR@/simet_lib_lmapd.sh || exit 3
 
 OUTFILE=
 abend() {
@@ -51,8 +52,6 @@ fi
 [ -d "$LMAP_REPORT_QUEUE_DIR" ] || mkdir -m 0770 -p "$LMAP_REPORT_QUEUE_DIR"
 [ -d "$LMAP_REPORT_QUEUE_DIR" ] || abend "could not access or create $LMAP_REPORT_QUEUE_DIR"
 
-LMAPCTL=${LMAPCTL:-@BINDIR@/lmapctl}
-
 OLDAT=
 OLDAID=
 [ -r "$AGENT_ID_FILE" ] && OLDAID=$(cat "$AGENT_ID_FILE")
@@ -70,7 +69,7 @@ OUTFILE=$(mktemp -q -p "$LMAP_REPORT_QUEUE_DIR" "simet-report.$TIMENOW.XXXXXXXXX
 trap 'run_trap' INT TERM QUIT
 
 # -o pipefail matters here!
-(export TZ=UTC0 && cd .. && $LMAPCTL -i json -j report | gzip -c) > "$OUTFILE" || {
+(cd .. && call lmapd_lmapctl_report | gzip -c) > "$OUTFILE" || {
 	abend "failed to render compressed report"
 }
 mv -f "$OUTFILE" "$OUTFILE.report.json.gz" || \

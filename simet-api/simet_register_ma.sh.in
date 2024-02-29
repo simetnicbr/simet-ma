@@ -482,7 +482,7 @@ __simet_attempt_pairing_recovery() {
 simet_attempt_pairing_recovery() {
 	OLDPAIR=$(cat "$AGENT_PAIRBKP_FILE" 2>/dev/null) || return 1
 
-	RMOLD=$(find "$AGENT_PAIRBKP_FILE" -type f -mtime +14) || RMOLD=
+	RMOLD=$(find "$AGENT_PAIRBKP_FILE" -maxdepth 0 -type f -mtime +14) || RMOLD=
 	[ -n "$RMOLD" ] && rm -f "$AGENT_PAIRBKP_FILE"
 
 	[ -z "$OLDPAIR" ] && return 1

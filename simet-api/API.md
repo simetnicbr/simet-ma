@@ -211,7 +211,7 @@ into some details of the SIMET2 web API.
 
 ## LMAP scheduler API
 
-  Simet-lmapd is responsible for scheduling and running periodic and
+  simet-lmapd is responsible for scheduling and running periodic and
   bootup non-critical tasks.  A task is critical if it must be able to
   run even when simet-lmapd is non-functional, or if it must be able to
   run regardless of the Measurement Agent being registered.
@@ -263,9 +263,6 @@ into some details of the SIMET2 web API.
   schedule to a default schedule.  It will also attempt to retrieve new
   schedules at every boot, as well as periodically.
 
-  <runstatedir>/lmap/lmap-schedule.json - variable schedule
-       received from the controller
-
   Tasks present in the schedule that are not defined anywhere will cause
   the schedule to be refused entirely.  Care must be taken for this to
   never happen to the default schedule (i.e. it must be fully compatible
@@ -284,6 +281,58 @@ into some details of the SIMET2 web API.
 
   For safety, security and resilience reasons, software/firmware auto
   update tasks must be completely independent of the lmap core.
+
+### Multiple LMAP scheduler support
+
+  There can be more than one instance of simet-lmapd running.  They all
+  share the same capabilities and base configuration, but have separate
+  schedules.  This is useful because when simet-lmapd applies an
+  schedule update, it stops (terminates) all running tasks.  Separate
+  simet-lmapd instances for, e.g., user-requested one-shot measurements
+  work around this deficiency.
+
+  Instances must be named using only lowercase ASCII letters and digits,
+  i.e. matching the regexp [a-z0-9]+
+
+  The main simet-lmapd instance is named "main", and will always be
+  present.  When multiple instances are not configured, this is the only
+  simet-lmapd instance that will be active.
+
+  Each simet-lmapd instance must have its own queue and runtime state
+  directories.
+
+  simet-lmapd runtime state includes the per-instance lmap schedule:
+
+  <runstatedir>/lmap/lmap-schedule.json - variable schedule
+       received from the controller, *for the main lmapd instance*
+
+  <runstatedir>/lmap/<instance>/lmap-schedule.json - variable schedule
+       received from the controller, *for lmapd <instance>*
+
+  The simet-lmapd *pidfile* and other internal files (e.g. *state* dumps
+  used by *lmapctl*) are also stored in <runstatedir>/lmap/ for the
+  "main" simet-lmapd instance, and <runstatedir>/lmap/<instance> for the
+  other instances.
+
+  Queue directories are also programatically generated based on the
+  instance name:
+
+  <spooldir>/reports - outgoing rendered report spool, common to all
+      instances
+
+  <spooldir>/queue - queue dir for main simet-lmapd instance
+
+  <spooldir>/queue-<instance> - queue dir for simet-lmapd <instance>
+
+  To enable multi-instance mode, set LMAP\_EXTRA\_INSTANCES to the
+  space-separated list of simet-lmapd instance names.  Do not include
+  the main instance.
+
+  For multiple instance mode to be useful, the LMAP controller must be
+  able to differentiate which simet-lmapd instance is talking to it.
+  Any instances of the string "{lmap\_instance}" in LMAP\_CHANNEL\_URL
+  will be replaced with the simet-lmapd instance.  "main" will be used
+  for the main simet-lmapd instance in that case.
 
 ### LMAP MA CAPABILITIES:
 
@@ -341,13 +390,19 @@ into some details of the SIMET2 web API.
      take the shared lock to block measurements, take the exclusive
      lock to measure.
 
+     This lock is not an empty file, and its contents are an internal
+     API detail (relevant to simet\_register-ma.sh --boot).  It should
+     be truncated when software packages are updated, and it should be
+     volatile (lost at MA reboot/power down).
+
   $AGENT\_TOKEN\_LOCK   -  general config lock.  Protects agent-id,
      agent token, LMAP config, and so on.  Take the exclusive lock
      when doing a non-atomic update.
 
-  Locks are empty files, locked using flock(2).  Beware permission
-  issues with the lock directory and lock files when scripts are run
-  with different privilege levels (e.g. root and a non-privileged user).
+  Locks are empty files unless explicitly stated otherwise, and are
+  always locked using flock(2).  Beware permission issues with the
+  lock directory and lock files when scripts are run with different
+  privilege levels (e.g. root and a non-privileged user).
 
 
 ## Hooks
