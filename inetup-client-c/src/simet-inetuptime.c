@@ -588,12 +588,15 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
             if (handlers->handler) {
                 /* single-threaded, so we can peek to avoid an extra copy... */
                 res = tcpaq_peek_nowait(&s->conn, hdr.message_size + sizeof(hdr), &data);
-                if (res > 0 && data)
+                if (res > 0 && data) { /* data is NULL only for res <= 0, this is just safety */
                     res = (* handlers->handler)(s, &hdr, data + sizeof(hdr));
-                if (tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr)) <= 0)
-                    protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
+                    if (tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr)) <= 0) {
+                        /* entire message was peeked at, since peek_nowait did not return zero */
+                        protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
+                    }
+                }
             } else {
-                /* silent discard the whole thing */
+                /* try to silent discard the whole thing */
                 res = tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr));
             }
             if (res < 0) {
