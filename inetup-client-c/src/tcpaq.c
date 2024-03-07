@@ -291,7 +291,8 @@ static int xx_tcpaq_is_in_queue_empty(struct tcpaq_conn * const s)
     return (s->in_queue.rd_pos >= s->in_queue.wr_pos || s->in_queue.rd_pos >= s->in_queue.buffer_size);
 }
 
-/* discards all pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
+/* discards pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
+/* returns -EPIPE if EOF is detected.  loop while tcpaq_drain() > 0 to fully drain. */
 int tcpaq_drain(struct tcpaq_conn * const s)
 {
     int discarded = 0;
@@ -314,12 +315,16 @@ int tcpaq_drain(struct tcpaq_conn * const s)
                 return discarded;
             protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
             return -err;
+        } else if (!res) {
+            protocol_trace(s, "tcpaq_drain: detected end of stream");
+            return -EPIPE; /* EOF */
         }
     }
     return discarded;
 }
 
 /* discards object, <0 error; 0 : still need to receive more data; NZ: discarded */
+/* returns -EPIPE if EOF is detected before the whole object is discarded */
 int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
 {
     assert(s);
@@ -356,6 +361,10 @@ int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
                 return 0;
             protocol_trace(s, "tcpaq_discard: recv() error: %s", strerror(err));
             return -err;
+        } else if (!res) {
+            /* EOF: we will not get the whole object, ever */
+            protocol_trace(s, "tcpaq_discard: detected end of stream");
+            return -EPIPE; /* EOF */
         }
         s->in_queue.wr_pos_reserved -= res; /* recv() ensures 0 < res <= wr_pos_reserved */
     }
@@ -364,6 +373,7 @@ int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
 }
 
 /* < 0: error, 0: need to receive more data; > 0: object ready for tcpaq_receive() */
+/* returns -EPIPE for EOF from recv() */
 static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t object_size)
 {
     int res;
@@ -409,6 +419,10 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
             return 0;
         protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
         return -err;
+    } else if (!rcvres) {
+        /* EOF: we will not get the whole object, ever */
+        protocol_trace(s, "tcpaq_request: detected end of stream");
+        return -EPIPE; /* EOF */
     }
     s->in_queue.wr_pos += rcvres; /* recv() ensures 0 <= rcvres <= wr_pos */
     object_size -= rcvres;  /* recv() ensures 0 <= rcvres <= wr_pos */
