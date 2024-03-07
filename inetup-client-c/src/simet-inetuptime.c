@@ -580,7 +580,7 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
     simet_uptime2_remotekeepalive_update(s);
 
     /* either tcpaq_discard the whole thing, or tcpaq_peek hdr and data */
-    int processed = 0;
+    int handler_found = 0;
     if (handlers && hdr.message_size <= SIMET_UPTIME2_MAXDATASIZE) {
         while (handlers->type != hdr.message_type && !(handlers->type & 0xffff0000U))
             handlers++;
@@ -602,10 +602,10 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
                         strerror(-res));
                 return res;
             }
-            processed = 1;
+            handler_found = 1;
         }
     }
-    if (!processed) {
+    if (!handler_found) {
         /* unexpected discard */
         res = tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr));
         if (res < 0)
