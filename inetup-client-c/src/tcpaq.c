@@ -212,7 +212,10 @@ static void xx_tcpaq_compact(struct tcpaq_conn * const s)
     }
 }
 
-int tcpaq_send_nowait(struct tcpaq_conn * const s)
+/* Returns < 0 for error, 0 if buffer empty, NZ if buffer not yet empty */
+/* Returns -EAGAIN if there is data to send, but send() returned EAGAIN/EWOULDBLOCK */
+/* Returns -EINTR if send() was interrupted by a signal */
+int tcpaq_flush_nowait(struct tcpaq_conn * const s)
 {
     size_t  send_sz;
     ssize_t sent;
@@ -231,10 +234,9 @@ int tcpaq_send_nowait(struct tcpaq_conn * const s)
     send_sz = s->out_queue.wr_pos - s->out_queue.rd_pos;
     sent = send(s->socket, &s->out_queue.buffer[s->out_queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (sent < 0) {
-        int err = errno;
-        if (is_EAGAIN_WOULDBLOCK(err) || err == EINTR)
-            return 0;
-        protocol_trace(s, "send() error: %s", strerror(err));
+        int err = (errno != EWOULDBLOCK) ? errno : EAGAIN;
+        if (err != EAGAIN && err != EINTR)
+            protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
     }
     s->out_queue.rd_pos += sent; /* sent verified to be >= 0 */
@@ -257,7 +259,14 @@ int tcpaq_send_nowait(struct tcpaq_conn * const s)
     /* protocol_trace(s, "send() %zd out of %zu bytes", sent, send_sz); */
 
     xx_tcpaq_compact(s);
-    return 0;
+    return !tcpaq_is_out_queue_empty(s);
+}
+
+/* returns < 0 on error other than EINTR, EAGAIN; 0 otherwise */
+int tcpaq_send_nowait(struct tcpaq_conn * const s)
+{
+    int rc = tcpaq_flush_nowait(s);
+    return (rc == -EAGAIN || rc == -EINTR || rc >= 0) ? 0 : rc;
 }
 
 #if 0

@@ -45,6 +45,7 @@ int tcpaq_reserve(struct tcpaq_conn * const s, size_t size);
 int tcpaq_unreserve(struct tcpaq_conn * const s, size_t size);
 int tcpaq_queue(struct tcpaq_conn * const s, void *data, size_t size, int reserved);
 int tcpaq_is_out_queue_empty(struct tcpaq_conn * const s);
+int tcpaq_flush_nowait(struct tcpaq_conn * const s); /* same as send_nowait but returns -EAGAIN, -EINTR */
 int tcpaq_send_nowait(struct tcpaq_conn * const s);
 int tcpaq_drain(struct tcpaq_conn * const s);
 int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size);
