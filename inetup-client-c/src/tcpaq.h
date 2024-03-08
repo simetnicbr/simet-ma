@@ -19,7 +19,6 @@
 #ifndef SIMET_TCPAQ_H
 #define SIMET_TCPAQ_H
 
-#include <time.h>
 #include <sys/socket.h>
 
 #define SIMET_TCPAQ_QUEUESIZE 8192U
@@ -47,7 +46,6 @@ int tcpaq_unreserve(struct tcpaq_conn * const s, size_t size);
 int tcpaq_queue(struct tcpaq_conn * const s, void *data, size_t size, int reserved);
 int tcpaq_is_out_queue_empty(struct tcpaq_conn * const s);
 int tcpaq_send_nowait(struct tcpaq_conn * const s);
-int tcpaq_send_timeout(struct tcpaq_conn * const s, time_t timeout);
 int tcpaq_drain(struct tcpaq_conn * const s);
 int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size);
 int tcpaq_receive_nowait(struct tcpaq_conn * const s, size_t object_size, void *buf) __attribute__((__unused__));
