@@ -243,6 +243,9 @@ int tcpaq_send_nowait(struct tcpaq_conn * const s)
     /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
      * and we already asked for TCP_NODELAY after connect() */
 
+    /* FIXME: this would need to know whether we are already in NODELAY mode
+     * or not, otherwise we'd always disable it */
+
     const int zero = 0;
     const int one = 1;
     /* Ask kernel to flush buffer every time our local queue is empty */
