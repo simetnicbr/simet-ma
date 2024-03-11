@@ -294,28 +294,29 @@ static int xx_tcpaq_is_in_queue_empty(struct tcpaq_conn * const s)
 /* discards all pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
 int tcpaq_drain(struct tcpaq_conn * const s)
 {
-    size_t remaining = 0;
+    int discarded = 0;
     ssize_t res = 0;
 
     assert(s);
 
     if (s->in_queue.rd_pos < s->in_queue.wr_pos)
-        remaining = s->in_queue.wr_pos - s->in_queue.rd_pos;
+        discarded = ((s->in_queue.wr_pos - s->in_queue.rd_pos) > 0);
     s->in_queue.rd_pos = s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
 
     if (s->socket != -1) {
         do {
-            res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
+            res = recv(s->socket, s->in_queue.buffer, s->in_queue.buffer_size, MSG_DONTWAIT | MSG_TRUNC);
         } while (res == -1 && errno == EINTR);
+        discarded |= (res > 0);
         if (res == -1) {
             int err = errno;
             if (is_EAGAIN_WOULDBLOCK(err))
-                return 0;
+                return discarded;
             protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
             return -err;
         }
     }
-    return (remaining > 0 || res > 0);
+    return discarded;
 }
 
 /* discards object, <0 error; 0 : still need to receive more data; NZ: discarded */
@@ -346,8 +347,8 @@ int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
         ssize_t res;
 
         do {
-            res = recv(s->socket, NULL, s->in_queue.wr_pos_reserved,
-                       MSG_DONTWAIT | MSG_TRUNC);
+            res = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos,
+                       s->in_queue.wr_pos_reserved, MSG_DONTWAIT | MSG_TRUNC);
         } while (res == -1 && errno == EINTR);
         if (res == -1) {
             int err = errno;
