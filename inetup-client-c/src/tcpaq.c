@@ -377,7 +377,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
 
     /* note: tcpaq_discard() > 0 ensures s->in_queue.wr_pos_reserved = 0 */
 
-    if (object_size > SIMET_TCPAQ_QUEUESIZE)
+    if (object_size > s->in_queue.buffer_size)
         return -EFAULT; /* we can't do it */
 
     size_t unread_bufsz = 0;
@@ -388,7 +388,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
         return 1; /* we have enough buffered data */
 
     object_size -= unread_bufsz;
-    if (s->in_queue.wr_pos + object_size > SIMET_TCPAQ_QUEUESIZE) {
+    if (s->in_queue.wr_pos + object_size > s->in_queue.buffer_size) {
         /* compress buffer */
         memmove(s->in_queue.buffer, s->in_queue.buffer + s->in_queue.rd_pos, unread_bufsz);
         s->in_queue.wr_pos = unread_bufsz;
@@ -396,7 +396,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
     }
 
     /* paranoia, must not happen */
-    if (s->in_queue.wr_pos + object_size > SIMET_TCPAQ_QUEUESIZE)
+    if (s->in_queue.wr_pos + object_size > s->in_queue.buffer_size)
         return -EFAULT;
 
     do {
@@ -418,7 +418,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
 /**
  * tcpaq_receive_nowait() - receive an exactly-sized object
  *
- * Size is limited to SIMET_TCPAQ_QUEUESIZE.  Does not wait,
+ * Size is limited to in_queue.buffer_size.  Does not wait,
  * returns 0 if there is not enough received buffer yet.  If
  * buf is NULL, discards the data.
  *
@@ -448,7 +448,7 @@ int tcpaq_receive_nowait(struct tcpaq_conn * const s, size_t object_size, void *
 /**
  * tcpaq_peek_nowait() - receve in-queue and peek at an object
  *
- * Size is limited to SIMET_TCPAQ_QUEUESIZE.  Does not wait,
+ * Size is limited to in_queue.buffer_size.  Does not wait,
  * returns 0 if there is not enough received buffer yet.  If
  * pbuf is not NULL, it will be set to either NULL or to the
  * (const char *) internal buffer (do NOT modify or free()).
