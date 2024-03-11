@@ -1,6 +1,6 @@
 /*
  * SIMET2 MA Internet Availability Measurement (inetup) client
- * Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
+ * Copyright (c) 2018-2024 NIC.br <medicoes@simet.nic.br>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
