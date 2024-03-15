@@ -1,6 +1,6 @@
 /*
  * SIMET2 MA Internet Availability Measurement (inetup) client
- * Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
+ * Copyright (c) 2018-2024 NIC.br <medicoes@simet.nic.br>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -212,7 +212,10 @@ static void xx_tcpaq_compact(struct tcpaq_conn * const s)
     }
 }
 
-int tcpaq_send_nowait(struct tcpaq_conn * const s)
+/* Returns < 0 for error, 0 if buffer empty, NZ if buffer not yet empty */
+/* Returns -EAGAIN if there is data to send, but send() returned EAGAIN/EWOULDBLOCK */
+/* Returns -EINTR if send() was interrupted by a signal */
+int tcpaq_flush_nowait(struct tcpaq_conn * const s)
 {
     size_t  send_sz;
     ssize_t sent;
@@ -231,10 +234,9 @@ int tcpaq_send_nowait(struct tcpaq_conn * const s)
     send_sz = s->out_queue.wr_pos - s->out_queue.rd_pos;
     sent = send(s->socket, &s->out_queue.buffer[s->out_queue.rd_pos], send_sz, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (sent < 0) {
-        int err = errno;
-        if (is_EAGAIN_WOULDBLOCK(err) || err == EINTR)
-            return 0;
-        protocol_trace(s, "send() error: %s", strerror(err));
+        int err = (errno != EWOULDBLOCK) ? errno : EAGAIN;
+        if (err != EAGAIN && err != EINTR)
+            protocol_trace(s, "send() error: %s", strerror(err));
         return -err;
     }
     s->out_queue.rd_pos += sent; /* sent verified to be >= 0 */
@@ -242,6 +244,9 @@ int tcpaq_send_nowait(struct tcpaq_conn * const s)
 #if 0
     /* commented out - we can tolerate 200ms extra delay from Naggle just fine,
      * and we already asked for TCP_NODELAY after connect() */
+
+    /* FIXME: this would need to know whether we are already in NODELAY mode
+     * or not, otherwise we'd always disable it */
 
     const int zero = 0;
     const int one = 1;
@@ -254,7 +259,14 @@ int tcpaq_send_nowait(struct tcpaq_conn * const s)
     /* protocol_trace(s, "send() %zd out of %zu bytes", sent, send_sz); */
 
     xx_tcpaq_compact(s);
-    return 0;
+    return !tcpaq_is_out_queue_empty(s);
+}
+
+/* returns < 0 on error other than EINTR, EAGAIN; 0 otherwise */
+int tcpaq_send_nowait(struct tcpaq_conn * const s)
+{
+    int rc = tcpaq_flush_nowait(s);
+    return (rc == -EAGAIN || rc == -EINTR || rc >= 0) ? 0 : rc;
 }
 
 #if 0
@@ -279,34 +291,40 @@ static int xx_tcpaq_is_in_queue_empty(struct tcpaq_conn * const s)
     return (s->in_queue.rd_pos >= s->in_queue.wr_pos || s->in_queue.rd_pos >= s->in_queue.buffer_size);
 }
 
-/* discards all pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
+/* discards pending receive data, returns 0 for nothing discarded, NZ for something, <0 error */
+/* returns -EPIPE if EOF is detected.  loop while tcpaq_drain() > 0 to fully drain. */
 int tcpaq_drain(struct tcpaq_conn * const s)
 {
-    size_t remaining = 0;
+    int discarded = 0;
     ssize_t res = 0;
 
     assert(s);
 
     if (s->in_queue.rd_pos < s->in_queue.wr_pos)
-        remaining = s->in_queue.wr_pos - s->in_queue.rd_pos;
+        discarded = ((s->in_queue.wr_pos - s->in_queue.rd_pos) > 0);
     s->in_queue.rd_pos = s->in_queue.wr_pos = s->in_queue.wr_pos_reserved = 0;
 
     if (s->socket != -1) {
         do {
-            res = recv(s->socket, NULL, SSIZE_MAX, MSG_DONTWAIT | MSG_TRUNC);
+            res = recv(s->socket, s->in_queue.buffer, s->in_queue.buffer_size, MSG_DONTWAIT | MSG_TRUNC);
         } while (res == -1 && errno == EINTR);
+        discarded |= (res > 0);
         if (res == -1) {
             int err = errno;
             if (is_EAGAIN_WOULDBLOCK(err))
-                return 0;
+                return discarded;
             protocol_trace(s, "tcpaq_drain: recv() error: %s", strerror(err));
             return -err;
+        } else if (!res) {
+            protocol_trace(s, "tcpaq_drain: detected end of stream");
+            return -EPIPE; /* EOF */
         }
     }
-    return (remaining > 0 || res > 0);
+    return discarded;
 }
 
 /* discards object, <0 error; 0 : still need to receive more data; NZ: discarded */
+/* returns -EPIPE if EOF is detected before the whole object is discarded */
 int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
 {
     assert(s);
@@ -334,8 +352,8 @@ int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
         ssize_t res;
 
         do {
-            res = recv(s->socket, NULL, s->in_queue.wr_pos_reserved,
-                       MSG_DONTWAIT | MSG_TRUNC);
+            res = recv(s->socket, s->in_queue.buffer + s->in_queue.wr_pos,
+                       s->in_queue.wr_pos_reserved, MSG_DONTWAIT | MSG_TRUNC);
         } while (res == -1 && errno == EINTR);
         if (res == -1) {
             int err = errno;
@@ -343,6 +361,10 @@ int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
                 return 0;
             protocol_trace(s, "tcpaq_discard: recv() error: %s", strerror(err));
             return -err;
+        } else if (!res) {
+            /* EOF: we will not get the whole object, ever */
+            protocol_trace(s, "tcpaq_discard: detected end of stream");
+            return -EPIPE; /* EOF */
         }
         s->in_queue.wr_pos_reserved -= res; /* recv() ensures 0 < res <= wr_pos_reserved */
     }
@@ -351,6 +373,7 @@ int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size)
 }
 
 /* < 0: error, 0: need to receive more data; > 0: object ready for tcpaq_receive() */
+/* returns -EPIPE for EOF from recv() */
 static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t object_size)
 {
     int res;
@@ -365,7 +388,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
 
     /* note: tcpaq_discard() > 0 ensures s->in_queue.wr_pos_reserved = 0 */
 
-    if (object_size > SIMET_TCPAQ_QUEUESIZE)
+    if (object_size > s->in_queue.buffer_size)
         return -EFAULT; /* we can't do it */
 
     size_t unread_bufsz = 0;
@@ -376,7 +399,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
         return 1; /* we have enough buffered data */
 
     object_size -= unread_bufsz;
-    if (s->in_queue.wr_pos + object_size > SIMET_TCPAQ_QUEUESIZE) {
+    if (s->in_queue.wr_pos + object_size > s->in_queue.buffer_size) {
         /* compress buffer */
         memmove(s->in_queue.buffer, s->in_queue.buffer + s->in_queue.rd_pos, unread_bufsz);
         s->in_queue.wr_pos = unread_bufsz;
@@ -384,7 +407,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
     }
 
     /* paranoia, must not happen */
-    if (s->in_queue.wr_pos + object_size > SIMET_TCPAQ_QUEUESIZE)
+    if (s->in_queue.wr_pos + object_size > s->in_queue.buffer_size)
         return -EFAULT;
 
     do {
@@ -396,6 +419,10 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
             return 0;
         protocol_trace(s, "tcpaq_request: recv() error: %s", strerror(err));
         return -err;
+    } else if (!rcvres) {
+        /* EOF: we will not get the whole object, ever */
+        protocol_trace(s, "tcpaq_request: detected end of stream");
+        return -EPIPE; /* EOF */
     }
     s->in_queue.wr_pos += rcvres; /* recv() ensures 0 <= rcvres <= wr_pos */
     object_size -= rcvres;  /* recv() ensures 0 <= rcvres <= wr_pos */
@@ -406,7 +433,7 @@ static int tcpaq_request_receive_nowait(struct tcpaq_conn * const s, size_t obje
 /**
  * tcpaq_receive_nowait() - receive an exactly-sized object
  *
- * Size is limited to SIMET_TCPAQ_QUEUESIZE.  Does not wait,
+ * Size is limited to in_queue.buffer_size.  Does not wait,
  * returns 0 if there is not enough received buffer yet.  If
  * buf is NULL, discards the data.
  *
@@ -436,7 +463,7 @@ int tcpaq_receive_nowait(struct tcpaq_conn * const s, size_t object_size, void *
 /**
  * tcpaq_peek_nowait() - receve in-queue and peek at an object
  *
- * Size is limited to SIMET_TCPAQ_QUEUESIZE.  Does not wait,
+ * Size is limited to in_queue.buffer_size.  Does not wait,
  * returns 0 if there is not enough received buffer yet.  If
  * pbuf is not NULL, it will be set to either NULL or to the
  * (const char *) internal buffer (do NOT modify or free()).
