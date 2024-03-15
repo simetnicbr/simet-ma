@@ -1,6 +1,6 @@
 /*
  * tcp-aq: tcp async queueing layer
- * Copyright (c) 2018-2022 NIC.br <medicoes@simet.nic.br>
+ * Copyright (c) 2018-2024 NIC.br <medicoes@simet.nic.br>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@
 #ifndef SIMET_TCPAQ_H
 #define SIMET_TCPAQ_H
 
-#include <time.h>
 #include <sys/socket.h>
 
 #define SIMET_TCPAQ_QUEUESIZE 8192U
@@ -46,8 +45,8 @@ int tcpaq_reserve(struct tcpaq_conn * const s, size_t size);
 int tcpaq_unreserve(struct tcpaq_conn * const s, size_t size);
 int tcpaq_queue(struct tcpaq_conn * const s, void *data, size_t size, int reserved);
 int tcpaq_is_out_queue_empty(struct tcpaq_conn * const s);
+int tcpaq_flush_nowait(struct tcpaq_conn * const s); /* same as send_nowait but returns -EAGAIN, -EINTR */
 int tcpaq_send_nowait(struct tcpaq_conn * const s);
-int tcpaq_send_timeout(struct tcpaq_conn * const s, time_t timeout);
 int tcpaq_drain(struct tcpaq_conn * const s);
 int tcpaq_discard(struct tcpaq_conn * const s, size_t object_size);
 int tcpaq_receive_nowait(struct tcpaq_conn * const s, size_t object_size, void *buf) __attribute__((__unused__));
