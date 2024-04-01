@@ -19,7 +19,7 @@ simet*_lmap-send-report.sh
 simet*_lmap-stdout-wrapper.sh
 simet*_geolocation.sh
 simet_read_vlabel.sh*
-simet*_spoofer.sh
+simet_spoofer_v2.sh
 simet_create_vlabel.sh*
 simet_issuebanner-generator.sh
 simet_qrcode.sh

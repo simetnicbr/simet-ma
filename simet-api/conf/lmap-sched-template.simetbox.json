@@ -42,7 +42,7 @@
        "destination":["ma-local_periodic_report"]},
       {"name":"simet.nic.br_geolocation","task":"simet.nic.br_geolocation",
        "destination":["ma-local_periodic_report"]},
-      {"name":"simet.nic.br_spoofer_ip4","task":"simet.nic.br_spoofer",
+      {"name":"simet.nic.br_spoofer_ip4","task":"simet.nic.br_spoofer-v2",
        "destination":["ma-local_periodic_report"]}
     ]
   },

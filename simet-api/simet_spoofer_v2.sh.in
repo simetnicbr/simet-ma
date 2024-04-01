@@ -1,0 +1,2 @@
+#!/bin/sh
+exec @BINDIR@/simet-ma_run.sh --TEST SPOOFER "$@"
