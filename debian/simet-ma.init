@@ -59,6 +59,15 @@ fix_traceroute() {
     :
 }
 
+fix_sspooferc() {
+    command -v setcap >/dev/null 2>&1 && setcap -q -v cap_net_raw+ep /opt/simet/bin/sspooferc || {
+	echo "$0: giving /opt/simet/bin/sspooferc CAP_NET_RAW capabilities for non-root measurement" >&2
+	setcap -q cap_net_raw+ep /opt/simet/bin/sspooferc || \
+	    echo "$0: failed to change /opt/simet/bin/sspooferc capabilities" >&2
+    }
+    :
+}
+
 # We *really* need bigger buffers for high-BDP, and unfortunately
 # due to several issues in many versions of the Linux kernels, it
 # has to already start big.  And we need some tricks because /bin/sh
@@ -175,6 +184,7 @@ do_stop_cmd_override() {
 #   2 if daemon could not be started
 do_start_cmd_override() {
 	fix_traceroute
+	fix_sspoofer
 	fix_tcp
 
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \

@@ -55,6 +55,15 @@ fix_traceroute() {
     :
 }
 
+fix_sspooferc() {
+    command -v setcap >/dev/null 2>&1 && setcap -q -v cap_net_raw+ep /opt/simet/bin/sspooferc || {
+	echo "$0: giving /opt/simet/bin/sspooferc CAP_NET_RAW capabilities for non-root measurement" >&2
+	setcap -q cap_net_raw+ep /opt/simet/bin/sspooferc || \
+	    echo "$0: failed to change /opt/simet/bin/sspooferc capabilities" >&2
+    }
+    :
+}
+
 # Refer to:
 #  - https://scotthelme.co.uk/lets-encrypt-old-root-expiration/
 #  - https://www.openssl.org/blog/blog/2021/09/13/LetsEncryptRootCertExpire/
@@ -93,6 +102,7 @@ case "$1" in
 
 	fix_traceroute
 	fix_letsencrypt
+	fix_sspooferc
 
 	# Remove any downloaded schedule, lastrun data
 	rm -f /var/run/lmapd/*.json
