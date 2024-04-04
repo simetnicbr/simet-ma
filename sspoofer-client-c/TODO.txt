@@ -1,0 +1,4 @@
+1. ensure server drains output chan after it sent MSMTDATA,
+   receiving for close/disconnect
+
+2. client needs to output reports of whatever is in done.

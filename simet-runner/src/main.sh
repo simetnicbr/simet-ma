@@ -26,7 +26,7 @@
 #
 # Execution (after build):
 # ./dist/simet-ma_run.sh --config ./dist/simet_agent_unix.conf --debug
-# [--test TWAMP|TWAMPFAST|TCPBW|GEOLOC] [--peer-reachability]
+# [--test TWAMP|TWAMPFAST|TCPBW|GEOLOC|SPOOFER] [--peer-reachability]
 #
 # Dependencies:
 # - curl
@@ -77,7 +77,7 @@ main(){
         if [ -n "$2" ] ; then
           RUN_ONLY_TASK="$2"
         else
-          log_error "--test requires a test name as a parameter: TWAMP, TWAMPFAST, TCPBW, GEOLOC"
+          log_error "--test requires a test name as a parameter: TWAMP, TWAMPFAST, TCPBW, GEOLOC, SPOOFER"
           exit 1
         fi
         shift
@@ -177,6 +177,12 @@ _main_run(){
     else
       log_warn "skipping ipv6 throughput measurement: authorization has been denied"
     fi
+  fi
+
+  # 6. task spoofer
+  #if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "SPOOFER" ] ; then
+  if [ "$RUN_ONLY_TASK" = "SPOOFER" ] ; then
+    _task_spoofer "$_tstid_prefix"
   fi
 }
 
@@ -465,6 +471,55 @@ _task_tcpbw(){
   log_debug "End Task TCPBW ${_tst_prefix}IPv$_af"
 }
 
+_task_spoofer(){
+  local _tst_prefix="$1"
+  shift 1
+  local _spoofer_opts="$*"
+  if [[ "$SSPOOFERC" = "NO" || "$SSPOOFERC" = "no" || "$SSPOOFERC" = "No" ]]; then
+    log_info "Skipping task SPOOFER"
+    return 0
+  fi
+  log_measurement "SPOOFER ${_tst_prefix}"
+  local _host="$( discover_service SPOOFER HOST )"
+  local _port=$( discover_service SPOOFER PORT )
+  #local _host="$( discover_service serverMonitor HOST )"
+  #local _port=22002
+  local _about=$( $SSPOOFERC -V | head -n1)
+  set -f && set -- $_about && set +f
+  export _task_name="${LMAP_TASK_NAME_PREFIX}sspooferc" # " spoofc 1.2.3-ABC " => "sspooferc"
+  export _task_version=$2 # " sspooferc 1.2.3-ABC " => "1.2.3-ABC"
+  export _task_dir="$BASEDIR/report/sspooferc${_tst_prefix:+-$_tst_prefix}"
+  export _task_action="spoofedpackettrain-udp_to-simet-measurement-peer${_tst_prefix:+_$_tst_prefix}"
+  export _task_parameters='{ "host": "'$_host'", "port": ['$_port'] }'
+  export _task_options='[]'
+  export _task_extra_tags="\"simet.nic.br_peer-name:$_host\","
+  export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  mkdir -p "$_task_dir/tables"
+
+  if haspipefail && [ "$VERBOSE" = "true" ] ; then
+    set -o pipefail
+    eval "$SSPOOFERC "$_host${_port:+:$_port}" 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/sspoofer.json\"" | tee "$_task_dir/tables/stderr.txt"
+    export _task_status="$?"
+    set +o pipefail
+  else
+    eval "$SSPOOFERC "$_host${_port:+:$_port}" >\"$_task_dir/tables/sspoofer.json\"" 2>"$_task_dir/tables/stderr.txt"
+    export _task_status="$?"
+  fi
+  export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  if [ "$_task_status" -ne 0 ]; then
+    log_error "Task SPOOFER, failed with exit code: $_task_status"
+    [ -s "$_task_dir/tables/stderr.txt" ] && \
+      error_template < "$_task_dir/tables/stderr.txt" > "$_task_dir/tables/stderr.json" && \
+      rm -f "$_task_dir/tables/stderr.txt"
+#   rm -f "$_task_dir/tables/sspoofer.json"
+  else
+    rm -f "$_task_dir/tables/stderr.txt"
+  fi
+  task_template > "$_task_dir/result.json"
+
+  log_debug "End Task SPOOFER ${_tst_prefix}"
+}
+
 
 
 ################################################################################
@@ -540,6 +595,7 @@ _main_config(){
   if [ "$LMAP_TASK_NAME_PREFIX" = "" ]; then _msg="$_msg LMAP_TASK_NAME_PREFIX"; fi
   if [ "$TWAMPC" = "" ]; then _msg="$_msg TWAMPC"; fi
   if [ "$TCPBWC" = "" ]; then _msg="$_msg TCPBWC"; fi
+  if [ "$SSPOOFERC" = "" ]; then _msg="$_msg SSPOOFERC"; fi
   if [ "$JSONFILTER" = "" ]; then _msg="$_msg JSONFILTER"; fi
   if [ "$_msg" != "" ]; then
     log_error "Exit due to missing config params: $_msg"

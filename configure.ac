@@ -26,7 +26,7 @@ AC_CONFIG_AUX_DIR([.])
 AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([1.13 tar-pax gnu no-dist-gzip dist-xz -Wall])
 AC_CONFIG_FILES([Makefile simet-api/Makefile cmake-projects/Makefile])
-AC_CONFIG_SUBDIRS([twamp-client-c tcpbw-client-c inetup-client-c simet-runner simet-api/utils])
+AC_CONFIG_SUBDIRS([twamp-client-c tcpbw-client-c inetup-client-c sspoofer-client-c simet-runner simet-api/utils])
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh $(top_srcdir)/version'])
 
 dnl MKDIR_P is used by our makefiles
@@ -44,18 +44,5 @@ AC_ARG_ENABLE([simetbox],
 AM_CONDITIONAL([SIMETBOX_BUILD], [test x$simetbox = xtrue])
 AM_COND_IF([SIMETBOX_BUILD],
 	   [AC_MSG_NOTICE([building for SIMETBOX (OpenWRT)])] )
-
-AC_ARG_ENABLE([simet-spoofer],
-    [AC_HELP_STRING([--enable-simet-spoofer],
-        [enable simet_spoofer measurement])],
-    [case "${enableval}" in
-        yes) simetspoofer=true ;;
-        no)  simetspoofer=false ;;
-        *) AC_MSG_ERROR([bad value ${enableval} for --enable-simet-spoofer]) ;;
-     esac],
-    [simetspoofer=false])
-AM_CONDITIONAL([SIMET_SPOOFER], [test x$simetspoofer = xtrue ])
-AM_COND_IF([SIMET_SPOOFER],
-           [AC_MSG_NOTICE([including simet_spoofer measurement])] )
 
 AC_OUTPUT

@@ -181,6 +181,9 @@ discover_service() {
     TCPBW)
       _service="tcpbw"
     ;;
+    SPOOFER)
+      _service="spoofer"
+    ;;
   esac
 
   case "$2" in
