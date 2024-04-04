@@ -127,7 +127,7 @@ static int xx_json_add_int64str(json_object *jo, const char * const tag, const i
 {
     if (jo && tag) {
         struct json_object *js = xx_json_object_new_int64_as_str(v);
-        if (!js || json_object_object_add(jo, tag, js)) {
+        if (!js || json_object_object_add(jo, tag, js)) {  /* FIXME: old json-c has (void) json_o_o_add */
             errno = ENOMEM;
             return -ENOMEM;
         }
@@ -141,10 +141,11 @@ static int xx_json_object_opt_string_add(struct json_object *jo, const char *tag
 {
     if (jo && tag && value) {
         struct json_object *js = json_object_new_string(value);
-        if (!js || json_object_object_add(jo, tag, js)) {
+        if (!js) {
             errno = ENOMEM;
             return -ENOMEM;
         }
+        json_object_object_add(jo, tag, js); /* (void) in json-c before 0.13 */
     }
     return 0;
 }
@@ -179,10 +180,11 @@ static int xx_json_object_int64_add(struct json_object *jo, const char *tag, int
 {
     if (jo && tag) {
         struct json_object *jv = json_object_new_int64(value);
-        if (!jv || json_object_object_add(jo, tag, jv)) {
+        if (!jv) {
             errno = ENOMEM;
             return -ENOMEM;
         }
+        json_object_object_add(jo, tag, jv); /* (void) in json-c before 0.13 */
     }
     return 0;
 }
@@ -191,10 +193,11 @@ static int xx_json_object_bool_add(struct json_object *jo, const char *tag, bool
 {
     if (jo && tag) {
         struct json_object *jv = json_object_new_boolean(value);
-        if (!jv || json_object_object_add(jo, tag, jv)) {
+        if (!jv) {
             errno = ENOMEM;
             return -ENOMEM;
         }
+        json_object_object_add(jo, tag, jv); /* (void) in json-c before 0.13 */
     }
     return 0;
 }
