@@ -580,7 +580,7 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
     simet_uptime2_remotekeepalive_update(s);
 
     /* either tcpaq_discard the whole thing, or tcpaq_peek hdr and data */
-    int processed = 0;
+    int handler_found = 0;
     if (handlers && hdr.message_size <= SIMET_UPTIME2_MAXDATASIZE) {
         while (handlers->type != hdr.message_type && !(handlers->type & 0xffff0000U))
             handlers++;
@@ -588,12 +588,15 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
             if (handlers->handler) {
                 /* single-threaded, so we can peek to avoid an extra copy... */
                 res = tcpaq_peek_nowait(&s->conn, hdr.message_size + sizeof(hdr), &data);
-                if (res > 0 && data)
+                if (res > 0 && data) { /* data is NULL only for res <= 0, this is just safety */
                     res = (* handlers->handler)(s, &hdr, data + sizeof(hdr));
-                if (tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr)) <= 0)
-                    protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
+                    if (tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr)) <= 0) {
+                        /* entire message was peeked at, since peek_nowait did not return zero */
+                        protocol_trace(s, "recvmsg: unexpected result for discard-after-peek");
+                    }
+                }
             } else {
-                /* silent discard the whole thing */
+                /* try to silent discard the whole thing */
                 res = tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr));
             }
             if (res < 0) {
@@ -602,10 +605,10 @@ static int simet_uptime2_recvmsg(struct simet_inetup_server * const s,
                         strerror(-res));
                 return res;
             }
-            processed = 1;
+            handler_found = 1;
         }
     }
-    if (!processed) {
+    if (!handler_found) {
         /* unexpected discard */
         res = tcpaq_discard(&s->conn, hdr.message_size + sizeof(hdr));
         if (res < 0)

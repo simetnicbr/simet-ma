@@ -54,4 +54,4 @@ int tcpaq_peek_nowait(struct tcpaq_conn * const s, size_t object_size, const cha
 
 #endif /* SIMET_TCPAQ_H */
 
-/* vim: set et ts=4 sw=4 : */
+/* vim: set et ts=8 sw=4 : */

@@ -1,11 +1,28 @@
-simet-ma (0.18.7+simetas1) unstable; urgency=medium
+simet-ma (0.18.8+simetas1) unstable; urgency=medium
 
   * SIMET-AS variant
-  * enable simet-spoofer, recommend simet-nping
   * change download directory to not update to regular simet-ma.
   * include beta version of the top.nic.br/internet.nl client
 
  -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 29 Feb 2024 20:45:16 -0300
+
+simet-ma (0.18.8) unstable; urgency=medium
+
+  * simet-ma version 0.18.8
+  * inetup: handle partial messages (not seen in the field)
+  * inetup: fix several potential issues that would cause connection drops
+  * sspoofer: add source address spoofing measurement client (sspooferc)
+    * Add SPOOFER measurement support to simet-ma_run.sh.  Right now, it
+      needs to be explicitly asked for (simet-ma_run.sh --test SPOOFER)
+    * Add LMAP capability and task to run sspooferc directly
+      (simet.nic.br_sspooferc) and through simet-ma_run.sh
+      (simet.nic.br_spoofer-v2)
+    * Run the SPOOFER measurement every 12 hours
+  * deb: move libcap2-bin from "Recommends" to "Depends"
+  * deb: grant CAP_NET_RAW to sspooferc (requires libcap2-bin)
+  * Remove remnants of the previous simet_spoofer / simet_bcp38 measurement
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 04 Apr 2024 11:25:40 -0300
 
 simet-ma (0.18.7) unstable; urgency=medium
 

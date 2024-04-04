@@ -16,7 +16,7 @@
  * for details.
  */
 
-#include "simet-inetuptime_config.h"
+#include "sspooferc_config.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,7 +34,6 @@
 
 #include <time.h>
 
-#include "simet-inetuptime.h"
 #include "tcpaq.h"
 #include "simet_err.h"
 #include "logger.h"
@@ -487,4 +486,4 @@ int tcpaq_peek_nowait(struct tcpaq_conn * const s, size_t object_size, const cha
     return res;
 }
 
-/* vim: set et ts=4 sw=4 : */
+/* vim: set et ts=8 sw=4 : */
