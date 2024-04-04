@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <limits.h>
 #include <string.h>
@@ -693,7 +694,7 @@ static int parse_sid(struct sspoof_sid *sid)
     if (rc > (ssize_t)sizeof(sid->sid))
         return -E2BIG;
 
-    static_assert(sizeof(sid->sid) < UINT8_MAX);
+    static_assert(sizeof(sid->sid) < UINT8_MAX, "size of struct sppoof_sid::sid too large");
 
     sid->len = (uint8_t)rc;
 

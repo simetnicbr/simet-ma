@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <limits.h>
 #include <string.h>
@@ -269,7 +270,8 @@ static void sspoof_pkt_payload(uint8_t *payload, size_t payload_len,
         return;
 
     /* we don't want to truncante the important data... */
-    static_assert(sizeof(struct sspoof_pkt_payload) <= SSPOOF_MSMT_MIN_PAYLOADSZ);
+    static_assert(sizeof(struct sspoof_pkt_payload) <= SSPOOF_MSMT_MIN_PAYLOADSZ,
+            "SSPOOF_MSMT_MIN_PAYLOADSZ too small for struct sspoof_pkt_payload");
 
     strncpy((char *)data.magic, SSPOOF_PKT_MAGIC, sizeof(data.magic)); /* 16 bytes */
     data.version = 1;
@@ -294,8 +296,9 @@ long sspoof_msmt_txpkt(struct sspoof_server * const sctx,
                        struct sspoof_msmt_ctx * const mctx,
                        struct sspoof_msmt_req * const mreq)
 {
-    uint8_t *payload = NULL;
     uint8_t pkt[SSPOOF_MSMT_MAX_PAYLOADSZ];
+    uint8_t *payload = NULL;
+    bool is_spoof = false;
 
     sockaddr_any_t_ saddr, daddr;
     sockaddr_any_t_ spoofaddr;
@@ -364,7 +367,7 @@ long sspoof_msmt_txpkt(struct sspoof_server * const sctx,
         /* packet pair: sentinel/probe ; spoof */
 
         /* even packets: sentinel/probe; odd packets: spoof v1 packet */
-        const bool is_spoof = !!(mreq->pkt_sent & 1);
+        is_spoof = !!(mreq->pkt_sent & 1);
 
         memcpy(&spoofaddr, &saddr, sizeof(spoofaddr));
 

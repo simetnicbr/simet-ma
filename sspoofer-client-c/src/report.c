@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <limits.h>
 #include <string.h>
