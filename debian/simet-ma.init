@@ -90,9 +90,11 @@ do_update_proc_triplet() (
 	:
 )
 fix_tcp() {
-	do_update_proc_triplet /proc/sys/net/ipv4/tcp_rmem 4096 1048576 16777216 && \
-	do_update_proc_triplet /proc/sys/net/ipv4/tcp_wmem 4096 1048576 16777216 || {
-		logger -t simet-ma -p daemon.warning "SIMET-MA: failed to increase socket buffer size limits, bandwidth measurements might be too low" >/dev/null 2>&1 || true
+	[ -x /opt/simet/bin/tcpbwc ] && {
+		do_update_proc_triplet /proc/sys/net/ipv4/tcp_rmem 4096 1048576 16777216 && \
+		do_update_proc_triplet /proc/sys/net/ipv4/tcp_wmem 4096 1048576 16777216 || {
+			logger -t simet-ma -p daemon.warning "SIMET-MA: failed to increase socket buffer size limits, bandwidth measurements might be too low" >/dev/null 2>&1 || true
+		}
 	}
 	:
 }
