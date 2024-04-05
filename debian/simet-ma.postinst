@@ -111,8 +111,8 @@ case "$1" in
 
 		# We ensure there *is* a schedule for each lmapd just in case
 		# shellcheck disable=SC2015
+		find /var/run/lmapd -mindepth 1 -maxdepth 1 -type d -exec ln -sf /opt/simet/lib/simet/lmap-empty-schedule.json "{}/lmap-schedule.json" \; || true
 		ln -sf /opt/simet/lib/simet/lmap-emergency-schedule.json /var/run/lmapd/lmap-schedule.json || true
-		find /var/run/lmapd -maxdepth 1 -type d -exec ln -sf /opt/simet/lib/simet/lmap-empty-schedule.json "{}/lmap-schedule.json" \; || true
 		find /var/run/lmapd -maxdepth 2 \( -type f -o -type l \) -name lmap-schedule.json -exec chown -h nicbr-simet:nicbr-simet "{}" + || true
 	}
 	( . /opt/simet/lib/simet/simet_lib_config.sh && {

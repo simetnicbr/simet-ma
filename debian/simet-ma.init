@@ -184,7 +184,7 @@ do_stop_cmd_override() {
 #   2 if daemon could not be started
 do_start_cmd_override() {
 	fix_traceroute
-	fix_sspoofer
+	fix_sspooferc
 	fix_tcp
 
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
