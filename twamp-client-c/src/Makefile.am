@@ -27,7 +27,8 @@ twampc_CFLAGS = -I .. -pthread -L json
 twampc_LDFLAGS = -pthread -L json
 twampc_LDADD = ${JSON_LIBS}
 
-EXTRA_DIST = base64_test.c
+check_PROGRAMS = base64_test
+base64_test_SOURCES = base64.h base64.c base64_test.c
 
 #valgrind: twampc
 #	valgrind --leak-check=full --track-origins=yes --xml-file=twampc_log.xml --xml=yes ./$(TWAMP_CLI)
