@@ -2505,7 +2505,7 @@ static int check_sock_raw(sa_family_t f)
 int main(int argc, char **argv) {
     int intarg;
     sa_family_t family = AF_UNSPEC;
-    int report_mode = 0;
+    int report_mode = SSPOOF_REPORT_MODE_FRAGMENT;
 
     progname = argv[0];
     sanitize_std_fds();
@@ -2560,6 +2560,10 @@ int main(int argc, char **argv) {
 	    break;
 	case 'r':
 	    report_mode = atoi(optarg);
+            if (report_mode < 0 || report_mode >= SSPOOF_REPORT_MODE_EOL) {
+                print_err("unknown report mode: %s", optarg);
+                exit(SEXIT_BADCMDLINE);
+            }
 	    break;
 
         case 'h':

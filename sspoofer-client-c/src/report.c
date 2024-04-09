@@ -418,11 +418,12 @@ err_exit:
 }
 
 /* Render a report with all measurements in all contextes for all servers in vector svec, size nvec */
-int sspoof_render_report(struct sspoof_server **svec, unsigned int nvec, int report_mode)
+int sspoof_render_report(struct sspoof_server **svec, unsigned int nvec, enum report_mode report_mode)
 {
     struct sspoof_report_ctx rctx = {};
     json_object *jo = NULL;
 
+    size_t arraylen;
     int rc = ENOMEM;
 
     if (!svec)
@@ -497,23 +498,33 @@ int sspoof_render_report(struct sspoof_server **svec, unsigned int nvec, int rep
     json_object_array_add(rctx.root, jtbl);
     jtbl = NULL;
 
-    if (report_mode) {
+    switch (report_mode) {
+    case SSPOOF_REPORT_MODE_FRAGMENT:
         /* we need to serialize the root array, but we don't want to output its delimiters [ ],
          * and we need to omit the "," after the last member of the array */
-        size_t al = json_object_array_length(rctx.root);
-        for (size_t i = 0; i < al ; i++) {
-            fprintf(stdout, "%s%s",
+        arraylen = json_object_array_length(rctx.root);
+        for (size_t i = 0; i < arraylen ; i++) {
+            if (fprintf(stdout, "%s%s",
                       json_object_to_json_string_ext(json_object_array_get_idx(rctx.root, i),
                                           JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED),
-                      (i + 1 < al) ? ",\n" : "\n");
+                      (i + 1 < arraylen) ? ",\n" : "\n") < 0) {
+                rc = -errno;
+                goto err_exit;
+            }
         }
-    } else {
-        fprintf(stdout, "%s\n", json_object_to_json_string_ext(rctx.root,
-                                    JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED));
+        break;
+    case SSPOOF_REPORT_MODE_OBJECT:
+        if (fprintf(stdout, "%s\n", json_object_to_json_string_ext(rctx.root,
+                                    JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED)) < 0) {
+            rc = -errno;
+            goto err_exit;
+        }
+        break;
+    default:
+        break;
     }
-    fflush(stdout);
 
-    rc = 0;
+    rc = (fflush(stdout) == EOF)? -errno : 0;
 
 err_exit:
     json_object_put(jtbl);
@@ -524,7 +535,6 @@ err_exit:
     rctx.sockrows = NULL;
     json_object_put(rctx.root);
     rctx.root = NULL;
-
 
     return rc;
 }
