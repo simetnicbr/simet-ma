@@ -2298,7 +2298,7 @@ static void print_usage(const char * const p, int mode)
             "\n"
             "server name: DNS name of the measurement peer(s)\n"
             "server port: TCP port on the measurement peer\n"
-            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to each measurement peer");
+            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to each measurement peer\n");
     }
 
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
