@@ -449,7 +449,7 @@ int sspoof_render_report(struct sspoof_server **svec, unsigned int nvec, enum re
     /* note: this does *not* allow for partial reports, they could contain partial row objects */
     for (unsigned int i = 0; svec && i < nvec; i++) {
         struct sspoof_server *s = svec[i];
-        if (!s)
+        if (!s || !s->msmt_done || !s->sid.str)
             continue;
 
         print_msg(MSG_DEBUG, "report: generating report for connection id %u: %s", s->connection_id, s->sid.str);
