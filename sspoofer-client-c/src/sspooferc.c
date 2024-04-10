@@ -337,12 +337,12 @@ static int fits_u64_i64(const uint64_t v64u, int64_t * const p64d)
 
 static void sspoof_msmtreq_freecontents(struct sspoof_msmt_req *mreq)
 {
+/*
     if (mreq) {
-        if (mreq->pkt) {
-            free(mreq->pkt);
-            mreq->pkt = NULL;
-        }
+       ...
     }
+*/
+    (void) mreq;
 }
 
 static struct sspoof_msmt_ctx *sspoof_msmtctx_new(void)

@@ -130,8 +130,6 @@ struct sspoof_msmt_req {
     struct timespec ts_next_pkt; /* when we should send the next packet */
     int pkt_sent;                /* packets sent inside the current group */
     int grp_sent;                /* groups already sent */
-
-    void *pkt;                  /* packet buffer cache */
 };
 
 /* One parallel batch of measurements */
