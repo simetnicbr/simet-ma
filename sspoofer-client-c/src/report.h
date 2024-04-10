@@ -23,6 +23,12 @@
 
 #include <inttypes.h>
 
-int sspoof_render_report(struct sspoof_server ** svec, unsigned int nvec, int report_mode);
+enum report_mode {
+    SSPOOF_REPORT_MODE_FRAGMENT = 0, /* Array contents */
+    SSPOOF_REPORT_MODE_OBJECT   = 1, /* array or object */
+    SSPOOF_REPORT_MODE_EOL
+};
+
+int sspoof_render_report(struct sspoof_server ** svec, unsigned int nvec, enum report_mode report_mode);
 
 #endif /* REPORT_H_ */
