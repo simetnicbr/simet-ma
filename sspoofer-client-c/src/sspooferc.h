@@ -107,6 +107,8 @@ enum sspoof_msmt_type {
     SSPOOF_MSMT_T_MAX
 };
 
+#define SSPOOF_MSMT_SPOOFV1_TAGLEN  32 /* maximum size of sspoofv1 tags, C-string */
+
 /* One measurement */
 struct sspoof_msmt_req {
     enum sspoof_msmt_type type;
@@ -125,6 +127,7 @@ struct sspoof_msmt_req {
     /* SSPOOF_MSMT_T_SPOOFV1 */
     uint8_t  prefix_length;     /* IP network prefix length, host part will be random */
     uint64_t prefix;            /* IP4: use the lowest 32 bits. IP6: /64 */
+    char     prefixtag[SSPOOF_MSMT_SPOOFV1_TAGLEN];  /* C-string, tag identifying prefix type */
 
     /* measurement loop */
     struct timespec ts_next_pkt; /* when we should send the next packet */

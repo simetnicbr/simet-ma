@@ -941,6 +941,7 @@ err_exit_free:
  *      "interpacket_interval_ms": <time in ms>,         default: 50ms
  *      "intergroup_interval_ms": <time in ms>,          default: 500ms
  *      "spoofed_src": "<prefix>",  (spoof-v1 only)
+ *      "spoofed_src_type": "<tag>", (sspoof-v1 only)    max len: SSPOOF_MSMT_SPOOFV1_TAGLEN-1
  *   }, ...
  * ] }
  *
@@ -1065,10 +1066,23 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
             if (xx_json_getstr(s, w, jmsmt, "spoofed_src", &prefix_str) <= 1)
                 goto err_exit;
             if (xx_split_prefix(prefix_str, s->conn.ai_family, &msmtreq->prefix, &msmtreq->prefix_length) < 0) {
-                protocol_msg(MSG_DEBUG, s, "invalid prefix: %s", prefix_str);
+                protocol_msg(MSG_DEBUG, s, "invalid prefix: %s", (prefix_str && *prefix_str)? prefix_str : "(none)");
                 goto err_exit;
             }
             /* protocol_msg(MSG_DEBUG, s, "prefix: %s = %16lx / %02u", prefix_str, msmtreq->prefix, msmtreq->prefix_length); */
+
+            prefix_str = NULL;
+            rc = xx_json_getstr(s, w, jmsmt, "spoofed_src_type", &prefix_str);
+            if (rc < 0) {
+                goto err_exit;
+            } else if (rc > 0) {
+                if (!prefix_str || !(*prefix_str) || strlen(prefix_str) >= sizeof(msmtreq->prefixtag)) {
+                    protocol_msg(MSG_DEBUG, s, "invalid spoof src type: %s", (prefix_str && *prefix_str)? prefix_str: "(none)");
+                    goto err_exit;
+                }
+                strncpy(msmtreq->prefixtag, prefix_str, sizeof(msmtreq->prefixtag)); /* strlen(prefix_str) < sizeof(msmtreq->prefixtag) */
+                /* protocol_msg(MSG_DEBUG, s, "spoofed src address type: %s", prefix_str); */
+            }
         }
         mctx->msmt_req_count++;
     }
