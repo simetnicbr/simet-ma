@@ -496,13 +496,18 @@ _task_spoofer(){
   export _task_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p "$_task_dir/tables"
 
+  local _sspooferv=
+  if [[ "$DEBUG" = "true" ]] ; then
+	  _spooferv="-v"
+  fi
+
   if haspipefail && [ "$VERBOSE" = "true" ] ; then
     set -o pipefail
-    eval "$SSPOOFERC "$_host${_port:+:$_port}" 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/sspoofer.json\"" | tee "$_task_dir/tables/stderr.txt"
+    eval "$SSPOOFERC $_spooferv \"$_host${_port:+:$_port}\" 3>&2 2>&1 1>&3 3<&- >\"$_task_dir/tables/sspoofer.json\"" | tee "$_task_dir/tables/stderr.txt"
     export _task_status="$?"
     set +o pipefail
   else
-    eval "$SSPOOFERC "$_host${_port:+:$_port}" >\"$_task_dir/tables/sspoofer.json\"" 2>"$_task_dir/tables/stderr.txt"
+    eval "$SSPOOFERC $_spooferv \"$_host${_port:+:$_port}\" >\"$_task_dir/tables/sspoofer.json\"" 2>"$_task_dir/tables/stderr.txt"
     export _task_status="$?"
   fi
   export _task_end=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
