@@ -1,3 +1,13 @@
+simet-ma (0.18.8.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.8.1
+  * sspoofer: fix LMAP report mode
+  * sspoofer: cosmetic: add LF after help text
+  * sspoofer: do not report incomplete control sessions
+  * simet-runner: fix quoting on sspooferc call, add verbose mode
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 09 Apr 2024 21:59:11 -0300
+
 simet-ma (0.18.8.1) unstable; urgency=medium
 
   * simet-ma version 0.18.8.1
