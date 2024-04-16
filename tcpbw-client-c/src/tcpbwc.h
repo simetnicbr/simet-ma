@@ -16,11 +16,69 @@
  * for details.
  */
 
-#ifndef TCP_H_
-#define TCP_H_
+#ifndef TCPBWC_H_
+#define TCPBWC_H_
 
+#include <inttypes.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <time.h>
+
+/*
+ * UI callbacks
+ *
+ * stage = 0: measurements will start
+ * stage = 2: measurement has finished without an error state
+ * stage = 3: measurmeent has finished with an error state
+ *
+ * typedef int (* tcpbw_msmt_cb_fn)(int mode);
+ *
+ * To enable (example):
+ * #define tcpbw_msmt_callback   tcpbw_msmt_android_callback
+ *
+ * Returns 0 (ok), NZ (SEXIT_* value, terminates measurement with an error)
+ */
+#ifndef tcpbw_msmt_callback
+static inline int tcpbw_msmt_cb(int mode) __attribute__((__unused__));
+static inline int tcpbw_msmt_cb(int mode __attribute__((__unused__)))
+{
+    return 0;
+}
+#define tcpbw_msmt_callback tcpbw_msmt_cb
+#endif
+
+/*
+ * Sampling callbacks for the UI
+ *
+ * mode = 1: during upload measurement (valid: stages 0, 1, 2, 3);
+ * mode = 2: during download measurmenet (valid: stages 0, 1, 2, 3);
+ *
+ * stage = 0: measurement will start, octets is zero. ts is T0 (first timestamp)
+ * stage = 1: [over]sample point, octets is *cumulative*, beware uint64_t wrap-around.
+ * stage = 2: measurement has finished without an error state.  ts, octets unused.
+ * stage = 3: measurement has finished with an error state. ts, octets unused.
+ *
+ * WARNING: DO NOT DEPEND ON UPLOAD/DOWNLOAD ORDERING, that's why mode 0 exists!
+ *
+ * typedef int (* tcpbw_sample_cb_fn)(int mode, int stage, const struct timespec * const ts, uint64_t octets);
+ *
+ * To enable (example):
+ * #define tcpbw_sample_callback   tcpbw_sample_android_callback
+ *
+ * Returns 0 (ok), NZ (SEXIT_* value, terminates measurement with an error)
+ */
+#ifndef tcpbw_sample_callback
+static inline int tcpbw_sample_cb(int mode, int stage,
+	const struct timespec * const ts, uint64_t octets)__attribute__((__unused__));
+static inline int tcpbw_sample_cb(int mode __attribute__((__unused__)),
+	int stage __attribute__((__unused__)),
+	const struct timespec * const ts __attribute__((__unused__)),
+	uint64_t octets __attribute__((__unused__)))
+{
+    return 0;
+}
+#define tcpbw_sample_callback tcpbw_sample_cb
+#endif
 
 /* TCP measure context struct */
 typedef struct measure_context {
@@ -56,4 +114,4 @@ int tcp_client_run(MeasureContext);
 
 #define MAX_CONCURRENT_SESSIONS 50
 
-#endif /* TCP_H_ */
+#endif /* TCPBWC_H_ */

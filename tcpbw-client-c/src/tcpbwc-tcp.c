@@ -721,6 +721,9 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
     ts_oversample = timespec_add(&ts_cur, &ts_oversamplingperiod);
     ts_nextstream = timespec_add(&ts_cur, &ts_streamstart);
 
+    if (tcpbw_sample_callback(1, 0, &ts_cur, 0))
+	goto err_exit;
+
     /*
      * we fill TCP buffers for the whole test time window, and they will
      * take some time to empty even after we stop queing data to be
@@ -804,6 +807,7 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 	    goto err_exit;
 
 	if (current_tcpi && timespec_le(&ts_sample, &ts_cur) && tcpi_sample_cnt < max_tcpi_samples) {
+	    uint64_t upload_byte_count = 0;
 	    for (i = 0; i < ctx->numstreams; i++) {
 		if (sockList[i] >= 0) {
 		    socklen_t tcpi_len = sizeof(current_tcpi->tcpi);
@@ -811,6 +815,10 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 			    && tcpi_len >= offsetof(struct simet_tcp_info, tcpi_bytes_retrans))) {
 		        current_tcpi->timestamp = ts_cur;
 			current_tcpi->stream_id = i;
+
+			/* tcpi_bytes_retrans is after tcpi_bytes_acked, so we know it is there */
+			upload_byte_count += current_tcpi->tcpi.tcpi_bytes_acked;
+
 			current_tcpi++;
 			tcpi_sample_cnt++;
 		    } else {
@@ -820,8 +828,10 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 		    }
 		}
 	    }
+	    if (tcpbw_sample_callback(1, 1, &ts_cur, upload_byte_count))
+		goto err_exit;
 
-	    /* the above can be very, very expensive. */
+	    /* TCP_INFO getsockopt can be very, very expensive. */
 	    if (clock_gettime(CLOCK_MONOTONIC, &ts_cur))
 		goto err_exit;
 	}
@@ -838,6 +848,8 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 	rc = -ECONNRESET;
 	goto err_exit;
     }
+
+    tcpbw_sample_callback(1, 2, NULL, 0);
 
     /* Report some TCP statistics to aid debugging */
     uint64_t bytes_retrans = 0;
@@ -893,6 +905,8 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
     return 0;
 
 err_exit:
+    tcpbw_sample_callback(1, 3, NULL, 0);
+
     free(upload_tcpi);
     free(upload_skmem);
     return rc;
@@ -974,6 +988,9 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
     ts_last = ts_cur;
     ts_oversample = timespec_add(&ts_cur, &ts_oversamplingperiod);
 
+    if (tcpbw_sample_callback(2, 0, &ts_cur, 0))
+	goto err_exit;
+
     uint64_t payload_total = 0;
     while (rCounter < max_samples && active_streams > 0) {
 	struct timespec ts_timeo = timespec_sub_saturated(&ts_oversample, &ts_cur, 0);
@@ -1045,6 +1062,9 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 	    payload_total += total;
 	    total = 0;
 
+	    if (tcpbw_sample_callback(2, 1, &ts_cur, payload_total))
+		goto err_exit;
+
 	    if (current_tcpi && tcpi_sample_cnt < max_tcpi_samples) {
 		for (unsigned int i = 0; i < ctx->numstreams; i++) {
 		    if (sockList[i] >= 0) {
@@ -1084,6 +1104,8 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 	rc = -ECONNRESET;
 	goto err_exit;
     }
+
+    tcpbw_sample_callback(2, 2, &ts_cur, 0);
 
     /* Report some TCP statistics to aid debugging */
     uint64_t bytes_total  = 0;
@@ -1128,6 +1150,8 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
     return 0;
 
 err_exit:
+    tcpbw_sample_callback(2, 3, &ts_cur, 0);
+
     free(download_tcpi);
     free(download_skmem);
     return rc;
@@ -1162,6 +1186,9 @@ int tcp_client_run(MeasureContext ctx)
 	print_err("failed to initialize report structures");
 	return SEXIT_OUTOFRESOURCE;
     }
+
+    if ((rc = tcpbw_msmt_callback(0)) != 0)
+	return (rc > 0)? rc : SEXIT_FAILURE;
 
     /* Authorization header, must go on every API call */
     if (ctx.token) {
@@ -1357,6 +1384,8 @@ err_exit:
     curl_global_cleanup();
     free_curl_err_handling();
     tcpbw_report_done(report_context);
+
+    tcpbw_msmt_callback((rc != SEXIT_SUCCESS)? 3 : 2);
 
     return rc;
 }
