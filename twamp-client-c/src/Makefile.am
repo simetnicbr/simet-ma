@@ -21,6 +21,7 @@ twampc_SOURCES = libubox/usock.h libubox/usock.c \
 				base64.h base64.c \
 				message.h message.c \
 				timestamp.h timestamp.c \
+				timespec.h \
 				report.h report.c \
 				twampc.c
 twampc_CFLAGS = -I .. -pthread -L json

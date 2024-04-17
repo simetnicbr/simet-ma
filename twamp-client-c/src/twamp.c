@@ -41,6 +41,7 @@
 #include "simet_err.h"
 #include "logger.h"
 #include "report.h"
+#include "timespec.h"
 
 #include "libubox/usock.h"
 
@@ -793,7 +794,7 @@ static void *twamp_callback_thread(void *p) {
         ts_stop.tv_nsec -= 1000000000L;
     }
 
-    while (!t_ctx->abort_test && timespec_lt(ts_cur, ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
+    while (!t_ctx->abort_test && timespec_lt(&ts_cur, &ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
         ret = receive_reflected_packet(t_ctx->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
 
@@ -861,7 +862,7 @@ error_out:
 }
 
 static int twamp_test(TWAMPContext * const test_ctx) {
-    struct timespec ts_offset, ts_cur;
+    struct timespec ts_offset, ts_cur, ts_realtime;
     unsigned int counter = 0;
     unsigned int error_counter = 0;
     void *thread_retval = NULL;
@@ -896,11 +897,11 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     const int ttl = (test_ctx->param.ttl > 0 && test_ctx->param.ttl < 256)? (int)test_ctx->param.ttl : 255;
     setsockopt(test_ctx->test_socket, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
 
-    if (clock_gettime(CLOCK_REALTIME, &ts_offset) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
+    if (clock_gettime(CLOCK_REALTIME, &ts_realtime) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
         rc = SEXIT_INTERNALERR;
         goto err_out;
     }
-    timespec_to_offset(&ts_offset, &ts_cur);
+    ts_offset = timespec_sub(&ts_realtime, &ts_cur);
 
     test_ctx->clock_offset = ts_offset;
 
