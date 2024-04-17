@@ -49,7 +49,7 @@
 static_assert(sizeof(int) >= 4, "code assumes (int) is at least 32 bits");
 static_assert(sizeof(long long) >= 8, "code assumes (long long int) is at least 64 bits");
 
-static int receive_reflected_packet(int socket, struct timeval *timeout, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
+static int receive_reflected_packet(int socket, const struct timespec * const ts_stop, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
 static void *twamp_callback_thread(void *param);
 static int twamp_test(TWAMPContext * const);
 
@@ -743,7 +743,6 @@ static void *twamp_callback_thread(void *p) {
     unsigned int pkg_corrupt = 0;
 
     struct timespec ts_cur, ts_stop, ts_recv;
-    struct timeval to;
 
     static int return_result; /* must be static! */
 
@@ -771,32 +770,21 @@ static void *twamp_callback_thread(void *p) {
     print_msg(MSG_NORMAL, "reflected packet receiving thread started");
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
-    uint64_t tt_us = t_ctx->param.packets_count * t_ctx->param.packets_interval_us
-                     + t_ctx->param.packets_timeout_us;
+    int64_t tt_us = t_ctx->param.packets_count * t_ctx->param.packets_interval_us
+                    + t_ctx->param.packets_timeout_us;
     /* clamp to 10 minutes */
     if (tt_us > 600000000)
         tt_us = 600000000;
-
-    to.tv_sec  = (time_t)(tt_us / 1000000);
-    to.tv_usec = (suseconds_t)(tt_us % 1000000);
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
         ret = SEXIT_INTERNALERR;
         goto error_out;
     }
-    ts_stop = ts_cur;
-    ts_stop.tv_sec  += to.tv_sec;
-    ts_stop.tv_nsec += to.tv_usec * 1000;
-
-    /* all timespecs going through timespec_lt() must be normalized! */
-    while (ts_stop.tv_nsec > 1000000000L) {
-        ts_stop.tv_sec++;
-        ts_stop.tv_nsec -= 1000000000L;
-    }
+    ts_stop = timespec_add_microseconds(&ts_cur, tt_us);
 
     while (!t_ctx->abort_test && timespec_lt(&ts_cur, &ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
-        ret = receive_reflected_packet(t_ctx->test_socket, &to, reflectedPacket, expected_pktsize, &bytes_recv);
+        ret = receive_reflected_packet(t_ctx->test_socket, &ts_stop, reflectedPacket, expected_pktsize, &bytes_recv);
 
         if (clock_gettime(CLOCK_MONOTONIC, &ts_recv)) {
             ret = SEXIT_INTERNALERR;
@@ -829,8 +817,6 @@ static void *twamp_callback_thread(void *p) {
             ret = SEXIT_INTERNALERR;
             goto error_out;
         }
-
-        /* FIXME: recalculate timespec "to" every so often, to avoid sistemic error */
     }
 
     ret = SEXIT_SUCCESS;
@@ -1001,34 +987,34 @@ err_out:
     return (rc != SEXIT_SUCCESS)? rc : ((test_ctx->abort_test)? SEXIT_FAILURE : SEXIT_SUCCESS);
 }
 
-static int receive_reflected_packet(int socket, struct timeval *timeout,
+static int receive_reflected_packet(int socket, const struct timespec * const ts_stop,
                                     UnauthReflectedPacket *reflectedPacket,
                                     size_t expected_size, size_t *recv_total) {
     ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
 
+    struct timespec ts_cur;
+
     FD_ZERO(&rset_master);
     FD_SET(socket, &rset_master);
 
     *recv_total = 0;
 
+    clock_gettime(CLOCK_MONOTONIC, &ts_cur);
     do {
         memcpy(&rset, &rset_master, sizeof(rset_master));
 
         /* we depend on Linux semanthics for *timeout (i.e. it gets updated) */
-        fd_ready = select(socket+1, &rset, NULL, NULL, timeout);
+        struct timespec ts_to = timespec_sub_saturated(ts_stop, &ts_cur, 0);
+        fd_ready = pselect(socket+1, &rset, NULL, NULL, &ts_to, NULL);
         if (fd_ready > 0 && FD_ISSET(socket, &rset)) {
             /* "receives" up to bufsize, but sets recv_size to the *real* size */
             /* any extra data (recv_size > bufsize) is discarded */
             recv_size = recv(socket, reflectedPacket, expected_size, MSG_TRUNC | MSG_DONTWAIT);
 
             if (recv_size < 0) {
-#if defined(EAGAIN) && defined (EWOULDBLOCK) && (EAGAIN == EWOULDBLOCK)
-                if (errno == EAGAIN ) {
-#else
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-#endif
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
                     continue;
                 } else {
                     print_err("recv message problem receiving reflected packet: %s", strerror(errno));
@@ -1058,7 +1044,9 @@ static int receive_reflected_packet(int socket, struct timeval *timeout,
         } else if (fd_ready == 0) {
             return SEXIT_MP_TIMEOUT;
         }
-    } while ((timeout->tv_sec > 0) && (timeout->tv_usec > 0));
+
+        clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+    } while (timespec_lt(&ts_cur, ts_stop));
 
     return SEXIT_MP_TIMEOUT;
 }

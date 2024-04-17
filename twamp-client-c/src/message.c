@@ -31,6 +31,8 @@
 
 #include <arpa/inet.h>
 
+#include "timespec.h"
+
 /********************/
 /* MESSAGES READERS */
 /********************/
@@ -40,7 +42,7 @@
 static ssize_t xrecv(const int socket, const int timeout, uint8_t *buf, const size_t buf_size)
 {
     fd_set rset, rset_master;
-    struct timeval tv_timeo;
+    struct timespec ts_timeo, ts_cur;
 
     if (socket < 0 || timeout < 0 || !buf || !buf_size || buf_size >= SSIZE_MAX) {
 	errno = EINVAL;
@@ -51,17 +53,19 @@ static ssize_t xrecv(const int socket, const int timeout, uint8_t *buf, const si
     FD_ZERO(&rset_master);
     FD_SET(socket, &rset_master);
 
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
+    clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+    ts_timeo = ts_cur;
+    if (timeout > 0)
+	ts_timeo.tv_sec += timeout;
 
     size_t recv_total = 0;
     size_t buf_free = buf_size;
-    while (buf_free > 0) {
+    while (buf_free > 0 && timespec_lt(&ts_cur, &ts_timeo)) {
+	struct timespec ts_to = timespec_sub_saturated(&ts_timeo, &ts_cur, 0);
         memcpy(&rset, &rset_master, sizeof(rset_master));
 
-	/* we depend on linux select() behavior that updates the timeout */
-        int fd_ready = select(socket+1, &rset, NULL, NULL, &tv_timeo);
-	if (fd_ready < 0 && errno != EINTR) {
+	int fd_ready = pselect(socket+1, &rset, NULL, NULL, &ts_to, NULL);
+	if (fd_ready < 0 && errno != EINTR && errno != EAGAIN) {
 	    goto err_exit;
 	} else if (fd_ready == 0) {
 	    errno = ETIMEDOUT;
@@ -80,6 +84,13 @@ static ssize_t xrecv(const int socket, const int timeout, uint8_t *buf, const si
 		buf_free -= (size_t) recv_size; /* verified, recv_size > 0 */
 	    }
 	}
+
+	clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+    }
+
+    if (buf_free > 0 && !timespec_lt(&ts_cur, &ts_timeo)) {
+	errno = ETIMEDOUT;
+	goto err_exit;
     }
 
     return (ssize_t) recv_total; /* verified, buf_size fits ssize_t, recv_total <= bufsize */
@@ -153,7 +164,7 @@ ssize_t message_start_ack(const int socket, const int timeout, StartAck * const 
 /* note: used both for TCP (TWAMP_CONTROL) and UDP (TWAMP_TEST) */
 ssize_t message_send(const int socket, const int timeout, void * const message, const size_t len) {
     fd_set wset, wset_master;
-    struct timeval tv_timeo;
+    struct timespec ts_timeo, ts_cur;
     int err;
 
     if (!message || socket < 0 || len >= SSIZE_MAX) {
@@ -164,18 +175,20 @@ ssize_t message_send(const int socket, const int timeout, void * const message, 
     FD_ZERO(&wset_master);
     FD_SET(socket, &wset_master);
 
-    tv_timeo.tv_sec = timeout;
-    tv_timeo.tv_usec = 0;
+    clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+    ts_timeo = ts_cur;
+    if (timeout > 0)
+	ts_timeo.tv_sec += timeout;
 
     uint8_t *buf = message;
     size_t buf_remain = len;
     size_t total_sent = 0;
-    while (buf_remain > 0) {
+    while (buf_remain > 0 && timespec_lt(&ts_cur, &ts_timeo)) {
+	struct timespec ts_to = timespec_sub_saturated(&ts_timeo, &ts_cur, 0);
         memcpy(&wset, &wset_master, sizeof(wset_master));
 
-	/* we depend on linux select() behavior that updates the timeout */
-        int fd_ready = select(socket+1, NULL, &wset, NULL, &tv_timeo);
-	if (fd_ready < 0 && errno != EINTR) {
+	int fd_ready = pselect(socket+1, NULL, &wset, NULL, &ts_to, NULL);
+	if (fd_ready < 0 && errno != EINTR && errno != EAGAIN) {
 	    goto err_exit;
 	} else if (fd_ready == 0) {
 	    errno = ETIMEDOUT;
@@ -192,11 +205,13 @@ ssize_t message_send(const int socket, const int timeout, void * const message, 
 		buf_remain -= (size_t) sent_size; /* verified, sent_size >= 0 */
 	    }
 	}
+
+	clock_gettime(CLOCK_MONOTONIC, &ts_cur);
     }
 
-    /* should never happen, but callers would break if we don't flag it as an error */
     if (total_sent != len) {
-	errno = EBADMSG; /* for symmetry with xrecv() */
+	/* EBADMSG for symmetry with xrecv() */
+	errno = (timespec_lt(&ts_cur, &ts_timeo))? EBADMSG : ETIMEDOUT;
 	goto err_exit;
     }
 
