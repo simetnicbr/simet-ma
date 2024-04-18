@@ -361,25 +361,7 @@ int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
         np--;
     print_msg(MSG_DEBUG, "Number of row of raw data to output: %u", np);
     for (unsigned int it = 0; it < np; it++) {
-        ReportPacket pkg;
-
-        uint64_t sendTime = timestamp_to_microsec(report->result->raw_data[it].data.SenderTime);
-        uint64_t reflRecvTime = timestamp_to_microsec(report->result->raw_data[it].data.RecvTime);
-        uint64_t reflReturnTime = timestamp_to_microsec(report->result->raw_data[it].data.Time);
-        uint64_t returnTime = timestamp_to_microsec(report->result->raw_data[it].time);
-
-        uint64_t processTime = reflReturnTime - reflRecvTime;
-
-        pkg.senderSeqNumber = report->result->raw_data[it].data.SenderSeqNumber;
-        pkg.reflectorSeqNumber = report->result->raw_data[it].data.SeqNumber;
-        pkg.receiverSeqNumber = it;
-
-        pkg.senderTime_us = sendTime;
-        pkg.reflectorRecvTime_us = reflRecvTime;
-        pkg.reflectorSendTime_us = reflReturnTime;
-        pkg.receiverTime_us = returnTime;
-
-        pkg.rtt_us = returnTime - sendTime - processTime;
+        const ReportPacket * const pktd = &report->result->pkt_data[it];
 
 #if 0
         /* THIS CODE CANNOT BE DISABLED FOR HOMOLOGATION V1.X CLIENTS */
@@ -395,14 +377,14 @@ int twamp_report_render_lmap(TWAMPReport *report, TWAMPParameters *param)
         json_object * jcurrow = json_object_new_array();
 
         /* WARNING: keep the same insert order as in twamp_report_col_names[] ! */
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.senderSeqNumber);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.reflectorSeqNumber);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.receiverSeqNumber);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.senderTime_us);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.reflectorRecvTime_us);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.reflectorSendTime_us);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.receiverTime_us);
-        xx_json_object_array_add_uint64_as_str(jcurrow, pkg.rtt_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->senderSeqNumber);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->reflectorSeqNumber);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->receiverSeqNumber);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->senderTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->reflectorRecvTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->reflectorSendTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->receiverTime_us);
+        xx_json_object_array_add_uint64_as_str(jcurrow, pktd->rtt_us);
 
         /* add row to list of rows */
         jo = json_object_new_object();
@@ -470,8 +452,10 @@ int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param)
     int err = 0;
 
     for (unsigned int it = 0; it < np; it++) {
-        unsigned int sender_seq    = report->result->raw_data[it].data.SenderSeqNumber;
-        unsigned int reflector_seq = report->result->raw_data[it].data.SeqNumber;
+        const ReportPacket * const pktd = &report->result->pkt_data[it];
+
+        unsigned int sender_seq    = pktd->senderSeqNumber;
+        unsigned int reflector_seq = pktd->reflectorSeqNumber;
 
         /* sender_seq MUST NOT index into pktstat_storage[maxseq] if out-of-bounds */
         if (sender_seq >= maxseq || reflector_seq >= maxseq) {
@@ -481,22 +465,26 @@ int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param)
 
         pktstat_storage[sender_seq].seen |= 1; /* for lost-packet tracking */
 
-        uint64_t send_time = timestamp_to_microsec(report->result->raw_data[it].data.SenderTime);
-        uint64_t refl_RecvTime = timestamp_to_microsec(report->result->raw_data[it].data.RecvTime);
-        uint64_t refl_ReturnTime = timestamp_to_microsec(report->result->raw_data[it].data.Time);
-        uint64_t receive_time = timestamp_to_microsec(report->result->raw_data[it].time);
-        if (refl_RecvTime > refl_ReturnTime || send_time > receive_time) {
-            packet_invalid_count++;
-            continue;
-        }
+        if (! pktd->rtt_us) {
+            /* we need to ensure it is actually zero, and not an error */
 
-        uint64_t reflector_time = refl_ReturnTime - refl_RecvTime;
-        uint64_t rtt_us = receive_time - send_time;
-        if (reflector_time > rtt_us) {
-            packet_invalid_count++;
-            continue;
+            uint64_t send_time = pktd->senderTime_us;
+            uint64_t refl_RecvTime = pktd->reflectorRecvTime_us;
+            uint64_t refl_ReturnTime = pktd->reflectorSendTime_us;
+            uint64_t receive_time = pktd->receiverTime_us;
+
+            if (refl_RecvTime > refl_ReturnTime || send_time > receive_time) {
+                packet_invalid_count++;
+                continue;
+            }
+
+            uint64_t reflector_time = refl_ReturnTime - refl_RecvTime;
+            uint64_t rtt_us = receive_time - send_time;
+            if (reflector_time > rtt_us) {
+                packet_invalid_count++;
+                continue;
+            }
         }
-        rtt_us -= reflector_time;
 
         if (pktstat_storage[sender_seq].seen & 2) {
             /* duplicate: count and skip */
@@ -504,13 +492,13 @@ int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param)
             continue;
         }
 
-        if (rtt_us > param->packets_timeout_us) {
+        if (pktd->rtt_us > param->packets_timeout_us) {
             /* arrived late and not a duplicate: count and proceed */
             packet_late_count++;
         }
 
         pktstat_storage[sender_seq].seen = 3; /* valid for statistics */
-        pktstat_storage[sender_seq].rtt = rtt_us;
+        pktstat_storage[sender_seq].rtt = pktd->rtt_us;
         packet_valid_count++;
     }
 
@@ -823,7 +811,7 @@ void twamp_report_done(TWAMPReport *r)
             free(p);
             }
         if (r->result) {
-            free(r->result->raw_data);
+            free(r->result->pkt_data);
             free(r->result);
         }
         free(r);

@@ -22,10 +22,18 @@
 #include "timestamp.h"
 #include "message.h"
 
-typedef struct twamp_raw_data {
-    Timestamp time;
-    UnauthReflectedPacket data;
-} TWAMPRawData;
+typedef struct report_packet {
+    unsigned int senderSeqNumber;
+    unsigned int reflectorSeqNumber;
+    unsigned int receiverSeqNumber;
+
+    uint64_t senderTime_us;
+    uint64_t reflectorRecvTime_us;
+    uint64_t reflectorSendTime_us;
+    uint64_t receiverTime_us;
+
+    uint64_t rtt_us;
+} ReportPacket;
 
 struct twamp_socket_info {
     const char *family;
@@ -111,7 +119,7 @@ typedef struct twamp_result {
     uint64_t rtt_max;
     uint64_t rtt_median;
 
-    TWAMPRawData * raw_data;
+    ReportPacket * pkt_data;
 } TWAMPResult;
 
 typedef struct twamp_report {
@@ -123,18 +131,5 @@ typedef struct twamp_report {
     TWAMPResult * result;
     void * privdata;
 } TWAMPReport;
-
-typedef struct report_packet {
-    unsigned int senderSeqNumber;
-    unsigned int reflectorSeqNumber;
-    unsigned int receiverSeqNumber;
-
-    uint64_t senderTime_us;
-    uint64_t reflectorRecvTime_us;
-    uint64_t reflectorSendTime_us;
-    uint64_t receiverTime_us;
-
-    uint64_t rtt_us;
-} ReportPacket;
 
 #endif /* REPORT_H_ */

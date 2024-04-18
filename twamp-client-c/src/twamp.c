@@ -49,7 +49,10 @@
 static_assert(sizeof(int) >= 4, "code assumes (int) is at least 32 bits");
 static_assert(sizeof(long long) >= 8, "code assumes (long long int) is at least 64 bits");
 
-static int receive_reflected_packet(int socket, const struct timespec * const ts_stop, UnauthReflectedPacket* reflectedPacket, size_t expected_size, size_t *bytes_recv);
+static int receive_reflected_packet(int socket, const struct timespec * const ts_stop,
+                                    UnauthReflectedPacket *reflectedPacket,
+                                    size_t expected_size, size_t *recv_total,
+                                    struct timespec * const ts_recv);
 static void *twamp_callback_thread(void *param);
 static int twamp_test(TWAMPContext * const);
 
@@ -147,12 +150,12 @@ static_assert(offsetof(struct stamp_private_tlv, data) > sizeof(struct stamp_tlv
 static_assert(sizeof(struct stamp_private_tlv) + SIMET_TWAMP_AUTH_MAXKEYSIZE < MIN_TSTPKT_SIZE - offsetof(UnauthPacket, Padding),
               "struct stamp_private_tlv + SIMET_TWAMP_AUTH_MAXKEYSIZE must fit inside the padding of the smallest acceptable TEST packet");
 
-static int twamp_rawdata_init(unsigned int num_packets, TWAMPRawData **pbuffer)
+static int twamp_pktdata_init(unsigned int num_packets, ReportPacket **pbuffer)
 {
     if (!pbuffer)
         return SEXIT_INTERNALERR;
 
-    *pbuffer = calloc(num_packets, sizeof(TWAMPRawData));
+    *pbuffer = calloc(num_packets, sizeof(ReportPacket));
     if (! *pbuffer) {
         print_err("Error allocating memory for raw_data");
         return SEXIT_OUTOFRESOURCE;
@@ -198,7 +201,7 @@ static int twamp_run_prepare(TWAMPContext *t_ctx, TWAMPParameters *param)
         return SEXIT_OUTOFRESOURCE;
     }
     // Init receive buffer
-    int rc = twamp_rawdata_init(param->packets_max, &report->result->raw_data);
+    int rc = twamp_pktdata_init(param->packets_max, &report->result->pkt_data);
     if (rc)
         return rc;
 
@@ -721,17 +724,46 @@ MEM_FREE:
     return rc;
 }
 
-static inline int twamp_check_pkt(const UnauthReflectedPacket * const pkt, const uint32_t max_pkt)
+/* Must "fast-detect" badly corrupted packets, such as what a recursive
+ * DNS resolver would send in reply to a twamp-test packet, etc.
+ */
+/* Returns Z for OK, NZ for invalid */
+static inline int twamp_process_pkt(const UnauthReflectedPacket * const rpkt,
+                                    const uint32_t max_pkt, const uint32_t pkt_count,
+                                    const struct timespec * const ts_recv,
+                                    const struct timespec * const ts_offset,
+                                    ReportPacket * const pktd)
 {
-    /* fast-detect badly corrupted packets, such as what a recursive
-     * DNS resolver would send in reply to a twamp-test packet, etc.
-     *
-     * Not needed in authenticated modes.
-     *
-     * Returns 0 if invalid.
-     */
-    return (pkt->SenderTime.integer != 0 && pkt->SenderTime.fractional != 0
-            && pkt->SeqNumber < max_pkt && pkt->SenderSeqNumber < max_pkt);
+    if (!rpkt || !pktd || pkt_count >= max_pkt)
+        return 0;
+
+    /* works regardless of host endianess */
+    if (!rpkt->SenderTime.integer && !rpkt->SenderTime.fractional)
+        return 0;
+
+    pktd->senderSeqNumber    = ntohl(rpkt->SenderSeqNumber);
+    pktd->reflectorSeqNumber = ntohl(rpkt->SeqNumber);
+    pktd->receiverSeqNumber  = pkt_count; /* approximate, final analysis might drop some */
+
+    if (pktd->senderSeqNumber >= max_pkt || pktd->reflectorSeqNumber >= max_pkt)
+        return 0;
+
+    pktd->senderTime_us        = timestamp_to_microsec(ntoh_timestamp(rpkt->SenderTime));
+    pktd->reflectorRecvTime_us = timestamp_to_microsec(ntoh_timestamp(rpkt->RecvTime));
+    pktd->reflectorSendTime_us = timestamp_to_microsec(ntoh_timestamp(rpkt->Time));
+    pktd->receiverTime_us      = timestamp_to_microsec(relative_timespec_to_timestamp(ts_recv, ts_offset));
+
+    /* clamp rtt_us to zero in case of invalid time sequence, analysis will count it
+     * as invalid later */
+    pktd->rtt_us = 0;
+    if (pktd->reflectorSendTime_us >= pktd->reflectorRecvTime_us && pktd->receiverTime_us >= pktd->senderTime_us) {
+        uint64_t reflectorDelay = pktd->reflectorSendTime_us - pktd->reflectorRecvTime_us;
+        uint64_t rtt_full = pktd->receiverTime_us - pktd->senderTime_us;
+        if (rtt_full >= reflectorDelay) {
+            pktd->rtt_us = rtt_full - reflectorDelay;
+        }
+    }
+    return 1;
 }
 
 /* twamp_callback_thread receive the reflected packets and return the result array
@@ -784,23 +816,16 @@ static void *twamp_callback_thread(void *p) {
 
     while (!t_ctx->abort_test && timespec_lt(&ts_cur, &ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
-        ret = receive_reflected_packet(t_ctx->test_socket, &ts_stop, reflectedPacket, expected_pktsize, &bytes_recv);
-
-        if (clock_gettime(CLOCK_MONOTONIC, &ts_recv)) {
-            ret = SEXIT_INTERNALERR;
-            goto error_out;
-        }
+        ret = receive_reflected_packet(t_ctx->test_socket, &ts_stop, reflectedPacket, expected_pktsize, &bytes_recv, &ts_recv);
 
         if (ret == SEXIT_MP_TIMEOUT)
             break; /* test time limit reached, not an error */
         if (ret != SEXIT_SUCCESS)
             goto error_out;
 
-        if (bytes_recv == expected_pktsize && twamp_check_pkt(reflectedPacket, t_ctx->param.packets_max)) {
-            // Save result
-            t_ctx->report->result->raw_data[pkg_count].time = relative_timespec_to_timestamp(&ts_recv, &ts_offset);
-            /* FIXME: zero-copy this! */
-            memcpy(&(t_ctx->report->result->raw_data[pkg_count].data), reflectedPacket, sizeof(UnauthReflectedPacket));
+        if (bytes_recv == expected_pktsize && twamp_process_pkt(reflectedPacket, t_ctx->param.packets_max, pkg_count,
+                    &ts_recv, &ts_offset, &t_ctx->report->result->pkt_data[pkg_count])) {
+
             pkg_count++;
         } else {
             // Something is wrong
@@ -989,7 +1014,8 @@ err_out:
 
 static int receive_reflected_packet(int socket, const struct timespec * const ts_stop,
                                     UnauthReflectedPacket *reflectedPacket,
-                                    size_t expected_size, size_t *recv_total) {
+                                    size_t expected_size, size_t *recv_total,
+                                    struct timespec * const ts_recv) {
     ssize_t recv_size;
     int fd_ready = 0;
     fd_set rset, rset_master;
@@ -1012,7 +1038,7 @@ static int receive_reflected_packet(int socket, const struct timespec * const ts
             /* "receives" up to bufsize, but sets recv_size to the *real* size */
             /* any extra data (recv_size > bufsize) is discarded */
             recv_size = recv(socket, reflectedPacket, expected_size, MSG_TRUNC | MSG_DONTWAIT);
-
+            clock_gettime(CLOCK_MONOTONIC, &ts_cur);
             if (recv_size < 0) {
                 if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
                     continue;
@@ -1023,16 +1049,8 @@ static int receive_reflected_packet(int socket, const struct timespec * const ts
             }
 
             if ((size_t) recv_size == expected_size) {
-                // Sender info
-                reflectedPacket->SenderSeqNumber = ntohl(reflectedPacket->SenderSeqNumber);
-                reflectedPacket->SenderTime = ntoh_timestamp(reflectedPacket->SenderTime);
-
-                // Reflector info
-                reflectedPacket->SeqNumber = ntohl(reflectedPacket->SeqNumber);
-                reflectedPacket->RecvTime = ntoh_timestamp(reflectedPacket->RecvTime);
-                reflectedPacket->Time = ntoh_timestamp(reflectedPacket->Time);
-
                 *recv_total = (size_t) recv_size; /* verified, recv_size can never be negative */
+                memcpy(ts_recv, &ts_cur, sizeof(*ts_recv));
                 return 0;
             }
 
