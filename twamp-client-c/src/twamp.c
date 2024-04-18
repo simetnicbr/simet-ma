@@ -375,6 +375,8 @@ TEST_EXIT:
         twamp_report_render_lmap(t_ctx.report, param);
         twamp_report_render_summary(t_ctx.report, param);
     }
+    if (t_ctx.report->result)
+        twamp_results_callback(t_ctx.report->result);
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
 
@@ -718,6 +720,8 @@ MEM_FREE:
         twamp_report_render_lmap(t_ctx.report, param);
         twamp_report_render_summary(t_ctx.report, param);
     }
+    if (t_ctx.report->result)
+        twamp_results_callback(t_ctx.report->result);
     twamp_report_done(t_ctx.report);
     t_ctx.report = NULL;
 
@@ -814,6 +818,11 @@ static void *twamp_callback_thread(void *p) {
     }
     ts_stop = timespec_add_microseconds(&ts_cur, tt_us);
 
+    if (twamp_pkt_callback(0, &ts_cur, NULL)) {
+        ret = SEXIT_FAILURE;
+        goto error_out;
+    }
+
     while (!t_ctx->abort_test && timespec_lt(&ts_cur, &ts_stop) && (pkg_count < t_ctx->param.packets_max)) {
         // Read message
         ret = receive_reflected_packet(t_ctx->test_socket, &ts_stop, reflectedPacket, expected_pktsize, &bytes_recv, &ts_recv);
@@ -825,6 +834,11 @@ static void *twamp_callback_thread(void *p) {
 
         if (bytes_recv == expected_pktsize && twamp_process_pkt(reflectedPacket, t_ctx->param.packets_max, pkg_count,
                     &ts_recv, &ts_offset, &t_ctx->report->result->pkt_data[pkg_count])) {
+
+            if (twamp_pkt_callback(1, &ts_recv, &t_ctx->report->result->pkt_data[pkg_count])) {
+                ret = SEXIT_FAILURE;
+                goto error_out;
+            }
 
             pkg_count++;
         } else {
@@ -865,6 +879,11 @@ error_out:
     if (ret != SEXIT_SUCCESS) {
         /* signal sending thread that it can stop early */
         t_ctx->abort_test = 1;
+    }
+
+    if (twamp_pkt_callback((ret != SEXIT_SUCCESS)? 3 : 2, NULL, NULL)) {
+        ret = SEXIT_FAILURE;
+        goto error_out;
     }
 
     free(reflectedPacket);
@@ -1069,4 +1088,4 @@ static int receive_reflected_packet(int socket, const struct timespec * const ts
     return SEXIT_MP_TIMEOUT;
 }
 
-/* vim: set et ts=4 sw=4 : */
+/* vim: set et ts=8 sw=4 : */
