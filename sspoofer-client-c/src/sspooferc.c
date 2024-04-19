@@ -1808,9 +1808,13 @@ static int sspoofserver_connected(struct sspoof_server * const s)
             goto conn_attempt_failed;
         }
         protocol_trace(s, "connect: getpeername failed: %s", strerror(errno));
+    } else if (s->sa_peer_len > sizeof(s->sa_peer)) {
+        print_err("connect: internal error: insufficient space for getpeername()");
+        exit(SEXIT_INTERNALERR);
     }
-    if (sspoof_nameinfo(&s->sa_peer, &s->peer_family, &s->peer_name, &s->peer_port))
+    if (sspoof_nameinfo(&s->sa_peer, &s->peer_family, &s->peer_name, &s->peer_port)) {
         print_warn("failed to get peer metadata, coping with it");
+    }
     s->peer_noconnect_ttl = 0;
 
     /* raw socket connection (which is instantaneous) */
@@ -1823,11 +1827,17 @@ static int sspoofserver_connected(struct sspoof_server * const s)
         goto conn_attempt_failed;
     }
 
-    s->sa_local_len = sizeof(struct sockaddr_storage);
-    s->sa_local.ss.ss_family = AF_UNSPEC;
-    if (getsockname(s->conn.socket, (struct sockaddr *)&s->sa_local, &s->sa_local_len) ||
-        sspoof_nameinfo(&s->sa_local, &s->local_family, &s->local_name, &s->local_port))
+    s->sa_local_len = sizeof(s->sa_local);
+    s->sa_local.sa.sa_family = AF_UNSPEC;
+    if (getsockname(s->conn.socket, (struct sockaddr *)&s->sa_local, &s->sa_local_len)) {
+        protocol_trace(s, "connect: getsockname failed: %s", strerror(errno));
+    } else if (s->sa_local_len > sizeof(s->sa_local)) {
+        print_err("connect: internal error: insufficient space for getsockame()");
+        exit(SEXIT_INTERNALERR);
+    }
+    if (sspoof_nameinfo(&s->sa_local, &s->local_family, &s->local_name, &s->local_port)) {
         print_warn("failed to get local metadata, coping with it");
+    }
 
     /* Disable Naggle, we don't need it (but we can tolerate it) */
     setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
@@ -1919,9 +1929,12 @@ static long sspoofserver_msmtrun(struct sspoof_server * const s)
                 protocol_msg(MSG_IMPORTANT, s, "error: could not create UDP socket: %s", strerror(errno));
                 return -errno;
             }
-            mctx->udp_sa_local_len = sizeof(struct sockaddr_storage);
-            mctx->udp_sa_local.ss.ss_family = AF_UNSPEC;
-            if (getsockname(s->conn.socket, &mctx->udp_sa_local.sa, &mctx->udp_sa_local_len)) {
+            mctx->udp_sa_local_len = sizeof(mctx->udp_sa_local);
+            mctx->udp_sa_local.sa.sa_family = AF_UNSPEC;
+            if (getsockname(s->conn.socket, &mctx->udp_sa_local.sa, &mctx->udp_sa_local_len)
+                    || s->sa_local_len > sizeof(s->sa_local)) {
+                if (!errno)
+                    errno = ENOBUFS; /* sa_local_len too large */
                 protocol_msg(MSG_IMPORTANT, s, "error: getsockname() failed for UDP socket: %s", strerror(errno));
                 return -errno;
             } else {
