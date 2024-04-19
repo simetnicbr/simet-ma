@@ -956,6 +956,7 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
     struct json_tokener *jtok;
     struct json_object *jroot = NULL;
     struct json_object *jmsmt_a, *jmsmt, *jo;
+    const char *param_str = NULL;
 
     struct sspoof_msmt_ctx * mctx = NULL;
 
@@ -1062,27 +1063,29 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
 
         if (msmtreq->type == SSPOOF_MSMT_T_SPOOFV1) {
             /* only for type spoof-v1 */
-            const char * prefix_str = NULL;
-            if (xx_json_getstr(s, w, jmsmt, "spoofed_src", &prefix_str) <= 1)
+            if (xx_json_getstr(s, w, jmsmt, "spoofed_src", &param_str) <= 1)
                 goto err_exit;
-            if (xx_split_prefix(prefix_str, s->conn.ai_family, &msmtreq->prefix, &msmtreq->prefix_length) < 0) {
-                protocol_msg(MSG_DEBUG, s, "invalid prefix: %s", (prefix_str && *prefix_str)? prefix_str : "(none)");
+            if (xx_split_prefix(param_str, s->conn.ai_family, &msmtreq->prefix, &msmtreq->prefix_length) < 0) {
+                protocol_msg(MSG_DEBUG, s, "invalid prefix: %s", (param_str && *param_str)? param_str : "(none)");
                 goto err_exit;
             }
-            /* protocol_msg(MSG_DEBUG, s, "prefix: %s = %16lx / %02u", prefix_str, msmtreq->prefix, msmtreq->prefix_length); */
+            /* protocol_msg(MSG_DEBUG, s, "prefix: %s = %16lx / %02u", param_str, msmtreq->prefix, msmtreq->prefix_length); */
+            free_const(param_str);
+            param_str = NULL;
 
-            prefix_str = NULL;
-            rc = xx_json_getstr(s, w, jmsmt, "spoofed_src_type", &prefix_str);
+            rc = xx_json_getstr(s, w, jmsmt, "spoofed_src_type", &param_str);
             if (rc < 0) {
                 goto err_exit;
             } else if (rc > 0) {
-                if (!prefix_str || !(*prefix_str) || strlen(prefix_str) >= sizeof(msmtreq->prefixtag)) {
-                    protocol_msg(MSG_DEBUG, s, "invalid spoof src type: %s", (prefix_str && *prefix_str)? prefix_str: "(none)");
+                if (!param_str || !(*param_str) || strlen(param_str) >= sizeof(msmtreq->prefixtag)) {
+                    protocol_msg(MSG_DEBUG, s, "invalid spoof src type: %s", (param_str && *param_str)? param_str: "(none)");
                     goto err_exit;
                 }
-                strncpy(msmtreq->prefixtag, prefix_str, sizeof(msmtreq->prefixtag)); /* strlen(prefix_str) < sizeof(msmtreq->prefixtag) */
-                /* protocol_msg(MSG_DEBUG, s, "spoofed src address type: %s", prefix_str); */
+                strncpy(msmtreq->prefixtag, param_str, sizeof(msmtreq->prefixtag)); /* strlen(param_str) < sizeof(msmtreq->prefixtag) */
+                /* protocol_msg(MSG_DEBUG, s, "spoofed src address type: %s", param_str); */
             }
+            free_const(param_str);
+            param_str = NULL;
         }
         mctx->msmt_req_count++;
     }
@@ -1102,6 +1105,9 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
     res = 1;
 
 err_exit:
+    free_const(param_str);
+    param_str = NULL;
+
     if (json_tokener_get_error(jtok) != json_tokener_success) {
         protocol_trace(s, "msmtreq: received invalid message: %s",
                       json_tokener_error_desc(json_tokener_get_error(jtok)));
