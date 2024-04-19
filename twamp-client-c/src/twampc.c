@@ -475,7 +475,7 @@ int main(int argc, char **argv)
         .port = port,
         .source_ss = ss_source,
         .family = family,
-        .lmap_report_mode = lmap_report_mode,
+        .lmap_report_mode = (enum report_mode)lmap_report_mode,
         .lmap_report_path = lmap_report_path,
         .lmap_report_output = (!lmap_report_path) ? stdout : NULL,
         .reports_enabled = reports_enabled,
