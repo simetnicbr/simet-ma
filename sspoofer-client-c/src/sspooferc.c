@@ -2080,6 +2080,9 @@ static int sspoofserver_disconnectwait(struct sspoof_server *s)
 static void sspoofserver_destroy(struct sspoof_server *s)
 {
     if (s) {
+        sspoof_msmtctx_destroy(s->msmt_queue);
+        sspoof_msmtctx_destroy(s->msmt_done);
+
         if (s->conn.socket != -1) {
             tcpaq_close(&s->conn);
             s->conn.socket = -1;
@@ -2092,6 +2095,8 @@ static void sspoofserver_destroy(struct sspoof_server *s)
             close(s->rawsock);
             s->rawsock = -1;
         }
+
+        free_const(s->sid.str);
 
         if (s->peer_gai)
             freeaddrinfo(s->peer_gai);
