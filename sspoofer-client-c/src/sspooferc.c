@@ -2166,6 +2166,25 @@ static struct sspoof_server_cluster * server_cluster_create(const char * const h
     return sc;
 }
 
+static void free_server_clusters(struct sspoof_server_cluster ** psc)
+{
+    if (psc) {
+        struct sspoof_server_cluster *sc = *psc;
+
+        while (sc) {
+            struct sspoof_server_cluster *asc = sc->next;
+
+            free_const(sc->cluster_name); sc->cluster_name = NULL;
+            free_const(sc->cluster_port); sc->cluster_port = NULL;
+            sc->next = NULL;
+            free(sc);
+
+            sc = asc;
+        }
+        *psc = NULL;
+    }
+}
+
 /*
  * Configuration
  */
@@ -2868,6 +2887,9 @@ int main(int argc, char **argv) {
         }
     } while (1); /* FIXME: got_exit_signal already set for some time, also */
 
+    free(servers_pollfds);
+    servers_pollfds = NULL;
+
     if (got_exit_signal) {
         print_msg(MSG_NORMAL, "received exit signal %d, exiting...", got_exit_signal);
         return 128 + got_exit_signal;
@@ -2886,6 +2908,10 @@ int main(int argc, char **argv) {
     }
 
     int rc = sspoof_render_report(servers, servers_count, report_mode);
+
+    free_server_structures(&servers, &servers_count);
+    free_server_clusters(&server_clusters);
+
     if (rc == -ENOMEM) {
         goto err_enomem;
     }
