@@ -22,6 +22,7 @@
 #include "report.h"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 #ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>

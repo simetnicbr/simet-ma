@@ -20,6 +20,7 @@
 
 #include "tcpbwc.h"
 #include <inttypes.h>
+#include <time.h>
 
 #include "tcpinfo.h"
 #include <linux/sock_diag.h> /* for SK_MEMINFO_* */
