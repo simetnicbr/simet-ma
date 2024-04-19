@@ -323,9 +323,6 @@ long sspoof_msmt_txpkt(struct sspoof_server * const sctx,
     /* needs to send one packet, according to mreq->type plus whatever state
      * kept in mreq for bursts of mixed types, etc */
 
-    /* FIXME: right now we just send either probe or spoof, one packet (burst 1),
-     * and the time to next packet is the group time */
-
     memcpy(&saddr, &mctx->udp_sa_local, sizeof(saddr));
     memcpy(&daddr, &sctx->sa_peer, sizeof(daddr));
 
@@ -364,9 +361,9 @@ long sspoof_msmt_txpkt(struct sspoof_server * const sctx,
         break;
 
     case SSPOOF_MSMT_T_SPOOFV1:
-        /* packet pair: sentinel/probe ; spoof */
+        /* packet pair: sentinel ; spoof */
 
-        /* even packets: sentinel/probe; odd packets: spoof v1 packet */
+        /* even packets: sentinel; odd packets: spoof v1 packet */
         is_spoof = !!(mreq->pkt_sent & 1);
 
         memcpy(&spoofaddr, &saddr, sizeof(spoofaddr));
