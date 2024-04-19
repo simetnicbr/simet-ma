@@ -55,7 +55,11 @@ typedef union sockaddr_any_u {
     struct sockaddr sa;
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
-    struct sockaddr_storage ss;
+
+#if 0
+    struct sockaddr_un un;      /* a lot bigger than sockaddr_in, sockaddr_in6 */
+    struct sockaddr_storage ss; /* sockaddr_un fits inside sockaddr_storage... */
+#endif
 } sockaddr_any_t_;
 
 struct sspoof_ctrl_msghdr {
