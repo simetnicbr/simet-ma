@@ -1800,7 +1800,7 @@ static int sspoofserver_connected(struct sspoof_server * const s)
 
     /* Get metadata of the connected socket */
     s->sa_peer_len = sizeof(s->sa_peer);
-    s->sa_peer.ss.ss_family = AF_UNSPEC;
+    s->sa_peer.sa.sa_family = AF_UNSPEC;
     if (getpeername(s->conn.socket, (struct sockaddr *)&s->sa_peer, &s->sa_peer_len)) {
         /* Resilience: ENOTCON here is sometimes the only thing that works */
         if (errno == ENOTCONN) {

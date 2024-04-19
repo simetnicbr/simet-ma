@@ -145,14 +145,14 @@ static ssize_t fill_udp46_hdr(uint8_t * const datagram, const uint16_t buffer_le
     in_port_t nbo_src_port = 0;
     in_port_t nbo_dst_port;
 
-    if (!datagram || !dst || (src && src->ss.ss_family != dst->ss.ss_family))
+    if (!datagram || !dst || (src && src->sa.sa_family != dst->sa.sa_family))
         return -EINVAL;
 
     memset(&udp_ph, 0, sizeof(udp_ph));
 
     /* IPv4/IPv6 header */
 
-    if (dst->ss.ss_family == AF_INET) {
+    if (dst->sa.sa_family == AF_INET) {
         /* IPv4 UDP datagram */
 
         udp_offset = sizeof(struct ip);
@@ -191,7 +191,7 @@ static ssize_t fill_udp46_hdr(uint8_t * const datagram, const uint16_t buffer_le
         memcpy(&udp_ph.udp4_ph.dst_addr, &iph->ip_dst, sizeof(udp_ph.udp4_ph.dst_addr));
         udp_ph.udp4_ph.proto  = iph->ip_p;
         udp_ph.udp4_ph.ip_len = htons(sizeof(struct udphdr) + udp_payload_len);
-    } else if (dst->ss.ss_family == AF_INET6) {
+    } else if (dst->sa.sa_family == AF_INET6) {
         /* IPv6 UDP datagram */
 
         udp_offset = sizeof(struct ip6_hdr);
@@ -369,7 +369,7 @@ long sspoof_msmt_txpkt(struct sspoof_server * const sctx,
         memcpy(&spoofaddr, &saddr, sizeof(spoofaddr));
 
         if (is_spoof) {
-            if (daddr.ss.ss_family == AF_INET6) {
+            if (daddr.sa.sa_family == AF_INET6) {
                 memcpy(&spoofaddr.sin6.sin6_addr, &mreq->prefix, sizeof(uint64_t));
 
                 /* FIXME: apply mask, random host */
