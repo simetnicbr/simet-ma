@@ -94,7 +94,7 @@ enum {
     msmt_tbl_col_mpdesc,
     MSMT_TBL_COL_MAX
 };
-const char * const msmt_report_col_names[SOCK_TBL_COL_MAX] = {
+const char * const msmt_report_col_names[MSMT_TBL_COL_MAX] = {
     [msmt_tbl_col_connid] = "connection-id",
     [msmt_tbl_col_msmtid] = "measurement-id",
     [msmt_tbl_col_sa_f] = "ip-family",
