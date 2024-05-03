@@ -2292,8 +2292,9 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode) __attribute__((__noreturn__));
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] [-i <netdev> ] "
+    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-4|-6] [-t <timeout>] [-i <netdev> ] "
         "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
+        "[-o <path>] [-r <mode>] "
         "<server name>[:<server port>] ...\n", p);
 
     if (mode) {
@@ -2308,7 +2309,7 @@ static void print_usage(const char * const p, int mode)
             "\t-d\tpath to a file with the measurement agent id\n"
             "\t-j\tpath to a file with the access credentials\n"
             "\t-o\tredirect report output to <path>\n"
-            "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
+            "\t-r\treport mode: 0 = comma-separated (default), 1 = json array\n"
             "\n"
             "server name: DNS name of the measurement peer(s)\n"
             "server port: TCP port on the measurement peer\n"
