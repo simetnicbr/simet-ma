@@ -61,6 +61,8 @@
 #define TCPBW_RANDOM_SOURCE "/dev/urandom"
 #define TCPBW_EARLY_EXIT_S 2
 
+#define TCPBW_MIN_STREAMSTART_DELAY 10000   /* microseconds */
+
 #define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
@@ -627,6 +629,11 @@ static void postprocess_skmem(SkmemSample *samples, size_t total_sample_count, s
     }
 }
 
+static inline long maxl(long a, long b)
+{
+    return (a >= b)? a : b;
+}
+
 static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * const rctx)
 {
     struct timespec ts_start, ts_cur, ts_stop, ts_sample, ts_oversample, ts_streamstart, ts_nextstream;
@@ -671,8 +678,9 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
     }
 
     unsigned int next_stream_to_start = ctx->numstreams;
+    /* Don't trust sRTT too much: GEO satellite transparent TCP acceleration proxies */
     const long streamdelay_us = (ctx->stream_start_delay < 0) ?
-		    (long)ctx->rtt / (-ctx->stream_start_delay * (long)ctx->numstreams) :
+		    maxl((long)ctx->rtt / (-ctx->stream_start_delay * (long)ctx->numstreams), TCPBW_MIN_STREAMSTART_DELAY) :
 		    ctx->stream_start_delay;
     bool delay_streams = (streamdelay_us > 0 && ctx->numstreams > 0);
     if (delay_streams && ctx->numstreams > 1) {
