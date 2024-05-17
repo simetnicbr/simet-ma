@@ -867,11 +867,11 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 	}
     }
     if (bytes_total > 0) {
-	print_msg(MSG_NORMAL, "TCP: %zu bytes transmitted (including retransmissions, if any)", bytes_total);
-	print_msg(MSG_NORMAL, "TCP: %zu bytes acknowleged as received by the peer (%.3f%% of transmitted)", bytes_acked,
+	print_msg(MSG_NORMAL, "TCP: %" PRIu64 " bytes transmitted (including retransmissions, if any)", bytes_total);
+	print_msg(MSG_NORMAL, "TCP: %" PRIu64 " bytes acknowleged as received by the peer (%.3f%% of transmitted)", bytes_acked,
 		100 * (double)bytes_acked / (double)bytes_total);
 	if (bytes_retrans > 0) {
-	   print_msg(MSG_NORMAL, "TCP: %zu bytes (%.3f%%) were TCP retransmissons, and not accounted for in throughput rate",
+	   print_msg(MSG_NORMAL, "TCP: %" PRIu64" bytes (%.3f%%) were TCP retransmissons, and not accounted for in throughput rate",
 		   bytes_retrans, 100 * (double)bytes_retrans / (double)bytes_total);
 	}
     }
@@ -1107,7 +1107,7 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 	}
     }
     if (bytes_total > 0) {
-	print_msg(MSG_NORMAL, "TCP: %zu bytes received (%.2f%% delivered to application)", bytes_total,
+	print_msg(MSG_NORMAL, "TCP: %" PRIu64 "bytes received (%.2f%% delivered to application)", bytes_total,
 		100 * (double)payload_total / (double)bytes_total);
     }
 
