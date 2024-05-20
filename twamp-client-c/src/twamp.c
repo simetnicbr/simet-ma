@@ -38,6 +38,7 @@
 #  define static_assert _Static_assert
 #endif
 
+#include "retry.h"
 #include "simet_err.h"
 #include "logger.h"
 #include "report.h"
@@ -225,7 +226,7 @@ static int twamp_resolve_host(const char * const host, const char * const port, 
         .ai_flags = AI_ADDRCONFIG,
     };
 
-    int r = getaddrinfo(host, port, &hints, res);
+    int r = RETRY_GAI(getaddrinfo(host, port, &hints, res));
     if (r) {
         print_err("could not resolve %s%s%s: %s", (host)? host : "", (port)? ":" : "", (port)? port : "", gai_strerror(r));
         return -1;
@@ -268,8 +269,7 @@ static int twamp_connect(const struct sockaddr_storage * const ss_source, struct
             continue;
         }
 
-        if (connect(fd_test, ai->ai_addr, ai->ai_addrlen) < 0) {
-            /* FIXME?  EINTR.  but right now we either ignore or abort on all signals... */
+        if (RETRY_EINTR(connect(fd_test, ai->ai_addr, ai->ai_addrlen) < 0)) {
             err = errno;
             continue;
         }
@@ -620,8 +620,8 @@ int twamp_run_client(TWAMPParameters * const param)
     print_msg(MSG_DEBUG, "addr value: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
     */
 
-    if (connect(fd_test, (struct sockaddr *) &remote_addr_measure,
-                remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0) {
+    if (RETRY_EINTR(connect(fd_test, (struct sockaddr *) &remote_addr_measure,
+                remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0)) {
         print_err("connect to remote measurement peer problem: %s", strerror(errno));
         rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
@@ -925,7 +925,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     }
 
     const int ttl = (test_ctx->param.ttl > 0 && test_ctx->param.ttl < 256)? (int)test_ctx->param.ttl : 255;
-    setsockopt(test_ctx->test_socket, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
+    RETRY_EINTR(setsockopt(test_ctx->test_socket, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)));
 
     if (clock_gettime(CLOCK_REALTIME, &ts_realtime) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
         rc = SEXIT_INTERNALERR;

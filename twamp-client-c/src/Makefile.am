@@ -16,14 +16,14 @@
 bin_PROGRAMS = twampc
 
 twampc_SOURCES = libubox/usock.h libubox/usock.c \
-		 logger.h simet_err.h \
-				twamp.h twamp.c \
-				base64.h base64.c \
-				message.h message.c \
-				timestamp.h timestamp.c \
-				timespec.h \
-				report.h report.c \
-				twampc.c
+		retry.h logger.h simet_err.h \
+		twamp.h twamp.c \
+		base64.h base64.c \
+		message.h message.c \
+		timestamp.h timestamp.c \
+		timespec.h \
+		report.h report.c \
+		twampc.c
 twampc_CFLAGS = -I .. -pthread -L json
 twampc_LDFLAGS = -pthread -L json
 twampc_LDADD = ${JSON_LIBS}

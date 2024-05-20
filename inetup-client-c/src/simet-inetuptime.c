@@ -49,6 +49,7 @@
 #include <signal.h>
 
 #include "simet-inetuptime.h"
+#include "retry.h"
 #include "simet_err.h"
 #include "logger.h"
 #include "tcpaq.h"
@@ -435,22 +436,24 @@ static void xx_json_object_seqnum_add(struct json_object * const j)
 
 static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
 {
+#if 0
     /* The use of SO_SNDTIMEO for blocking connect() timeout is not
      * mandated by POSIX and it is implemented only in [non-ancient]
      * Linux
      *
-     * FIXME: now that we're doing non-blocking connect(), we could
-     * implement it explicitly ourselves, perhaps in addition to using
-     * this.
+     * Note: SO_RCVTIMEO and SO_SNDTIMEO disable SA_RESTART even for
+     * things like setsockopt() and getsockopt(), which is a major
+     * hassle.
      */
     const struct timeval so_timeout = {
         .tv_sec = s->client_timeout,
         .tv_usec = 0,
     };
-    if (setsockopt(s->conn.socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout)) ||
-        setsockopt(s->conn.socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
+    if (RETRY_EINTR(setsockopt(s->conn.socket, SOL_SOCKET, SO_SNDTIMEO, &so_timeout, sizeof(so_timeout))) ||
+        RETRY_EINTR(setsockopt(s->conn.socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout)))) {
         protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
     }
+#endif
 
     /*
      * RFC-0793/RFC-5482 user timeout.
@@ -470,7 +473,7 @@ static void xx_set_tcp_timeouts(struct simet_inetup_server * const s)
      * Fixed in: Linux v4.19
      */
     const unsigned int ui = (unsigned int)s->client_timeout * 1000U;
-    if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
+    if (RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int)))) {
         print_warn("failed to enable TCP timeouts, measurement error will increase");
     }
 
@@ -1605,7 +1608,7 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
     ai.ai_family = s->conn.ai_family;
     ai.ai_protocol = IPPROTO_TCP;
 
-    r = getaddrinfo(server_name, server_port, &ai, &s->peer_gai);
+    r = RETRY_GAI(getaddrinfo(server_name, server_port, &ai, &s->peer_gai));
     if (r != 0) {
         protocol_trace(s, "getaddrinfo() returned %s", gai_strerror(r));
         return backoff;
@@ -1631,7 +1634,8 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
 
     assert(s && s->state == SIMET_INETUP_P_C_CONNECT);
 
-    while (s->conn.socket == -1 && s->peer_ai != NULL) {
+    int fast_retries = 0;
+    while (s->conn.socket == -1 && s->peer_ai != NULL && fast_retries < 5) {
         struct addrinfo * const airp = s->peer_ai;
 
         /* avoid fast reconnect to same peer */
@@ -1653,7 +1657,7 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
         xx_set_tcp_timeouts(s);
 
         /* Defang OOB/urgent data, we might need it to implement resync messages */
-        setsockopt(s->conn.socket, IPPROTO_TCP, SO_OOBINLINE, &int_one, sizeof(int_one));
+        RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, SO_OOBINLINE, &int_one, sizeof(int_one)));
 
         /* Linux TCP Thin-stream optimizations.
          *
@@ -1663,12 +1667,12 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
          * Refer to: https://github.com/torvalds/linux/blob/master/Documentation/networking/tcp-thin.txt
          */
 #ifdef TCP_THIN_LINEAR_TIMEOUTS
-        if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_THIN_LINEAR_TIMEOUTS, &int_one, sizeof(int_one))) {
+        if (RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, TCP_THIN_LINEAR_TIMEOUTS, &int_one, sizeof(int_one)))) {
             print_warn("failed to enable TCP thin-stream linear timeouts, false positives may increase");
         }
 #endif /* TCP_THIN_LINEAR_TIMEOUTS */
 #ifdef TCP_THIN_DUPACK
-        if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_THIN_DUPACK, &int_one, sizeof(int_one))) {
+        if (RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, TCP_THIN_DUPACK, &int_one, sizeof(int_one)))) {
             print_warn("failed to enable TCP thin-stream dupack, false positives may increase");
         }
 #endif /* TCP_THIN_DUPACK */
@@ -1702,11 +1706,13 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
             /* redo loop without advancing */
             close(s->conn.socket);
             s->conn.socket = -1;
+            fast_retries++;
             continue;
         }
 
         close(s->conn.socket);
         s->conn.socket = -1;
+        fast_retries = 0;
         s->peer_ai = s->peer_ai->ai_next;
     }
 
@@ -1767,7 +1773,7 @@ static int uptimeserver_connectwait(struct simet_inetup_server * const s)
      * http://cr.yp.to/docs/connect.html
      * http://www.madore.org/~david/computers/connect-intr.html
      */
-    if (getsockopt(s->conn.socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz))
+    if (RETRY_EINTR(getsockopt(s->conn.socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz)))
         socket_err = errno;
     switch (socket_err) {
     case 0:
@@ -1831,7 +1837,7 @@ static int uptimeserver_connected(struct simet_inetup_server * const s)
         print_warn("failed to get local metadata, coping with it");
 
     /* Disable Naggle, we don't need it (but we can tolerate it) */
-    setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
+    RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one)));
 
     /* done... */
     s->connect_timestamp = reltime();

@@ -40,6 +40,7 @@
 #endif
 
 #include "simet_err.h"
+#include "retry.h"
 #include "logger.h"
 #include "base64.h"
 
@@ -228,7 +229,7 @@ static int cmdline_parse_bindsrc(const char * const p, struct sockaddr_storage *
         return 1;
 
     hints.ai_family = (ss->ss_family != 0) ? ss->ss_family : AF_UNSPEC;
-    int s = getaddrinfo(host, port, &hints, &res);
+    int s = RETRY_GAI(getaddrinfo(host, port, &hints, &res));
     if (s) {
         print_err("%s: failed to resolve: %s", p, gai_strerror(s));
         return 1;

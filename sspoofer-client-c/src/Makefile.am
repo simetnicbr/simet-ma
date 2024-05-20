@@ -16,7 +16,7 @@
 bin_PROGRAMS = sspooferc
 
 sspooferc_SOURCES = ../sspooferc_config.h \
-		  simet_err.h logger.h timespec.h \
+		  simet_err.h logger.h timespec.h retry.h \
 		  netinet-tcp-compat.h \
 		  sys-linux.h sys-linux.c \
 		  base64.h base64.c \
