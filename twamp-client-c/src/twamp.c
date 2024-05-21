@@ -893,6 +893,7 @@ error_out:
 
 static int twamp_test(TWAMPContext * const test_ctx) {
     struct timespec ts_offset, ts_cur, ts_realtime;
+    struct timespec ts_sleep = { 0 };
     unsigned int counter = 0;
     unsigned int error_counter = 0;
     void *thread_retval = NULL;
@@ -900,9 +901,6 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     int rc = SEXIT_SUCCESS;
     int ret;
 
-#ifdef HAVE_CLOCK_NANOSLEEP
-    struct timespec ts_sleep = { 0 };
-#endif
 
     const unsigned int pktsize = test_ctx->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
@@ -976,7 +974,6 @@ static int twamp_test(TWAMPContext * const test_ctx) {
             }
         }
 
-#ifdef HAVE_CLOCK_NANOSLEEP
         if (!ts_sleep.tv_sec && !ts_sleep.tv_nsec)
             ts_sleep = ts_cur;
 
@@ -987,16 +984,39 @@ static int twamp_test(TWAMPContext * const test_ctx) {
         }
 
         if (!test_ctx->abort_test) {
-            if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_sleep, NULL)) {
-                /* We abort on EINTR... */
-                rc = (errno == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
+            int tries = MAXIMUM_SYSCALL_RETRIES;
+
+#ifdef HAVE_CLOCK_NANOSLEEP
+            int r;
+            do {
+                r = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_sleep, NULL);
+            } while (r == EINTR && (--tries > 0));
+            if (r) {
+                rc = (r == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
                 goto err_out;
             }
-        }
+#else /* !HAVE_CLOCK_NANOSLEEP */
+            clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+            while (timespec_lt(&ts_cur, &ts_sleep) && !test_ctx->abort_test) {
+                const struct timespec ts_o = timespec_sub(&ts_sleep, &ts_cur);
+#ifdef HAVE_NANOSLEEP
+                if (nanosleep(&ts_o, NULL))
 #else
-        if (!test_ctx->abort_test)
-            usleep(test_ctx->param.packets_interval_us);
+                /* limit usleep to one second. POSIX. */
+                if (usleep( (ts_o.tv_sec > 0)? MICROSECONDS_IN_SECOND : (useconds_t)(ts_o.tv_nsec / 1000) ))
 #endif
+                {
+                    if (errno == EINTR && tries > 0) {
+                        tries--;
+                    } else {
+                        rc = (errno == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
+                        goto err_out;
+                    }
+                }
+                clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+            }
+#endif /* HAVE_CLOCK_NANOSLEEP */
+        }
     }
 
     if (test_ctx->abort_test)
