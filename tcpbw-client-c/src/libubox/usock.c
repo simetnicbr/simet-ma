@@ -32,6 +32,7 @@
 #include <time.h>
 
 #include "usock.h"
+#include "retry.h"
 
 static void usock_set_flags(int sock, unsigned int type)
 {
@@ -72,13 +73,13 @@ static int usock_connect(int type, struct sockaddr *sa, int sa_len, int family, 
 
 	if (server) {
 		const int one = 1;
-		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+		RETRY_EINTR(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)));
 
 		if (!bind(sock, sa, sa_len) &&
 		    (socktype != SOCK_STREAM || !listen(sock, SOMAXCONN)))
 			return sock;
 	} else {
-		if (!connect(sock, sa, sa_len) || errno == EINPROGRESS)
+		if (!RETRY_EINTR(connect(sock, sa, sa_len)) || errno == EINPROGRESS)
 			return sock;
 	}
 
@@ -172,7 +173,7 @@ int usock_inet_timeout(int type, const char *host, const char *service,
 	int sock = -1;
 	int i;
 
-	if (getaddrinfo(host, service, &hints, &result))
+	if (RETRY_GAI(getaddrinfo(host, service, &hints, &result)))
 		return -1;
 
 	if (timeout <= 0 || server) {
@@ -297,7 +298,7 @@ int usock_wait_ready(int fd, int msecs) {
 		int err = 0;
 		socklen_t optlen = sizeof(err);
 
-		res = getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &optlen);
+		res = RETRY_EINTR(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &optlen));
 		if (res)
 			return errno;
 		if (err)
