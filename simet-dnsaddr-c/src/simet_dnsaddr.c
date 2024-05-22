@@ -136,12 +136,16 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
     struct sockaddr *sa = NULL;
 
     struct timespec ts1, ts2;
+    int eai;
 
     if (!node || !node[9])
         return SEXIT_FAILURE;
 
+    int fast_retries = 5;
     clock_gettime(CLOCK_MONOTONIC, &ts1);
-    int eai = getaddrinfo(node, NULL, &hints, &addr);
+    do {
+        eai = getaddrinfo(node, NULL, &hints, &addr);
+    } while (eai == EAI_SYSTEM && errno == EINTR && (--fast_retries) > 0);
     clock_gettime(CLOCK_MONOTONIC, &ts2);
     long long delta_us = timespec_sub_microseconds(&ts2, &ts1);
 

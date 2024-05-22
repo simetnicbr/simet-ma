@@ -1,7 +1,7 @@
 bin_PROGRAMS = simet_dnsaddr
 
 simet_dnsaddr_SOURCES = base64.h base64.c \
-		timespec.h simet_err.h logger.h \
+		retry.h timespec.h simet_err.h logger.h \
 		report.h report.c \
 		simet_random.h simet_random.c \
 		simet_dnsaddr.c
