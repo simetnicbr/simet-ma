@@ -183,6 +183,8 @@ _main_run(){
   #if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "SPOOFER" ] ; then
   if [ "$RUN_ONLY_TASK" = "SPOOFER" ] ; then
     _task_spoofer "$_tstid_prefix"
+    _task_traceroute "4" "$_tstid_prefix" &
+    _task_traceroute "6" "$_tstid_prefix" &
   fi
 }
 

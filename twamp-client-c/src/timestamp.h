@@ -74,16 +74,4 @@ static inline uint64_t timestamp_to_microsec(const Timestamp ts) {
     return timeval_to_microsec(timestamp_to_timeval(ts));
 }
 
-static inline void timespec_to_offset(struct timespec * const ts_target, const struct timespec * const ts_reference)
-{
-    ts_target->tv_sec  -= ts_reference->tv_sec;
-    ts_target->tv_nsec -= ts_reference->tv_nsec;
-}
-
-/* ts1, ts2 must be normalized */
-static inline int timespec_lt(const struct timespec ts1, const struct timespec ts2)
-{
-    return (ts1.tv_sec < ts2.tv_sec || (ts1.tv_sec == ts2.tv_sec && ts1.tv_nsec < ts2.tv_nsec));
-}
-
 #endif /* TWAMP_NTP_TIMESTAMP_H_ */

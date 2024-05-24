@@ -55,7 +55,11 @@ typedef union sockaddr_any_u {
     struct sockaddr sa;
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
-    struct sockaddr_storage ss;
+
+#if 0
+    struct sockaddr_un un;      /* a lot bigger than sockaddr_in, sockaddr_in6 */
+    struct sockaddr_storage ss; /* sockaddr_un fits inside sockaddr_storage... */
+#endif
 } sockaddr_any_t_;
 
 struct sspoof_ctrl_msghdr {
@@ -107,6 +111,8 @@ enum sspoof_msmt_type {
     SSPOOF_MSMT_T_MAX
 };
 
+#define SSPOOF_MSMT_SPOOFV1_TAGLEN  32 /* maximum size of sspoofv1 tags, C-string */
+
 /* One measurement */
 struct sspoof_msmt_req {
     enum sspoof_msmt_type type;
@@ -125,13 +131,12 @@ struct sspoof_msmt_req {
     /* SSPOOF_MSMT_T_SPOOFV1 */
     uint8_t  prefix_length;     /* IP network prefix length, host part will be random */
     uint64_t prefix;            /* IP4: use the lowest 32 bits. IP6: /64 */
+    char     prefixtag[SSPOOF_MSMT_SPOOFV1_TAGLEN];  /* C-string, tag identifying prefix type */
 
     /* measurement loop */
     struct timespec ts_next_pkt; /* when we should send the next packet */
     int pkt_sent;                /* packets sent inside the current group */
     int grp_sent;                /* groups already sent */
-
-    void *pkt;                  /* packet buffer cache */
 };
 
 /* One parallel batch of measurements */

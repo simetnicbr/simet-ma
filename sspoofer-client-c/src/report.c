@@ -94,7 +94,7 @@ enum {
     msmt_tbl_col_mpdesc,
     MSMT_TBL_COL_MAX
 };
-const char * const msmt_report_col_names[SOCK_TBL_COL_MAX] = {
+const char * const msmt_report_col_names[MSMT_TBL_COL_MAX] = {
     [msmt_tbl_col_connid] = "connection-id",
     [msmt_tbl_col_msmtid] = "measurement-id",
     [msmt_tbl_col_sa_f] = "ip-family",
@@ -159,6 +159,22 @@ static int xx_json_array_opt_string_add(struct json_object *jarray, const char *
             errno = ENOMEM;
             return -ENOMEM;
         }
+    }
+    return 0;
+}
+
+/* returns NZ on error, does nothing if string already in array */
+static int xx_json_array_stringset_add(struct json_object *jarray, const char *value)
+{
+    if (jarray && value) {
+        size_t al = json_object_array_length(jarray);
+        while (al > 0) {
+            --al;
+            const char *setmember = json_object_get_string(json_object_array_get_idx(jarray, al));
+            if (!xstrcmp(value, setmember))
+                return 0; /* already in set */
+        }
+        return xx_json_array_opt_string_add(jarray, value);
     }
     return 0;
 }
@@ -319,7 +335,7 @@ err_exit:
  * mp-hostname    (MP's hostname as returned in MACONFIG)
  * mp-clustername (MP's cluster name as returned in MACONFIG)
  * mp-description (MP's description as retrned in MACONFIG)
- * measuremet-summart (JSON, same contents as MSMTDATA minus the measurement-id field)
+ * measurement-summary (JSON, same contents as MSMTDATA minus the measurement-id field)
  */
 
 static json_object *sspoof_render_msmt_header(void)
@@ -369,6 +385,7 @@ err_exit:
  *   "sentinel_packets_received": <int>,
  *   "spoof_packets_received": <int>,
  *   "probe_packets_received": <int>,
+ *   "spoof_src_types": [ "<tag>", "<tag>"... ],
  *   "sentinel_snat": <bool>,
  *   "spoof_snat": <bool>,
  *   "probe_snat": <bool>,
@@ -383,8 +400,9 @@ err_exit:
 static json_object *sspoof_render_summ(struct sspoof_msmt_ctx *mctx)
 {
     json_object *jmsmt = json_object_new_object();
-    if (!jmsmt)
-        return NULL;
+    json_object *ja_srctypes = json_object_new_array();
+    if (!jmsmt || !ja_srctypes)
+        goto err_exit;
 
     if (mctx) {
         if (xx_json_object_int64_add(jmsmt, "sentinel_packets_received", mctx->data.sentinel_rcvd_count)
@@ -409,10 +427,21 @@ static json_object *sspoof_render_summ(struct sspoof_msmt_ctx *mctx)
                     || xx_json_object_opt_string_add(jmsmt, "probe_snat_addr", mctx->data.last_probe_snat_saddr)
                     || xx_json_object_bool_add(jmsmt, "probe_intact", mctx->data.probe_intact_seen)))
             goto err_exit;
+
+        for (int i = 0; i < mctx->msmt_req_count; i++) {
+            if (mctx->msmt_reqs[i].prefixtag[0] != '\0'  /* not an empty string */
+                    && xx_json_array_stringset_add(ja_srctypes, mctx->msmt_reqs[i].prefixtag))
+                goto err_exit;
+        }
+        if (json_object_array_length(ja_srctypes) > 0) {
+            json_object_object_add(jmsmt, "spoof_src_types", ja_srctypes);  /* (void) in json-c before 0.13 */
+            ja_srctypes = NULL; /* now owned by jmsmt */
+        }
     }
     return jmsmt;
 
 err_exit:
+    json_object_put(ja_srctypes);
     json_object_put(jmsmt);
     return NULL;
 }
@@ -451,6 +480,8 @@ int sspoof_render_report(struct sspoof_server **svec, unsigned int nvec, enum re
         struct sspoof_server *s = svec[i];
         if (!s || !s->msmt_done || !s->sid.str)
             continue;
+
+        /* if a measurement context made it to s->msmt_done, it will not be empty */
 
         print_msg(MSG_DEBUG, "report: generating report for connection id %u: %s", s->connection_id, s->sid.str);
 

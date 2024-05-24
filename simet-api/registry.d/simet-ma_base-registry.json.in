@@ -11,6 +11,7 @@
   { "name":"simet.nic.br_internet-availability","version":"@PACKAGEVERSION@","program":"@BINDIR@/inetupc" },
   { "name":"simet.nic.br_sspooferc","version":"@PACKAGEVERSION@","program":"@BINDIR@/sspooferc" },
   { "name":"simet.nic.br_spoofer-v2","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_spoofer_v2.sh" },
+  { "name":"simet.nic.br_sdnsaddr","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_dnsaddr" },
   { "name":"simet.nic.br_report","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_lmap-send-report.sh" },
   { "name":"simet.nic.br_report-queue-flush","version":"@PACKAGEVERSION@","program":"@BINDIR@/simet_report-queue-flush.sh" },
   { "name":"simet.nic.br_nop","version":"@PACKAGEVERSION@","program":"/bin/true" },

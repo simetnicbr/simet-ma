@@ -22,6 +22,7 @@
 #include "report.h"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 #ifdef  HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
@@ -112,6 +113,41 @@ typedef struct twamp_parameters {
     TWAMPKey key;
 } TWAMPParameters;
 
+/*
+ * Sampling callbacks for the UI
+ *
+ * stage = 0: measurement will start, ts = T0, pkt = NULL
+ * stage = 1: [over]sample point; ts = Tn; pkt is valid
+ * stage = 2: measurement has finished without an error state. ts, pkt = NULL
+ * stage = 3: measurement has finished with an error state. ts, pkt = NULL
+ *
+ * typedef int (* twamp_pkt_cb_fn)(int stage, const struct timespec * const ts,
+ *				const struct report_packet * const pkt);
+ *
+ * To enable: defiine a preprocessor symbol before this point:
+ * #define twamp_pkt_callback twamp_pkt_android_callback
+ *
+ * Returns 0 (ok), NZ (SEXIT_*, terminates measurement with an error)
+ */
+#ifndef twamp_pkt_callback
+static inline int twamp_pkt_callback(int stage, const struct timespec * const ts,
+        const struct report_packet * const pkt)__attribute__((__unused__));
+static inline int twamp_pkt_callback(int stage __attribute__((__unused__)),
+        const struct timespec * const ts __attribute__((__unused__)),
+        const struct report_packet * const pkt __attribute__((__unused__)))
+{
+    return 0;
+}
+#endif
+/* called only when the measurement finished succesfully
+ *
+ * typedef void (* twamp_results_cb_fn)(const struct twamp_result * const results);
+ */
+#ifndef twamp_results_callback
+static void twamp_results_callback(const struct twamp_result * const results)__attribute__((__unused__));
+static void twamp_results_callback(const struct twamp_result * const results __attribute__((__unused__))) {}
+#endif
+
 /* Context */
 /* Pointers are *not* owned by this struct */
 typedef struct twamp_test_context {
@@ -136,3 +172,4 @@ int twamp_report_render_lmap(TWAMPReport*, TWAMPParameters*);
 int twamp_report_render_summary(TWAMPReport *report, TWAMPParameters *param);
 
 #endif /* TWAMP_H_ */
+/* vim: set et ts=8 sw=4 : */

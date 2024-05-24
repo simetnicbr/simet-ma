@@ -337,12 +337,12 @@ static int fits_u64_i64(const uint64_t v64u, int64_t * const p64d)
 
 static void sspoof_msmtreq_freecontents(struct sspoof_msmt_req *mreq)
 {
+/*
     if (mreq) {
-        if (mreq->pkt) {
-            free(mreq->pkt);
-            mreq->pkt = NULL;
-        }
+       ...
     }
+*/
+    (void) mreq;
 }
 
 static struct sspoof_msmt_ctx *sspoof_msmtctx_new(void)
@@ -941,6 +941,7 @@ err_exit_free:
  *      "interpacket_interval_ms": <time in ms>,         default: 50ms
  *      "intergroup_interval_ms": <time in ms>,          default: 500ms
  *      "spoofed_src": "<prefix>",  (spoof-v1 only)
+ *      "spoofed_src_type": "<tag>", (sspoof-v1 only)    max len: SSPOOF_MSMT_SPOOFV1_TAGLEN-1
  *   }, ...
  * ] }
  *
@@ -955,6 +956,7 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
     struct json_tokener *jtok;
     struct json_object *jroot = NULL;
     struct json_object *jmsmt_a, *jmsmt, *jo;
+    const char *param_str = NULL;
 
     struct sspoof_msmt_ctx * mctx = NULL;
 
@@ -1061,14 +1063,29 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
 
         if (msmtreq->type == SSPOOF_MSMT_T_SPOOFV1) {
             /* only for type spoof-v1 */
-            const char * prefix_str = NULL;
-            if (xx_json_getstr(s, w, jmsmt, "spoofed_src", &prefix_str) <= 1)
+            if (xx_json_getstr(s, w, jmsmt, "spoofed_src", &param_str) <= 1)
                 goto err_exit;
-            if (xx_split_prefix(prefix_str, s->conn.ai_family, &msmtreq->prefix, &msmtreq->prefix_length) < 0) {
-                protocol_msg(MSG_DEBUG, s, "invalid prefix: %s", prefix_str);
+            if (xx_split_prefix(param_str, s->conn.ai_family, &msmtreq->prefix, &msmtreq->prefix_length) < 0) {
+                protocol_msg(MSG_DEBUG, s, "invalid prefix: %s", (param_str && *param_str)? param_str : "(none)");
                 goto err_exit;
             }
-            /* protocol_msg(MSG_DEBUG, s, "prefix: %s = %16lx / %02u", prefix_str, msmtreq->prefix, msmtreq->prefix_length); */
+            /* protocol_msg(MSG_DEBUG, s, "prefix: %s = %16lx / %02u", param_str, msmtreq->prefix, msmtreq->prefix_length); */
+            free_const(param_str);
+            param_str = NULL;
+
+            rc = xx_json_getstr(s, w, jmsmt, "spoofed_src_type", &param_str);
+            if (rc < 0) {
+                goto err_exit;
+            } else if (rc > 0) {
+                if (!param_str || !(*param_str) || strlen(param_str) >= sizeof(msmtreq->prefixtag)) {
+                    protocol_msg(MSG_DEBUG, s, "invalid spoof src type: %s", (param_str && *param_str)? param_str: "(none)");
+                    goto err_exit;
+                }
+                strncpy(msmtreq->prefixtag, param_str, sizeof(msmtreq->prefixtag)); /* strlen(param_str) < sizeof(msmtreq->prefixtag) */
+                /* protocol_msg(MSG_DEBUG, s, "spoofed src address type: %s", param_str); */
+            }
+            free_const(param_str);
+            param_str = NULL;
         }
         mctx->msmt_req_count++;
     }
@@ -1088,6 +1105,9 @@ static int sspoofer_msghdl_msmtreq(struct sspoof_server * const s,
     res = 1;
 
 err_exit:
+    free_const(param_str);
+    param_str = NULL;
+
     if (json_tokener_get_error(jtok) != json_tokener_success) {
         protocol_trace(s, "msmtreq: received invalid message: %s",
                       json_tokener_error_desc(json_tokener_get_error(jtok)));
@@ -1780,7 +1800,7 @@ static int sspoofserver_connected(struct sspoof_server * const s)
 
     /* Get metadata of the connected socket */
     s->sa_peer_len = sizeof(s->sa_peer);
-    s->sa_peer.ss.ss_family = AF_UNSPEC;
+    s->sa_peer.sa.sa_family = AF_UNSPEC;
     if (getpeername(s->conn.socket, (struct sockaddr *)&s->sa_peer, &s->sa_peer_len)) {
         /* Resilience: ENOTCON here is sometimes the only thing that works */
         if (errno == ENOTCONN) {
@@ -1788,9 +1808,13 @@ static int sspoofserver_connected(struct sspoof_server * const s)
             goto conn_attempt_failed;
         }
         protocol_trace(s, "connect: getpeername failed: %s", strerror(errno));
+    } else if (s->sa_peer_len > sizeof(s->sa_peer)) {
+        print_err("connect: internal error: insufficient space for getpeername()");
+        exit(SEXIT_INTERNALERR);
     }
-    if (sspoof_nameinfo(&s->sa_peer, &s->peer_family, &s->peer_name, &s->peer_port))
+    if (sspoof_nameinfo(&s->sa_peer, &s->peer_family, &s->peer_name, &s->peer_port)) {
         print_warn("failed to get peer metadata, coping with it");
+    }
     s->peer_noconnect_ttl = 0;
 
     /* raw socket connection (which is instantaneous) */
@@ -1803,11 +1827,17 @@ static int sspoofserver_connected(struct sspoof_server * const s)
         goto conn_attempt_failed;
     }
 
-    s->sa_local_len = sizeof(struct sockaddr_storage);
-    s->sa_local.ss.ss_family = AF_UNSPEC;
-    if (getsockname(s->conn.socket, (struct sockaddr *)&s->sa_local, &s->sa_local_len) ||
-        sspoof_nameinfo(&s->sa_local, &s->local_family, &s->local_name, &s->local_port))
+    s->sa_local_len = sizeof(s->sa_local);
+    s->sa_local.sa.sa_family = AF_UNSPEC;
+    if (getsockname(s->conn.socket, (struct sockaddr *)&s->sa_local, &s->sa_local_len)) {
+        protocol_trace(s, "connect: getsockname failed: %s", strerror(errno));
+    } else if (s->sa_local_len > sizeof(s->sa_local)) {
+        print_err("connect: internal error: insufficient space for getsockame()");
+        exit(SEXIT_INTERNALERR);
+    }
+    if (sspoof_nameinfo(&s->sa_local, &s->local_family, &s->local_name, &s->local_port)) {
         print_warn("failed to get local metadata, coping with it");
+    }
 
     /* Disable Naggle, we don't need it (but we can tolerate it) */
     setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
@@ -1899,9 +1929,12 @@ static long sspoofserver_msmtrun(struct sspoof_server * const s)
                 protocol_msg(MSG_IMPORTANT, s, "error: could not create UDP socket: %s", strerror(errno));
                 return -errno;
             }
-            mctx->udp_sa_local_len = sizeof(struct sockaddr_storage);
-            mctx->udp_sa_local.ss.ss_family = AF_UNSPEC;
-            if (getsockname(s->conn.socket, &mctx->udp_sa_local.sa, &mctx->udp_sa_local_len)) {
+            mctx->udp_sa_local_len = sizeof(mctx->udp_sa_local);
+            mctx->udp_sa_local.sa.sa_family = AF_UNSPEC;
+            if (getsockname(s->conn.socket, &mctx->udp_sa_local.sa, &mctx->udp_sa_local_len)
+                    || s->sa_local_len > sizeof(s->sa_local)) {
+                if (!errno)
+                    errno = ENOBUFS; /* sa_local_len too large */
                 protocol_msg(MSG_IMPORTANT, s, "error: getsockname() failed for UDP socket: %s", strerror(errno));
                 return -errno;
             } else {
@@ -2060,6 +2093,9 @@ static int sspoofserver_disconnectwait(struct sspoof_server *s)
 static void sspoofserver_destroy(struct sspoof_server *s)
 {
     if (s) {
+        sspoof_msmtctx_destroy(s->msmt_queue);
+        sspoof_msmtctx_destroy(s->msmt_done);
+
         if (s->conn.socket != -1) {
             tcpaq_close(&s->conn);
             s->conn.socket = -1;
@@ -2072,6 +2108,8 @@ static void sspoofserver_destroy(struct sspoof_server *s)
             close(s->rawsock);
             s->rawsock = -1;
         }
+
+        free_const(s->sid.str);
 
         if (s->peer_gai)
             freeaddrinfo(s->peer_gai);
@@ -2144,6 +2182,25 @@ static struct sspoof_server_cluster * server_cluster_create(const char * const h
     sc->cluster_name = hostname;
     sc->cluster_port = port;
     return sc;
+}
+
+static void free_server_clusters(struct sspoof_server_cluster ** psc)
+{
+    if (psc) {
+        struct sspoof_server_cluster *sc = *psc;
+
+        while (sc) {
+            struct sspoof_server_cluster *asc = sc->next;
+
+            free_const(sc->cluster_name); sc->cluster_name = NULL;
+            free_const(sc->cluster_port); sc->cluster_port = NULL;
+            sc->next = NULL;
+            free(sc);
+
+            sc = asc;
+        }
+        *psc = NULL;
+    }
 }
 
 /*
@@ -2278,8 +2335,9 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode) __attribute__((__noreturn__));
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] [-i <netdev> ] "
+    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-4|-6] [-t <timeout>] [-i <netdev> ] "
         "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
+        "[-o <path>] [-r <mode>] "
         "<server name>[:<server port>] ...\n", p);
 
     if (mode) {
@@ -2294,7 +2352,7 @@ static void print_usage(const char * const p, int mode)
             "\t-d\tpath to a file with the measurement agent id\n"
             "\t-j\tpath to a file with the access credentials\n"
             "\t-o\tredirect report output to <path>\n"
-            "\t-r\treport mode: 0 = comma-separated, 1 = json array\n"
+            "\t-r\treport mode: 0 = comma-separated (default), 1 = json array\n"
             "\n"
             "server name: DNS name of the measurement peer(s)\n"
             "server port: TCP port on the measurement peer\n"
@@ -2847,6 +2905,9 @@ int main(int argc, char **argv) {
         }
     } while (1); /* FIXME: got_exit_signal already set for some time, also */
 
+    free(servers_pollfds);
+    servers_pollfds = NULL;
+
     if (got_exit_signal) {
         print_msg(MSG_NORMAL, "received exit signal %d, exiting...", got_exit_signal);
         return 128 + got_exit_signal;
@@ -2865,6 +2926,10 @@ int main(int argc, char **argv) {
     }
 
     int rc = sspoof_render_report(servers, servers_count, report_mode);
+
+    free_server_structures(&servers, &servers_count);
+    free_server_clusters(&server_clusters);
+
     if (rc == -ENOMEM) {
         goto err_enomem;
     }

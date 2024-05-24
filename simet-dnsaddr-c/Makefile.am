@@ -1,3 +1,5 @@
+##
+## Makefile.am for inetupc - SIMET2 MA Internet network availability (client)
 ## Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
 ##
 ## This program is free software: you can redistribute it and/or modify
@@ -13,29 +15,11 @@
 ## General Public License and the COPYING file in the program Source
 ## for details.
 
-bin_PROGRAMS = twampc
+SUBDIRS = src
 
-twampc_SOURCES = libubox/usock.h libubox/usock.c \
-		 logger.h simet_err.h \
-				twamp.h twamp.c \
-				base64.h base64.c \
-				message.h message.c \
-				timestamp.h timestamp.c \
-				timespec.h \
-				report.h report.c \
-				twampc.c
-twampc_CFLAGS = -I .. -pthread -L json
-twampc_LDFLAGS = -pthread -L json
-twampc_LDADD = ${JSON_LIBS}
+EXTRA_DIST = autogen.sh version version.sh
 
-check_PROGRAMS = base64_test
-base64_test_SOURCES = base64.h base64.c base64_test.c
+dist-local: version
 
-#valgrind: twampc
-#	valgrind --leak-check=full --track-origins=yes --xml-file=twampc_log.xml --xml=yes ./$(TWAMP_CLI)
-#	valkyrie --view-log ./twampc_log.xml
-
-#clean:
-#	rm -f *.o
-#	rm -f $(TWAMP_CLI)
-#	rm -f twampc_log.xml
+version: $(top_srcdir)/version.sh
+	$(top_srcdir)/version.sh > version
