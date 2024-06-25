@@ -259,11 +259,17 @@ __simet_modify_agent_apicall() {
 	:
 }
 __simet_modify_agent_pairing() {
-	if [ -z "$1" ] || [ "$1" = "DISABLED" ] || [ "$PAIRED" = "true" ] || [ "$PAIRED" = 1 ] ; then
-		SC="\"waiting_for_pairing\":false,"
-	else
-		SC="\"waiting_for_pairing\":true,\"secret\":\"$1\","
-	fi
+	# Note: if the vlabel subsystem failed, leave agent pairing state unchanged
+	[ "$1" = "FAILED" ] && return 1
+
+	SCSECRET="$1"
+	[ "$SCSECRET" = "DISABLED" ] && SCSECRET=
+	WFP="true"
+	[ -z "$SCSECRET" ] || [ "$PAIRED" = "true" ] || [ "$PAIRED" = 1 ] && WFP="false"
+
+	SC="\"waiting_for_pairing\":$WFP,"
+	[ -n "$SCSECRET" ] && SC="$SC\"secret\":\"$SCSECRET\","
+
 	__simet_modify_agent_apicall "$SC" || return $?
 	:
 }
@@ -501,7 +507,7 @@ simet_attempt_pairing_recovery() {
 	[ -n "$RMOLD" ] && rm -f "$AGENT_PAIRBKP_FILE"
 
 	[ -z "$OLDPAIR" ] && return 1
-	[ -z "$SIMET2_VLABEL" ] && return 1
+	[ -z "$SIMET2_VLABEL" ] || [ "$SIMET2_VLABEL" != "FAILED" ] && return 1
 	__simet_attempt_pairing_recovery "$OLDPAIR" "$SIMET2_VLABEL" || return 1
 	SID2=$($JSONFILTER -i "$OUTFILE" -e "PAIRED=@.recovered") || return 1
 	eval "$SID2" || return 1
@@ -515,7 +521,7 @@ simet_attempt_pairing_recovery() {
 
 #overridable
 simet_pairing_flow() {
-	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL=
+	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || SIMET2_VLABEL="FAILED"
 	[ "$SIMET2_VLABEL" = "DISABLED" ] && SIMET2_VLABEL=
 	if [ -z "$SIMET2_VLABEL" ] ; then
 		# register as not available for pairing
@@ -526,13 +532,14 @@ simet_pairing_flow() {
 		# did not request to remove an existing pairing above.
 		#
 		# PAIREDTO and PAIRED will be correctly set and up-to-date.
-	else
+	elif [ "$SIMET2_VLABEL" != "FAILED" ] ; then
 		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
 			call simet_attempt_pairing_recovery && call simet_refresh_agent_status
 		fi
-		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
-			call simet_register_vlabel || true
-		fi
+
+		# update the pairing secret in the AR, in case it could be
+		# used to recover agent identity during a factory reset.
+		call simet_register_vlabel || true
 	fi
 
 	call simet_update_participant_info || \
