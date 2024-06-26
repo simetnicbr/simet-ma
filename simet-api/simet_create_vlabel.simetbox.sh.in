@@ -8,6 +8,12 @@
 ##
 ## Otherwise, return the existing virtual label on stdout.
 
+## Note: we transitioned to a new virtual label format, so there is
+## handling here for the new and old formats.  We only calculate the
+## old format if we need it to check for a changed vlabel for the
+## "vlabel-was-foreign" functionality, used to detect cloning of an
+## already-registered device.
+
 # If we already have it, or it is disabled, output it and exit
 @BINDIR@/simet_read_vlabel.sh 2>/dev/null && exit 0
 
@@ -35,6 +41,7 @@ abend() {
 SIMETBOX_VERSION=$(get_simet_box_version.sh 2>/dev/null) || SIMETBOX_VERSION="unknown"
 
 openwrt_vendor_mtd_filter() {
+  #shellcheck disable=SC2018,SC2019
   model=$(get_model.sh 2>/dev/null | tr A-Z a-z) || model=
   case "$model" in
     ubnt_*|ubiquiti_*)
@@ -47,8 +54,8 @@ openwrt_vendor_mtd_filter() {
   :
 }
 
-#FIXME: use a real KDF
-openwrt_read_invariant_seed() {
+# Old-format SIMETBox vlabel, deprecated, to be removed on 2026/07
+openwrt_read_invariant_seed_fmt13() {
   # See if we can get something stable from the platform vendor
   [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_secret" ] && \
     SBXSEED=$(@SIMETLIBDIR@/vendor/get_platform_simet_secret vlabel) || SBXSEED=
@@ -69,20 +76,68 @@ openwrt_read_invariant_seed() {
       || RC=3 abend "failed to parse /proc/mtd"
     [ -z "$P" ] \
       && RC=3 abend "no useful partitions in /proc/mtd to generate a stable secret"
+    #shellcheck disable=SC2086
     SBXSEED=$( set -o pipefail ; { echo "NIC VLABEL IV 0132457869" ; cat -- $P ; } | md5sum - ) \
       || RC=3 abend "failed to generate stable secret from /dev/mtd"
     [ -z "$SBXSEED" ] \
       && RC=3 abend "md5sum empty?!"
-    # FIXME: compress to base64, an md5sum becomes 8 characters. needs migration
     printf 'NIC1%s' "$SBXSEED" | tr -dc 0-9a-zA-Z
   fi
+  :
+}
+
+openwrt_read_invariant_seed() {
+  [ -x @BINDIR@/simet_gen_vlabel ] || RC=2 abend "simet_gen_vlabel missing"
+
+  #shellcheck disable=SC2015,SC2018,SC2019
+  PMAC=$(set -o pipefail; printf "%s" "$SIMET_MAC_LABEL" | sha256sum - | tr A-Z a-z | tr -dc 0-9a-z)
+  #shellcheck disable=SC2015
+  [ -n "$PMAC" ] && [ "$PMAC" != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ] \
+    || RC=2 abend "internal error: empty PMAC"
+
+  # See if we can get something stable from the platform vendor
+  SBXSEED=
+  [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_secret" ] && {
+    RRC=0
+    SBXSEED=$(@SIMETLIBDIR@/vendor/get_platform_simet_secret vlabel) || RRC=$?
+    # temporary error, *MUST* retry later and not generate own label
+    [ $RRC -ge 2 ] && return 20
+  }
+
+  if [ "$SBXSEED" = "DISABLED" ] || [ "$SBXSEED" = "disabled" ] ; then
+    printf "DISABLED"
+  elif [ -n "$SBXSEED" ] ; then
+    # N0 vlabel post-processing for get_platform_simet_secret vlabel
+
+    #shellcheck disable=SC2086
+    VL=$(set -o pipefail ; printf "%s" "$SBXSEED" | @BINDIR@/simet_gen_vlabel $GENVLABEL_OPT N0 "$PMAC") \
+      || RC=3 abend "simet_gen_vlabel N0 failed"
+  else
+    # This is a hack, it is not perfect, and not that secure.  Use unknown
+    # sources of variance (if we're lucky, the serial number and the -- unused
+    # by openwrt/simetbox -- default vendor firmware wifi password) to have a
+    # per-device secret seed.
+
+    # note: this can be quite expensive in CPU and wall time
+
+    P=$( sed -En -e '/^mtd[0-9]/! d' -e '/[" ](rootfs|firmware|kernel|ubi)/ d' -e "$(openwrt_vendor_mtd_filter)" -e 's#(mtd[^:]+).*#/dev/\1ro# ; p' < /proc/mtd ) \
+      || RC=3 abend "failed to parse /proc/mtd"
+    [ -z "$P" ] \
+      && RC=3 abend "no useful partitions in /proc/mtd to generate a stable secret"
+
+    #shellcheck disable=SC2086
+    VL=$(set -o pipefail ; { printf "NIC VLABEL IV 0132457869" ; cat -- $P ; } | @BINDIR@/simet_gen_vlabel $GENVLABEL_OPT N0 "$PMAC") \
+      || RC=3 abend "failed to generate stable secret from /dev/mtd"
+  fi
+  [ -z "$VL" ] && RC=3 abend "SIMET vlabel creation failed"
+  printf "%s" "$VL"
   :
 }
 
 openwrt_generate_vlabel() {
   RC=1
   [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_label" ] && {
-    # attempt to retreive a real, printed label from FLASH
+    # attempt to retrieve a real, printed label from FLASH
     RC=0
     IVS=$(@SIMETLIBDIR@/vendor/get_platform_simet_label vlabel) || RC=$?
     # temporary error, *MUST* retry later and not generate own label
@@ -108,12 +163,22 @@ simetbox_output_vlabel_file() {
 SIMET2_VLABEL=$(openwrt_generate_vlabel) || SIMET2_VLABEL=
 [ -z "$SIMET2_VLABEL" ] && RC=3 abend "MA could not create its virtual label"
 
-[ -r "$AGENT_VLABEL_FILE" ] && {
+[ -r "$AGENT_VLABEL_FILE" ] && [ "$SIMET2_VLABEL" != "DISABLED" ] && {
+  NEWLABEL="$SIMET2_VLABEL"
   OLDLABEL=$(sed -n -e '1 {p;q}' "$AGENT_VLABEL_FILE") || OLDLABEL=
-  [ -n "$OLDLABEL" ] && [ "$OLDLABEL" != "$SIMET2_VLABEL" ] && {
-    mv -f "$AGENT_VLABEL_FILE" "${AGENT_VLABEL_FILE}.${SIMETBOX_VERSION}.bkp"
-    # signal other layers we detected a problem
-    [ -d "$SIMET_RUNSTATE_DIR" ] && touch "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
+  [ "$OLDLABEL" = "DISABLED" ] && OLDLABEL=
+  [ -n "$OLDLABEL" ] && [ "$OLDLABEL" != "$NEWLABEL" ] && {
+    [ "${OLDLABEL#N0*}" = "${OLDLABEL}" ] && [ ! -x @SIMETLIBDIR@/vendor/get_platform_simet_label ] && {
+      # old label is not N0, we need to compare with the old algorithm. fail-safe.
+      NEWLABEL=$(openwrt_read_invariant_seed_fmt13) || NEWLABEL=
+      [ "$NEWLABEL" = "DISABLED" ] && NEWLABEL=
+    }
+
+    [ "$OLDLABEL" != "$NEWLABEL" ] && [ -n "$NEWLABEL" ] && {
+      mv -f "$AGENT_VLABEL_FILE" "${AGENT_VLABEL_FILE}.${SIMETBOX_VERSION}.bkp"
+      # signal other layers we detected a problem
+      [ -d "$SIMET_RUNSTATE_DIR" ] && touch "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
+    }
   }
 }
 simetbox_output_vlabel_file > "$AGENT_VLABEL_FILE" \
