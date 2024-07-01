@@ -16,7 +16,7 @@
   },
   { "name":"ma-local_periodic-sdnsaddr",
     "tag":["simet.nic.br_ev-period:@PERIODIC_TEST_PERIOD@"],
-    "start":"ma-local_ev-periodic-test-run",
+    "start":"ma-local_ev-default-periodic-test-run",
     "execution-mode":"sequential",
     "action":[
       {"name":"simet.nic.br_agent-info","task":"simet.nic.br_agent-info",
