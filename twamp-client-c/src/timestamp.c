@@ -18,6 +18,37 @@
 #include "twampc_config.h"
 #include "timestamp.h"
 
+#include <assert.h>
+#if !defined(static_assert) && defined(__STDC_VERSION__) && (__STDC_VERSION__ < 202301L)
+#  define static_assert _Static_assert
+#endif
+
+/* NTP era 0 (1900-01-01) to UNIX epoch offset (1970-01-01) */
+#define NTP_TIMESTAMP_UNIX_EPOCH    (2208988800U)   /* 70 years = 2208988800 seconds */
+#define NTP_TIMESTAMP_UNIX_EPOCH_LL (2208988800LL)
+
+/* UNIX timestamp when to switch from NTP era 0 to era 1 */
+#define UNIX_TIMESTAMP_2K10      (1262304000U)
+
+struct timeval timestamp_to_timeval(const Timestamp ts) {
+    struct timeval ret_tv;
+
+    static_assert(NTP_TIMESTAMP_UNIX_EPOCH < UINT32_MAX - UNIX_TIMESTAMP_2K10,
+		  "NTP era rollover detection point must be < UINT32_MAX");
+    if (ts.integer >= NTP_TIMESTAMP_UNIX_EPOCH + UNIX_TIMESTAMP_2K10) {
+	/* ntp era 0, 32-bit time_t safe */
+	static_assert(UINT32_MAX - NTP_TIMESTAMP_UNIX_EPOCH < INT32_MAX, "Something insane happaned");
+        ret_tv.tv_sec = (time_t)(ts.integer - NTP_TIMESTAMP_UNIX_EPOCH);
+    } else {
+	/* ntp era 1, needs 64-bit time_t */
+	int64_t ut_sec = (int64_t)ts.integer - NTP_TIMESTAMP_UNIX_EPOCH + UINT32_MAX + 1;
+	ret_tv.tv_sec = ut_sec; /* y2k38: warn on 32-bit time_t */
+    }
+
+    ret_tv.tv_usec = (suseconds_t)((double)ts.fractional * ((double)1e6 / (double)(1uLL<<32)) + 0.5); /* lround(n), n>=0 */
+    return ret_tv;
+}
+
 Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, const struct timespec * const ts_offset)
 {
     Timestamp ret_timestamp = { .integer = 0, .fractional = 0 };
@@ -28,8 +59,7 @@ Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, c
         return ret_timestamp;
 
     /* Realtime is based on UNIX epoch (1970), timestamps are NTP epoch (1900) */
-    /* 70 years = 2208988800 seconds */
-    sec = ts_now->tv_sec + ts_offset->tv_sec + 2208988800;
+    sec = ts_now->tv_sec + ts_offset->tv_sec + NTP_TIMESTAMP_UNIX_EPOCH_LL;
     nsec = ts_now->tv_nsec + ts_offset->tv_nsec;
 
     /* our two input timespecs are assumed to be normalized already,

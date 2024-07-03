@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
+ * Copyright (c) 2018-2024 NIC.br <medicoes@simet.nic.br>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,6 +13,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License and the COPYING file in the program Source
  * for details.
+ *
+ * Y2k36 safety (NTP): safe for y2010-y2145
+ * Y2k38 safety (unix int32_t time_t rollover): unsafe.
  */
 
 #ifndef TWAMP_NTP_TIMESTAMP_H_
@@ -32,6 +35,7 @@ typedef struct ntp_timestamp {
     uint32_t fractional;
 } Timestamp;
 
+
 /***********/
 /* HELPERS */
 /***********/
@@ -43,12 +47,7 @@ Timestamp relative_timespec_to_timestamp(const struct timespec * const ts_now, c
 Timestamp timeval_to_timestamp(const struct timeval *tv);
 
 /* timestamp_to_timeval converts Timestamp to struct timeval */
-static inline struct timeval timestamp_to_timeval(const Timestamp ts) {
-    struct timeval ret_tv;
-    ret_tv.tv_sec = ts.integer - 2208988800U;
-    ret_tv.tv_usec = (suseconds_t)((double)ts.fractional * ((double)1e6 / (double)(1uLL<<32)) + 0.5); /* lround(n), n>=0 */
-    return ret_tv;
-}
+struct timeval timestamp_to_timeval(const Timestamp ts);
 
 /* local endian to network endian, for Timestamp */
 static inline Timestamp hton_timestamp(Timestamp ts) {
