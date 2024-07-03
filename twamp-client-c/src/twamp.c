@@ -980,11 +980,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
         if (!ts_sleep.tv_sec && !ts_sleep.tv_nsec)
             ts_sleep = ts_cur;
 
-        ts_sleep.tv_nsec += test_ctx->param.packets_interval_us * 1000;
-        while (ts_sleep.tv_nsec > 1000000000) {
-            ts_sleep.tv_sec++;
-            ts_sleep.tv_nsec -= 1000000000;
-        }
+        ts_sleep = timespec_add_microseconds(&ts_sleep, test_ctx->param.packets_interval_us);
 
         if (!test_ctx->abort_test) {
             if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_sleep, NULL)) {
