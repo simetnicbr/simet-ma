@@ -1,3 +1,20 @@
+simet-ma (0.18.9) unstable; urgency=medium
+
+  * simet-ma version 0.18.9
+  * sspoofer: update measurement to include spoofed_src_type field
+  * sspoofer: reduce memory footprint
+  * sspoofer: add missing options to usage help line
+  * simet-runner: add traceroute to SPOOFER measurement report
+  * twamp: refactor per-packet data storage, RTT calculation
+  * twamp: switch tx/rx loops from select() to pselect()
+  * twamp: handle NTP y2036 rollover, twampc assumes year is 2010-2146
+  * tcpbw: enforce a minimum stream start delay of 10ms if delays are enabled
+  * simet-dnsaddr: add new DNS measurement: last-in-default-chain resolver
+  * simet-api: keep pairing secret up-to-date in the SIMET agent registry
+  * deb: provide hook for dhcpcd
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 05 Jul 2024 09:58:17 -0300
+
 simet-ma (0.18.8.2) unstable; urgency=medium
 
   * simet-ma version 0.18.8.1
