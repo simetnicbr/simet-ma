@@ -33,6 +33,18 @@
       {"name":"simet.nic.br_srvlist-mp-latency","task":"simet.nic.br_srvlist-mp-latency"}
     ]
   },
+  { "name":"ma-local_initial-measurement2",
+    "start":"startup-delayed",
+    "execution-mode":"sequential",
+    "action":[
+      {"name":"simet.nic.br_agent-info","task":"simet.nic.br_agent-info",
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_geolocation","task":"simet.nic.br_geolocation",
+       "destination":["ma-local_periodic_report"]},
+      {"name":"simet.nic.br_sdnsaddr","task":"simet.nic.br_sdnsaddr",
+       "destination":["ma-local_periodic_report"]}
+    ]
+  },
   { "name":"ma-local_periodic-sdnsaddr",
     "tag":["simet.nic.br_ev-period:@PERIODIC_TEST_PERIOD@"],
     "start":"ma-local_ev-default-periodic-test-run",
