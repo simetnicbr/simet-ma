@@ -22,7 +22,7 @@
 
 #include <time.h>
 
-#define MICROSECONDS_IN_SECOND 1000000LL
+#define MICROSECONDS_IN_SECOND 1000000L
 #define NANOSECONDS_IN_SECOND  1000000000LL
 #define TIMESPEC_NANOSECONDS(ts) ((ts.tv_sec * NANOSECONDS_IN_SECOND) + ts.tv_nsec)
 
@@ -65,12 +65,12 @@ static inline struct timespec timespec_add(const struct timespec * const ts1, co
     return result;
 }
 
-static inline struct timespec timespec_add_microseconds(const struct timespec * const base, const long us)
+static inline struct timespec timespec_add_microseconds(const struct timespec * const base, const int64_t us)
 {
     struct timespec result;
 
-    result.tv_sec = base->tv_sec;
-    result.tv_nsec = base->tv_nsec + us * 1000L; /* can be negative */
+    result.tv_sec = base->tv_sec + (time_t)(us / MICROSECONDS_IN_SECOND);
+    result.tv_nsec = base->tv_nsec + (long)( us % MICROSECONDS_IN_SECOND ) * 1000L; /* can be negative */
     while (result.tv_nsec < 0) {
 	--result.tv_sec;
 	result.tv_nsec += NANOSECONDS_IN_SECOND;
