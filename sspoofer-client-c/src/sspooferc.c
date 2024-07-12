@@ -52,6 +52,7 @@
 
 #include "sspooferc.h"
 #include "simet_err.h"
+#include "retry.h"
 #include "logger.h"
 #include "tcpaq.h"
 #include "base64.h"
@@ -146,7 +147,7 @@ static void tcp_abort(int socket)
         .l_linger = 0,
     };
     if (socket >= 0) {
-        setsockopt(socket, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+        RETRY_EINTR(setsockopt(socket, SOL_SOCKET, SO_LINGER, &l, sizeof(l)));
         close(socket); /* TCP RST, signal error condition */
     }
 }
@@ -465,13 +466,14 @@ static void xx_json_object_seqnum_add(struct json_object * const j)
 
 static void xx_set_tcp_timeouts(struct sspoof_server * const s)
 {
+#if 0
     /* The use of SO_SNDTIMEO for blocking connect() timeout is not
      * mandated by POSIX and it is implemented only in [non-ancient]
      * Linux
      *
-     * FIXME: now that we're doing non-blocking connect(), we could
-     * implement it explicitly ourselves, perhaps in addition to using
-     * this.
+     * Note: SO_RCVTIMEO and SO_SNDTIMEO disable SA_RESTART even for
+     * things like setsockopt() and getsockopt(), which is a major
+     * hassle.
      */
     const struct timeval so_timeout = {
         .tv_sec = s->control_timeout,
@@ -481,6 +483,7 @@ static void xx_set_tcp_timeouts(struct sspoof_server * const s)
         setsockopt(s->conn.socket, SOL_SOCKET, SO_RCVTIMEO, &so_timeout, sizeof(so_timeout))) {
         protocol_trace(s, "failed to set socket timeouts using SO_*TIMEO");
     }
+#endif
 
     /*
      * RFC-0793/RFC-5482 user timeout.
@@ -500,7 +503,7 @@ static void xx_set_tcp_timeouts(struct sspoof_server * const s)
      * Fixed in: Linux v4.19
      */
     const unsigned int ui = (unsigned int)s->control_timeout * 1000U;
-    if (setsockopt(s->conn.socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int))) {
+    if (RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, TCP_USER_TIMEOUT, &ui, sizeof(unsigned int)))) {
         print_warn("failed to enable TCP timeouts, measurement error will increase");
     }
 
@@ -1600,7 +1603,7 @@ static int sspoofserver_connect_init(struct sspoof_server * const s,
     ai.ai_family = s->conn.ai_family;
     ai.ai_protocol = IPPROTO_TCP;
 
-    r = getaddrinfo(server_name, server_port, &ai, &s->peer_gai);
+    r = RETRY_GAI(getaddrinfo(server_name, server_port, &ai, &s->peer_gai));
     if (r != 0) {
         protocol_trace(s, "getaddrinfo() returned %s", gai_strerror(r));
         goto exit_backoff;
@@ -1643,7 +1646,8 @@ static int sspoofserver_connect(struct sspoof_server * const s)
         return -errno;
     }
 
-    while (s->conn.socket == -1 && s->peer_ai != NULL) {
+    int fast_retries = 0;
+    while (s->conn.socket == -1 && s->peer_ai != NULL && fast_retries < 5) {
         struct addrinfo * const airp = s->peer_ai;
 
         /* avoid fast reconnect to same peer */
@@ -1693,11 +1697,13 @@ static int sspoofserver_connect(struct sspoof_server * const s)
             /* redo loop without advancing */
             close(s->conn.socket);
             s->conn.socket = -1;
+            fast_retries++;
             continue;
         }
 
         close(s->conn.socket);
         s->conn.socket = -1;
+        fast_retries = 0;
         s->peer_ai = s->peer_ai->ai_next;
     }
 
@@ -1765,7 +1771,7 @@ static int sspoofserver_connectwait(struct sspoof_server * const s)
      * http://cr.yp.to/docs/connect.html
      * http://www.madore.org/~david/computers/connect-intr.html
      */
-    if (getsockopt(s->conn.socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz))
+    if (RETRY_EINTR(getsockopt(s->conn.socket, SOL_SOCKET, SO_ERROR, &socket_err, &socket_err_sz)))
         socket_err = errno;
     switch (socket_err) {
     case 0:
@@ -1840,7 +1846,7 @@ static int sspoofserver_connected(struct sspoof_server * const s)
     }
 
     /* Disable Naggle, we don't need it (but we can tolerate it) */
-    setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one));
+    RETRY_EINTR(setsockopt(s->conn.socket, IPPROTO_TCP, TCP_NODELAY, &int_one, sizeof(int_one)));
 
     /* done... */
     s->connect_timestamp = reltime();

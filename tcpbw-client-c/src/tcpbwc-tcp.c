@@ -50,6 +50,7 @@
 #include "libubox/usock.h"
 
 #include "timespec.h"
+#include "retry.h"
 
 #define MAX_URL_SIZE 1024
 #define TCP_MAX_BUFSIZE 33554432U
@@ -95,14 +96,14 @@ static size_t new_tcp_buffer(int sockfd, void **p)
 
     /* grow application buffer size to handle kernel's default socket buffer size */
     optvalsz = sizeof(optval);
-    if (!getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &optval, &optvalsz)) {
+    if (!RETRY_EINTR(getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &optval, &optvalsz))) {
 	print_msg(MSG_DEBUG, "TCP Socket initial send buffer size: %d bytes", optval);
 	if (optval > 0 && (size_t) optval > buflen)
 	    buflen = (size_t) optval;
     }
 
     optvalsz = sizeof(optval);
-    if (!getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &optval, &optvalsz)) {
+    if (!RETRY_EINTR(getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &optval, &optvalsz))) {
 	print_msg(MSG_DEBUG, "TCP Socket initial receive buffer size: %d bytes", optval);
 	if (optval > 0 && (size_t) optval > buflen)
 	    buflen = (size_t) optval;
@@ -257,19 +258,19 @@ static int create_measure_socket(const char * const host, const char * const por
     tcpbw_hello_msg.session_id_len = htonl((uint32_t)sessionid_len);
 
     /* Send and flush header */
-    setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one));
+    RETRY_EINTR(setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one)));
     if (message_send(fd_measure, 10, &tcpbw_hello_msg, sizeof(tcpbw_hello_msg)) < 0 ||
 	message_send(fd_measure, 10, sessionid, sessionid_len) < 0) {
         print_warn("failed to send test stream header");
         return -1;
     }
-    setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &zero, sizeof(zero));
+    RETRY_EINTR(setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &zero, sizeof(zero)));
 
     if (mss || srtt) {
 	size_t amss = 0;
 	struct simet_tcp_info tcpi;
 	socklen_t tcpi_len = sizeof(tcpi);
-	if (likely(!getsockopt(fd_measure, IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len)
+	if (likely(!RETRY_EINTR(getsockopt(fd_measure, IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len))
 		&& tcpi_len >= offsetof(struct simet_tcp_info, tcpi_min_rtt))) {
 	    amss = tcpi.tcpi_snd_mss;
 	    if (srtt) {
@@ -286,7 +287,7 @@ static int create_measure_socket(const char * const host, const char * const por
 	if (!amss && mss) {
 	    int iamss = 0;
 	    socklen_t iamss_len = sizeof(iamss);
-	    if (!getsockopt(fd_measure, IPPROTO_TCP, TCP_MAXSEG, &iamss, &iamss_len) && iamss_len == sizeof(iamss) && iamss > 0) {
+	    if (!RETRY_EINTR(getsockopt(fd_measure, IPPROTO_TCP, TCP_MAXSEG, &iamss, &iamss_len) && iamss_len == sizeof(iamss) && iamss > 0)) {
 		amss = (size_t)iamss;
 	    } else {
 		print_warn("failed to read stream's MSS");
@@ -298,16 +299,16 @@ static int create_measure_socket(const char * const host, const char * const por
     }
 
     /* Keep Nagle disabled, no waiting for ACKs */
-    setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+    RETRY_EINTR(setsockopt(fd_measure, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)));
 
     /* Set TCP_CORK mode from now on: no partial segments */
-    if (setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one))) {
+    if (RETRY_EINTR(setsockopt(fd_measure, IPPROTO_TCP, TCP_CORK, &one, sizeof(one)))) {
 	print_warn("failed to enable TCP_CORK, might send smaller packets");
     }
 
     /* enable TCP pacing, when requested */
     uint32_t apace = (pacerate > UINT32_MAX) ? UINT32_MAX : (uint32_t) pacerate;
-    if (apace > 0 && setsockopt(fd_measure, SOL_SOCKET, SO_MAX_PACING_RATE, &apace, sizeof(apace))) {
+    if (apace > 0 && RETRY_EINTR(setsockopt(fd_measure, SOL_SOCKET, SO_MAX_PACING_RATE, &apace, sizeof(apace)))) {
 	print_warn("failed to enable TCP pacing (%u): %m", apace);
     }
 
@@ -771,7 +772,7 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 #if HAVE_DECL_SO_MEMINFO != 0
 		if (current_skmem && timespec_le(&ts_oversample, &ts_cur) && skmem_sample_cnt < max_skmem_samples) {
 		    socklen_t meminfo_len = sizeof(current_skmem->sk_meminfo);
-		    if (likely(!getsockopt(sockList[i], SOL_SOCKET, SO_MEMINFO, &(current_skmem->sk_meminfo), &meminfo_len)
+		    if (likely(!RETRY_EINTR(getsockopt(sockList[i], SOL_SOCKET, SO_MEMINFO, &(current_skmem->sk_meminfo), &meminfo_len))
 				&& meminfo_len == sizeof(current_skmem->sk_meminfo))) {
 			current_skmem->timestamp = ts_cur;
 			current_skmem->stream_id = i;
@@ -819,7 +820,7 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 	    for (i = 0; i < ctx->numstreams; i++) {
 		if (sockList[i] >= 0) {
 		    socklen_t tcpi_len = sizeof(current_tcpi->tcpi);
-		    if (likely(!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &(current_tcpi->tcpi), &tcpi_len)
+		    if (likely(!RETRY_EINTR(getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &(current_tcpi->tcpi), &tcpi_len))
 			    && tcpi_len >= offsetof(struct simet_tcp_info, tcpi_bytes_retrans))) {
 		        current_tcpi->timestamp = ts_cur;
 			current_tcpi->stream_id = i;
@@ -868,7 +869,7 @@ static int sendUploadPackets(const MeasureContext * const ctx, ReportContext * c
 	if (sockList[i] >= 0) {
 	    struct simet_tcp_info tcpi = { 0 };
 	    socklen_t tcpi_len = sizeof(tcpi);
-	    if (!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len)
+	    if (!RETRY_EINTR(getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len))
 		    && tcpi_len > offsetof(struct simet_tcp_info, tcpi_bytes_retrans) + sizeof(tcpi.tcpi_bytes_retrans)) {
 		bytes_retrans += tcpi.tcpi_bytes_retrans;
 		bytes_total   += tcpi.tcpi_bytes_sent;
@@ -1016,7 +1017,7 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 #if HAVE_DECL_SO_MEMINFO != 0
 		if (current_skmem && timespec_le(&ts_oversample, &ts_cur) && skmem_sample_cnt < max_skmem_samples) {
 		    socklen_t meminfo_len = sizeof(current_skmem->sk_meminfo);
-		    if (likely(!getsockopt(sockList[i], SOL_SOCKET, SO_MEMINFO, &(current_skmem->sk_meminfo), &meminfo_len)
+		    if (likely(!RETRY_EINTR(getsockopt(sockList[i], SOL_SOCKET, SO_MEMINFO, &(current_skmem->sk_meminfo), &meminfo_len))
 				&& meminfo_len == sizeof(current_skmem->sk_meminfo))) {
 			current_skmem->timestamp = ts_cur;
 			current_skmem->stream_id = i;
@@ -1077,7 +1078,7 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 		for (unsigned int i = 0; i < ctx->numstreams; i++) {
 		    if (sockList[i] >= 0) {
 			socklen_t tcpi_len = sizeof(current_tcpi->tcpi);
-			if (likely(!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &(current_tcpi->tcpi), &tcpi_len)
+			if (likely(!RETRY_EINTR(getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &(current_tcpi->tcpi), &tcpi_len))
 				&& tcpi_len >= offsetof(struct simet_tcp_info, tcpi_bytes_retrans))) {
 			    current_tcpi->timestamp = ts_cur;
 			    current_tcpi->stream_id = i;
@@ -1121,7 +1122,7 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 	if (sockList[i] >= 0) {
 	    struct simet_tcp_info tcpi = { 0 };
 	    socklen_t tcpi_len = sizeof(tcpi);
-	    if (!getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len)
+	    if (!RETRY_EINTR(getsockopt(sockList[i], IPPROTO_TCP, TCP_INFO, &tcpi, &tcpi_len))
 		    && tcpi_len > offsetof(struct simet_tcp_info, tcpi_bytes_retrans) + sizeof(tcpi.tcpi_bytes_retrans)) {
 		bytes_total   += tcpi.tcpi_bytes_received;
 	    }

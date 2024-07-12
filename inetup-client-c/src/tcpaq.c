@@ -252,8 +252,8 @@ int tcpaq_flush_nowait(struct tcpaq_conn * const s)
     const int one = 1;
     /* Ask kernel to flush buffer every time our local queue is empty */
     if (s->out_queue.wr_pos <= s->out_queue.rd_pos) {
-        setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-        setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
+        RETRY_EINTR(setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)));
+        RETRY_EINTR(setsockopt(s->socket, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero)));
     }
 #endif
     /* protocol_trace(s, "send() %zd out of %zu bytes", sent, send_sz); */

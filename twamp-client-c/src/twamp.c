@@ -38,6 +38,7 @@
 #  define static_assert _Static_assert
 #endif
 
+#include "retry.h"
 #include "simet_err.h"
 #include "logger.h"
 #include "report.h"
@@ -225,7 +226,7 @@ static int twamp_resolve_host(const char * const host, const char * const port, 
         .ai_flags = AI_ADDRCONFIG,
     };
 
-    int r = getaddrinfo(host, port, &hints, res);
+    int r = RETRY_GAI(getaddrinfo(host, port, &hints, res));
     if (r) {
         print_err("could not resolve %s%s%s: %s", (host)? host : "", (port)? ":" : "", (port)? port : "", gai_strerror(r));
         return -1;
@@ -268,8 +269,7 @@ static int twamp_connect(const struct sockaddr_storage * const ss_source, struct
             continue;
         }
 
-        if (connect(fd_test, ai->ai_addr, ai->ai_addrlen) < 0) {
-            /* FIXME?  EINTR.  but right now we either ignore or abort on all signals... */
+        if (RETRY_EINTR(connect(fd_test, ai->ai_addr, ai->ai_addrlen) < 0)) {
             err = errno;
             continue;
         }
@@ -620,8 +620,8 @@ int twamp_run_client(TWAMPParameters * const param)
     print_msg(MSG_DEBUG, "addr value: %u", ((struct sockaddr_in *)&remote_addr_measure)->sin_addr);
     */
 
-    if (connect(fd_test, (struct sockaddr *) &remote_addr_measure,
-                remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0) {
+    if (RETRY_EINTR(connect(fd_test, (struct sockaddr *) &remote_addr_measure,
+                remote_addr_measure.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)) != 0)) {
         print_err("connect to remote measurement peer problem: %s", strerror(errno));
         rc = SEXIT_MP_REFUSED;
         goto TEST_CLOSE;
@@ -893,6 +893,7 @@ error_out:
 
 static int twamp_test(TWAMPContext * const test_ctx) {
     struct timespec ts_offset, ts_cur, ts_realtime;
+    struct timespec ts_sleep = { 0 };
     unsigned int counter = 0;
     unsigned int error_counter = 0;
     void *thread_retval = NULL;
@@ -900,9 +901,6 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     int rc = SEXIT_SUCCESS;
     int ret;
 
-#ifdef HAVE_CLOCK_NANOSLEEP
-    struct timespec ts_sleep = { 0 };
-#endif
 
     const unsigned int pktsize = test_ctx->param.payload_size;
     assert(pktsize >= sizeof(UnauthReflectedPacket));
@@ -925,7 +923,7 @@ static int twamp_test(TWAMPContext * const test_ctx) {
     }
 
     const int ttl = (test_ctx->param.ttl > 0 && test_ctx->param.ttl < 256)? (int)test_ctx->param.ttl : 255;
-    setsockopt(test_ctx->test_socket, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
+    RETRY_EINTR(setsockopt(test_ctx->test_socket, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)));
 
     if (clock_gettime(CLOCK_REALTIME, &ts_realtime) || clock_gettime(CLOCK_MONOTONIC, &ts_cur)) {
         rc = SEXIT_INTERNALERR;
@@ -976,23 +974,45 @@ static int twamp_test(TWAMPContext * const test_ctx) {
             }
         }
 
-#ifdef HAVE_CLOCK_NANOSLEEP
         if (!ts_sleep.tv_sec && !ts_sleep.tv_nsec)
             ts_sleep = ts_cur;
 
         ts_sleep = timespec_add_microseconds(&ts_sleep, test_ctx->param.packets_interval_us);
 
         if (!test_ctx->abort_test) {
-            if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_sleep, NULL)) {
-                /* We abort on EINTR... */
-                rc = (errno == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
+            int tries = MAXIMUM_SYSCALL_RETRIES;
+
+#ifdef HAVE_CLOCK_NANOSLEEP
+            int r;
+            do {
+                r = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_sleep, NULL);
+            } while (r == EINTR && (--tries > 0));
+            if (r) {
+                rc = (r == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
                 goto err_out;
             }
-        }
+#else /* !HAVE_CLOCK_NANOSLEEP */
+            clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+            while (timespec_lt(&ts_cur, &ts_sleep) && !test_ctx->abort_test) {
+                const struct timespec ts_o = timespec_sub(&ts_sleep, &ts_cur);
+#ifdef HAVE_NANOSLEEP
+                if (nanosleep(&ts_o, NULL))
 #else
-        if (!test_ctx->abort_test)
-            usleep(test_ctx->param.packets_interval_us);
+                /* limit usleep to one second. POSIX. */
+                if (usleep( (ts_o.tv_sec > 0)? MICROSECONDS_IN_SECOND : (useconds_t)(ts_o.tv_nsec / 1000) ))
 #endif
+                {
+                    if (errno == EINTR && tries > 0) {
+                        tries--;
+                    } else {
+                        rc = (errno == EINTR)? SEXIT_FAILURE : SEXIT_INTERNALERR;
+                        goto err_out;
+                    }
+                }
+                clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+            }
+#endif /* HAVE_CLOCK_NANOSLEEP */
+        }
     }
 
     if (test_ctx->abort_test)

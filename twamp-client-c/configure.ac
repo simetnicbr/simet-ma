@@ -85,7 +85,7 @@ AX_CHECK_COMPILE_FLAG([-std=gnu11],
 ])
 
 # Checks for library functions.
-AC_CHECK_FUNCS([clock_nanosleep])
+AC_CHECK_FUNCS([clock_nanosleep nanosleep])
 dnl AC_FUNC_REALLOC
 dnl AC_FUNC_STAT
 dnl AC_CHECK_FUNCS([memset strcasecmp strdup strerror strrchr strtoul timegm])
