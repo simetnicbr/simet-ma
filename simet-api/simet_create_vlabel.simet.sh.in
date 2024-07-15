@@ -27,6 +27,14 @@ abend() {
 
 [ -z "$AGENT_VLABEL_FILE" ] && RC=3 abend "MA does not know where to keep its virtual label"
 
+#
+# self-test the "tr" and "sha256sum" implementations for what we need/expect
+#
+#shellcheck disable=SC2015,SC2018,SC2019
+ST=$(printf '\n037\n' | tr -d '\000-\037') && \
+  SHA=$(printf "%s" "$ST" | sha256sum - | tr A-Z a-z | tr -dc 0-9a-z ) && \
+  [ "$SHA" = "48a212a91e6da95f10d71b05c789efddfb0bad9814be07f6f7a343189fb630e7" ] || RC=2 abend "self-test failed"
+
 # Load hooks and overrides
 simet_load_hooks create_vlabel
 
@@ -44,17 +52,41 @@ platform_generate_vlabel() {
   return $RC
 }
 
+# Needs a stable seed, and a message. we can use the MAC only in the presence of vendor/get_mac_label.
+# if it is missing, we make do with sha of the stable seed.
+simet_n0_vlabel() {
+  [ -x @BINDIR@/simet_gen_vlabel ] || RC=2 abend "simet_gen_vlabel missing"
+  PIV="$1"
+  [ -n "$PIV" ] || RC=2 abend "internal error: missing data for simet_n0_vlabel"
+
+  # fallback to *something* that is only random if the seed itself is also random
+  PMAC="$PIV"
+  [ -x @SIMETLIBDIR@/vendor/get_mac_label ] && {
+    #shellcheck disable=SC2015
+    PMAC=$(@SIMETLIBDIR@/vendor/get_mac_label) && [ -n "$PMAC" ] \
+      || RC=2 abend "vendor/get_mac_label failed"
+  }
+  #shellcheck disable=SC2015,SC2018,SC2019
+  PMAC=$(set -o pipefail; printf "%s" "$PMAC" | sha256sum - | tr A-Z a-z | tr -dc 0-9a-z)
+  #shellcheck disable=SC2015
+  [ -n "$PMAC" ] && [ "$PMAC" != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ] \
+    || RC=2 abend "internal error: empty PMAC"
+
+  #shellcheck disable=SC2015,SC2086
+  VL=$(printf "%s" "$PIV" | @BINDIR@/simet_gen_vlabel $GENVLABEL_OPT N0 "$PMAC") && [ -n "$VL" ] || RC=2 abend "simet_gen_vlabel N0 failed"
+
+  printf "%s" "$VL"
+  :
+}
+
 #overridable
 platform_generate_secret() {
   [ -x "@SIMETLIBDIR@/vendor/get_platform_simet_secret" ] && \
-    SBXSEED=$(@SIMETLIBDIR@/vendor/get_platform_simet_secret vlabel) || SBXSEED=
+    SBXSEED=$(@SIMETLIBDIR@/vendor/get_platform_simet_secret vlabel) || return 1
   if [ "$SBXSEED" = "DISABLED" ] || [ "$SBXSEED" = "disabled" ] ; then
     printf "DISABLED"
   elif [ -n "$SBXSEED" ] ; then
-    SBXSEED=$( set -o pipefail ; printf "NIC VLABEL IV 0132457869\n%s\nNIC VLABEL IV TRAILER 9123432100" "$SBXSEED" | sha256sum - ) \
-      || RC=3 abend "failed to derive stable secret from platform simet secret"
-    #shellcheck disable=SC2018,SC2019
-    printf 'NIC3%s' "$SBXSEED" | tr -dc 0-9a-zA-Z | tr a-z A-Z
+    simet_n0_vlabel "$SBXSEED" || return $?
   else
     return 1
   fi
@@ -63,12 +95,9 @@ platform_generate_secret() {
 
 #overridable
 platform_generate_random() {
-  RDATA=$( set -o pipefail ; dd if=/dev/urandom bs=128 count=1 2>/dev/null | md5sum - ) \
-    || RC=1 abend "failed to read /dev/urandom"
-  [ -z "$RDATA" ] && RC=1 abend "md5sum empty ?!"
-  [ "$RDATA" = "d41d8cd98f00b204e9800998ecf8427e" ] && RC=1 abend "got the md5sum of an empty file !"
-  #shellcheck disable=SC2018,SC2019
-  printf 'NIC2%s' "${RDATA}" | tr -dc 0-9a-zA-Z | tr a-z A-Z
+  [ -x @BINDIR@/simet_gen_vlabel ] || RC=2 abend "simet_gen_vlabel missing"
+  dd if=/dev/urandom bs=128 count=1 2>/dev/null | @BINDIR@/simet_gen_vlabel N0 "SIMET123456789ab" \
+    || RC=2 abend "failed to read /dev/urandom or to simet_gen_vlabel"
   :
 }
 
