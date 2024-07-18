@@ -1,3 +1,18 @@
+simet-ma (0.18.9.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.9.1
+  * simet-api: switch virtual label to N0 format
+    This changes the device's pairing secret, but devices where this is
+    relevant MUST provide a vendor/get_platform_simet_label and are not
+    affected.
+  * inetup, sspoofer, twamp, tcpbw: retry get/setsockopt, getaddrinfo() on EINTR
+  * twamp: retry clock_nanosleep() on EINTR instead of aborting measurement
+  * twamp: improve non-clock_nanosleep() send scheduling
+  * inetup: break endless loop when the agent-id and/or agent token files were
+    removed and inetup receives a SIGHUP
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 18 Jul 2024 08:35:57 -0300
+
 simet-ma (0.18.9) unstable; urgency=medium
 
   * simet-ma version 0.18.9
