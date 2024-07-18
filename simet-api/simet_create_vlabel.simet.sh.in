@@ -7,8 +7,15 @@
 ##
 ## Otherwise, return the existing virtual label on stdout.
 
-# If we already have it, output it and exit
-@BINDIR@/simet_read_vlabel.sh 2>/dev/null && exit 0
+# If we already have it, or it is disabled, output it and exit ...
+# ... unless it needs to be switched to a new format.
+OLDLABEL=$(@BINDIR@/simet_read_vlabel.sh 2>/dev/null) && {
+  [ -z "$OLDLABEL" ] && exit 0
+  [ "${OLDLABEL#NIC[0-9]*}" = "${OLDLABEL}" ] && {
+    printf "%s\n" "$OLDLABEL"
+    exit 0
+  }
+}
 
 set -e
 set -o pipefail
