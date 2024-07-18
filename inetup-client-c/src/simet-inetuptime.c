@@ -2042,6 +2042,7 @@ static int fread_agent_str(const char *path, const char ** const p)
 {
     FILE *fp;
     struct stat st;
+    int retry = 3;
     char *b;
     int n, e;
 
@@ -2061,9 +2062,12 @@ static int fread_agent_str(const char *path, const char ** const p)
         return -1;
     }
 
+    /* POSIX fscanf() has errno set on EOF. Use it to retry on EINTR */
     do {
+        clearerr(fp);
+        errno = 0; /* required */
         n = fscanf(fp, " %ms ", &b); /* ENOMEM is relevant */
-    } while (n == EOF && errno == EINTR);
+    } while (n == EOF && !feof(fp) && errno == EINTR && retry-- > 0);
 
     e = (errno)? errno : EINVAL;
     fclose(fp);
