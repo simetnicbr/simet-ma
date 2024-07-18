@@ -39,7 +39,7 @@ simet_log() {
 [ -z "$SIMET_CFG_LOAD_ERROR" ] || \
 	simet_log simet-ma daemon.crit "SIMET-MA configuration has syntax errors, malfunction is likely"
 
-SIMET_MAC_LABEL=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || true
+SIMET_MAC_LABEL=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || SIMET_MAC_LABEL=
 
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
