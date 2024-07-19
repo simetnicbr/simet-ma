@@ -184,7 +184,7 @@ do_reload() {
 	RETVAL=0
 	for i in $LMAP_INSTANCE_LIST ; do
 		log_action_begin_msg "Validating $DESC configuration, instance $i"
-		if lmapd_lmapctl_validate "$(lmapd_get_sched_filename)" >/dev/null 2>&1 ; then
+		if lmapd_lmapctl_validate "$(lmapd_get_sched_filename "$i")" >/dev/null 2>&1 ; then
 			log_action_end_msg 0
 			log_daemon_msg "Reloading $DESC configuration files" "$NAME-$i"
 			ARETVAL=0
