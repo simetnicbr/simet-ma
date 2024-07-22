@@ -99,7 +99,7 @@ EOF1TASKJSONTEMPLATE
     local comma=
     while [ $# -ge 2 ] ; do
       [ -s "$1" ] && {
-	printf ' %s\"%s\"' "$comma" "$2"
+	printf ' %s"%s"' "$comma" "$2"
         comma=", "
       }
       shift 2
