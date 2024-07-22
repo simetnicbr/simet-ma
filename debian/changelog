@@ -1,3 +1,11 @@
+simet-ma (0.18.9.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.9.2
+  * simet-runner: fix LMAP report on non-bash shells (openwrt: busybox ash)
+  * deb: simet-lmapd.init: validate non-main instances before reload
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 22 Jul 2024 10:59:18 -0300
+
 simet-ma (0.18.9.1) unstable; urgency=medium
 
   * simet-ma version 0.18.9.1
