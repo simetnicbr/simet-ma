@@ -1,3 +1,16 @@
+simet-ma (0.18.6.5) unstable; urgency=medium
+
+  * simet-ma version 0.18.6.5
+  * simet-runner: fix LMAP report on non-bash shells (openwrt: busybox ash)
+  * inetup: break endless loop when the agent-id and/or agent token files were
+    removed and inetup receives a SIGHUP
+  * simet-api: keep pairing secret up-to-date in the SIMET agent registry
+  * deb: provide hook for dhcpcd
+  * inetup: handle partial messages (not seen in the field)
+  * inetup: fix several potential issues that would cause connection drops
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 22 Jul 2024 12:12:14 -0300
+
 simet-ma (0.18.6.4) unstable; urgency=medium
 
   * simet-ma version 0.18.6.4
