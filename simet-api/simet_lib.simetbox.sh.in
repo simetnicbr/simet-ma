@@ -48,10 +48,15 @@ get_http_useragent()
 	BOXVERSION=$(get_simet_box_version.sh 2>/dev/null) || BOXVERSION="unknown"
 	[ -r "${AGENT_VERSION_FILE}" ] && AGENTVERSION=$(cat "${AGENT_VERSION_FILE}")
 	[ -z "$AGENTVERSION" ] && AGENTVERSION="simet-ma/unknown"
-	if [ -r /etc/openwrt_release ] ; then
+	if [ -r /etc/os-release ] ; then
+		AGENTENV=$( \
+			. /etc/os-release
+			printf '%s %s %s' "$OPENWRT_RELEASE" "$OPENWRT_BOARD" "$OPENWRT_ARCH" | tr -s ' '
+		) || true
+	elif [ -r /etc/openwrt_release ] ; then
 		AGENTENV=$( \
 			. /etc/openwrt_release
-			echo "$DISTRIB_DESCRIPTION $DISTRIB_TARGET $DISTRIB_ARCH" | tr -s ' '
+			printf '%s %s %s' "$DISTRIB_DESCRIPTION" "$DISTRIB_TARGET" "$DISTRIB_ARCH" | tr -s ' '
 		) || true
 	fi
 	[ -z "$AGENTENV" ] && AGENTENV="unknown"
@@ -63,8 +68,13 @@ get_http_useragent()
 # sets environment variables that match the environment
 # shellcheck disable=SC2034
 simet2_agentinfo() {
-	SIMET2_AGENT_ENVNAME=$(. /etc/openwrt_release && printf '%s' "$DISTRIB_ID") || return 1
-	SIMET2_AGENT_ENVVERSION=$(. /etc/openwrt_release && printf '%s %s' "$DISTRIB_DESCRIPTION" "$DISTRIB_REVISION") || return 1
+	if [ -r /etc/os-release ] ; then
+		SIMET2_AGENT_ENVNAME=$(. /etc/os-release && printf '%s' "$NAME") || return 1
+		SIMET2_AGENT_ENVVERSION=$(. /etc/os-release && printf '%s %s (%s %s)' "$OPENWRT_RELEASE" "$BUILD_ID" "$OPENWRT_BOARD" "$OPENWRT_ARCH") || return 1
+	else
+		SIMET2_AGENT_ENVNAME=$(. /etc/openwrt_release && printf '%s' "$DISTRIB_ID") || return 1
+		SIMET2_AGENT_ENVVERSION=$(. /etc/openwrt_release && printf '%s %s' "$DISTRIB_DESCRIPTION" "$DISTRIB_REVISION") || return 1
+	fi
 	SIMET2_MAHOSTNAME=$(uci get system.@system[0].hostname 2>/dev/null) || SIMET2_MAHOSTNAME=
 	SIMET2_MADESCRIPTION=$(uci get system.@system[0].description 2>/dev/null) || SIMET2_MADESCRIPTION=
 	SIMET2_DEVICE_MODEL=$(get_model.sh 2>/dev/null | tr -s '_' ' ') || SIMET2_DEVICE_MODEL=
