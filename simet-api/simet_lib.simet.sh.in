@@ -51,8 +51,8 @@ get_http_useragent()
 (
 	[ -r "${AGENT_VERSION_FILE}" ] && AGENTVERSION=$(cat "${AGENT_VERSION_FILE}")
 	[ -z "$AGENTVERSION" ] && AGENTVERSION="simet-ma/unknown"
-	AGENTENV="$(lsb_release -sd)" || AGENTENV="unknown"
-	AGENTENV="$AGENTENV; $(uname -srm)" || AGENTENV="$AGENTENV; unknown"
+	AGENTENV="$(lsb_release -s -d)" || AGENTENV="unknown"
+	AGENTENV="$AGENTENV; $(uname -s -r -m)" || AGENTENV="$AGENTENV; unknown"
 	echo "$AGENTVERSION (generic; $AGENTENV)" | tr -dc ' A-Za-z0-9(),.;:/+~^_-'
 	:
 )
@@ -62,6 +62,7 @@ get_http_useragent()
 simet2_agentinfo() {
 	SIMET2_AGENT_ENVNAME=$(lsb_release -s -i) || SIMET2_AGENT_ENVNAME="(generic)"
 	SIMET2_AGENT_ENVVERSION=$(lsb_release -s -d) || SIMET2_AGENT_ENVVERSION="unknown"
+	SIMET2_AGENT_ENVVERSION="$SIMET2_AGENT_ENVVERSION; $(uname -m)" || AGENTENV="$AGENTENV; unknown"
 	# MA HOSTNAME from config file, or from system if set to 'auto'
 	[ "$SIMET2_MAHOSTNAME" = "auto" ] && {
 		SIMET2_MAHOSTNAME=$(sed -n 'p;q' /etc/hostname || hostname --fqdn) 2>/dev/null || SIMET2_MAHOSTNAME=
