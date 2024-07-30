@@ -53,6 +53,10 @@ main(){
   ALLPEERS=0
   MEASUREMENT_CONTEXT=
 
+  # refer to src/util.c::condwait()
+  SERIALIZE_DISABLE=
+  SERIALIZE_MEMLIMIT=5000
+
   # read params
   while [ ! $# -eq 0 ]; do
     case "$1" in
@@ -104,6 +108,18 @@ main(){
       --lock)
         SETLOCK="true"
         ;;
+      --no-parallel)
+	SERIALIZE_DISABLE=1
+	;;
+      --limit-parallel-mem)
+        if [ -n "$2" ] && [ "$2" -ge 0 ] 2>/dev/null; then
+          SERIALIZE_MEMLIMIT="$2"
+        else
+          log_error "--limit-parallel-mem requires a parameter with the memory limit in KiB"
+          exit 1
+        fi
+        shift
+	;;
     esac
     shift
   done
@@ -161,9 +177,9 @@ _main_run(){
     _task_traceroute "6" "$_tstid_prefix"
   elif [ "$RUN_ONLY_TASK" = "TWAMPFAST" ] ; then
     _task_twamp "4" "$_tstid_prefix" $TWAMPFAST_OPT
-    _task_traceroute "4" "$_tstid_prefix" &
+    _task_traceroute "4" "$_tstid_prefix" & condwait
     _task_twamp "6" "$_tstid_prefix" $TWAMPFAST_OPT
-    _task_traceroute "6" "$_tstid_prefix" &
+    _task_traceroute "6" "$_tstid_prefix" & condwait
   fi
 
   # 5. task bw tcp
@@ -183,8 +199,8 @@ _main_run(){
   #if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "SPOOFER" ] ; then
   if [ "$RUN_ONLY_TASK" = "SPOOFER" ] ; then
     _task_spoofer "$_tstid_prefix"
-    _task_traceroute "4" "$_tstid_prefix" &
-    _task_traceroute "6" "$_tstid_prefix" &
+    _task_traceroute "4" "$_tstid_prefix" & condwait
+    _task_traceroute "6" "$_tstid_prefix" & condwait
   fi
 }
 
