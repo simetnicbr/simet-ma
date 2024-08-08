@@ -16,11 +16,15 @@
 # for details.
 
 # parameters:
-# --url     print the URL instead of running the browser
+# --json    output to stdout the agent-id, token, and URL in JSON format
+# --url     output to stdout the URL instead of running the browser
 # --        pass anything after to the browser (or ignore it)
 #
 # An error is always returned if the MA is not registered or lacking the
-# required token to access/view measurement results.
+# required token to access/view measurement results.  simet_register_ma
+# must have run succesfully (and contact the SIMET Agent Registry) to
+# create the $AGENT_VIEW_CREDENTIALS_FILE file, which is often ephemeral
+# and lost on reboot / poweroff.
 
 set -e
 
@@ -33,12 +37,13 @@ abend() {
 }
 
 usage() {
-	printf 'usage: %s [--help|-h] [--url] [--lang <language>|none]\n' "$0"
+	printf 'usage: %s [--help|-h] [--url | --json] [--lang <language>|none]\n' "$0"
 	:
 }
 
 simet_load_hooks view_results
 
+JSONMODE=
 URLMODE=
 URLLANGOVERRIDE=
 # Handle command line
@@ -50,6 +55,9 @@ while [ $# -gt 0 ] ; do
 		;;
 	--url)
 		URLMODE=1
+		;;
+	--json)
+		JSONMODE=1
 		;;
 	--lang)
 		URLLANGOVERRIDE="$2"
@@ -111,6 +119,11 @@ call simet_read_tokens || abend "missing access credentials, cannot proceed..."
 
 URL=$(call simet_generate_view_url "$AID" "$VTK" "$(__get_lang)") || URL=
 [ -z "$URL" ] && abend "cannot generate the URL to view results"
+
+[ -n "$JSONMODE" ] && {
+	simet_jo_obj "agent-id" "$AID" "results_token" "$VTK" "results_interactive_url" "$URL" || :
+	exit 0
+}
 
 [ -n "$URLMODE" ] && {
 	printf '%s\n' "$URL"
