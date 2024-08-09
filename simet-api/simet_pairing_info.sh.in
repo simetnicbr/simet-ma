@@ -1,0 +1,124 @@
+#!/bin/sh
+# SIMET2 MA - access interface to pairing information
+# Copyright (c) 2024 NIC.br <medicoes@simet.nic.br>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.  In every case, additional
+# restrictions and permissions apply, refer to the COPYING file in the
+# program Source for details.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License and the COPYING file in the program Source
+# for details.
+
+# parameters:
+# --json    output to stdout the agent-id, vlabel, and pairing info
+#
+# An error is always returned if the MA is not registered or lacking the
+# required token to access/view measurement results.  simet_register_ma
+# must have run succesfully (and contact the SIMET Agent Registry) to
+# create the $AGENT_VIEW_CREDENTIALS_FILE file, which is often ephemeral
+# and lost on reboot / poweroff.
+
+set -e
+
+. @SIMETLIBDIR@/simet_lib.sh || exit 3
+
+RC=1
+abend() {
+	simet_log simet-ma daemon.err "simet_pairing_info: error: $*"
+	exit "$RC"
+}
+
+usage() {
+	printf 'usage: %s [--help|-h] [--json]\n' "$0"
+	:
+}
+
+simet_load_hooks pairing_info
+
+JSONMODE=0
+# Handle command line
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	--help|-h)
+		usage
+		exit 0
+		;;
+	--json)
+		JSONMODE=1
+		;;
+	--)
+		break
+		;;
+	*)
+		usage
+		RC=2 abend "Unknown command line argument/option $1"
+		;;
+	esac
+	shift
+done
+
+#overridable
+get_pairing_info() {
+	[ -z "$AGENT_ID_FILE" ] && return 1
+	[ -s "$AGENT_ID_FILE" ] && AID=$(cat "$AGENT_ID_FILE") || AID=
+	[ -z "$AID" ] && return 1
+
+	RC=0
+	SIMET2_VLABEL=$(@BINDIR@/simet_read_vlabel.sh) || RC=$?
+	[ "$RC" -eq 20 ] && {
+		RC=0
+		SIMET2_VLABEL=
+	}
+	[ "$RC" -ne 0 ] && return 1
+
+	# note: AGENT_PARTICIPANT_INFO present but empty means it is unpaired
+	# when not present, it means information is not known.
+	[ -r "$AGENT_PARTICIPANT_INFO" ] || return 1
+
+	# pairing
+	PAIRED=false
+	if [ -s "$AGENT_PARTICIPANT_INFO" ] ; then
+		PSNAME=$($JSONFILTER -i "$AGENT_PARTICIPANT_INFO" -e '@.short_name' 2>/dev/null) || PSNAME=
+		PFNAME=$($JSONFILTER -i "$AGENT_PARTICIPANT_INFO" -e '@.name' 2>/dev/null) || PFNAME=
+		PNAME=
+		if [ -n "$PFNAME" ] && [ -n "$PSNAME" ] ; then
+			PNAME="\"$PFNAME\" ($PSNAME)"
+		elif [ -n "$PFNAME$PSNAME" ] ; then
+			PNAME="\"$PFNAME$PSNAME\""
+		fi
+		[ -z "$PNAME" ] && PAIRED=true
+	fi
+	:
+}
+
+#shellcheck disable=SC2015
+call get_pairing_info && [ -n "$PAIRED" ] || \
+	RC=1 abend "could not retrieve agent and pairing information"
+
+# ABI: per line: Agent_ID, vlabel|DISABLED, paired (true|false), participant UI name
+if [ -z "$JSONMODE" ] || [ "$JSONMODE" -eq 0 ] ; then
+	printf '%s\n' "$AID"
+	[ -z "$SIMET2_VLABEL" ] && SIMET2_VLABEL=DISABLED
+	printf '%s\n' "$SIMET2_VLABEL"
+	printf '%s\n' "$PAIRED"
+	printf '%s\n' "$PNAME"
+else
+	obj1=$(simet_jo_pairs_null 0 "agent_id" "$AID" "pairing_secret" "$SIMET2_VLABEL") || \
+		RC=3 abend "error while generating JSON object"
+	obj2=$(simet_jo_obj_named 0 "participant" \
+		"short_name" "$PSNAME" "name" "$PFNAME" "ui_name" "$PNAME") || obj2=
+	printf '{ %s' "$obj1"
+	if [ -n "$obj2" ] ; then
+		printf ', "paired": true, %s' "$obj2"
+	else
+		printf ', "paired": false'
+	fi
+	printf ' }\n'
+fi
+:

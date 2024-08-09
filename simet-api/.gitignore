@@ -23,6 +23,7 @@ simet_spoofer_v2.sh
 simet_create_vlabel.sh*
 simet_issuebanner-generator.sh
 simet_qrcode.sh
+simet_pairing_info.sh
 simet_lib.sh*
 simet_lib_config.sh
 simet_lib_lmapd.sh
