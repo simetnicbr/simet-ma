@@ -1,3 +1,16 @@
+simet-ma (0.18.10) unstable; urgency=medium
+
+  * simet-ma version 0.18.10
+  * simet-runner: limit parallel traceroutes on low-memory situations
+    This is required on 32MiB RAM SIMETBoxes
+  * simet-api: simet_lib (simetbox): support /etc/os-release
+  * simet-api: simet_lib: add architecture to agent metadata
+  * simet-api: simet_lib: add _null variants to json helpers
+  * simet-api: add --json mode to simet_view_results.sh
+  * simet-api: add simet_pairing_info.sh.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 12 Aug 2024 13:58:48 -0300
+
 simet-ma (0.18.9.2) unstable; urgency=medium
 
   * simet-ma version 0.18.9.2
