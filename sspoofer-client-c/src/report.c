@@ -83,15 +83,16 @@ const char * const socket_report_col_names[SOCK_TBL_COL_MAX] = {
     [socket_tbl_col_remote_port] = "remote-port",
 };
 
+/* WARNING: KEEP IN SYNC WITH sspoof_render_report() */
 enum {
     msmt_tbl_col_connid = 0,
     msmt_tbl_col_msmtid,
-    msmt_tbl_col_msmtsum,
     msmt_tbl_col_sa_f,
     msmt_tbl_col_mpaddr,
     msmt_tbl_col_mpname,
     msmt_tbl_col_mpcluster,
     msmt_tbl_col_mpdesc,
+    msmt_tbl_col_msmtsum,
     MSMT_TBL_COL_MAX
 };
 const char * const msmt_report_col_names[MSMT_TBL_COL_MAX] = {
@@ -507,6 +508,7 @@ int sspoof_render_report(struct sspoof_server **svec, unsigned int nvec, enum re
             jo = NULL;
 
             /* fill in row, note row has been added to table already */
+            /* WARNING: KEEP IN SYNC WITH e enum msmt_tbl_col_* ordering! */
             if (xx_json_array_int64str_add(jrowdata, s->connection_id)
                     || xx_json_array_int64str_add(jrowdata, msmt_id)
                     || xx_json_array_opt_string_add(jrowdata, str_ip46(s->peer_family))
