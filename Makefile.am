@@ -15,8 +15,12 @@
 ## General Public License and the COPYING file in the program Source
 ## for details.
 
-SUBDIRS     = simet-api twamp-client-c tcpbw-client-c inetup-client-c sspoofer-client-c simet-runner cmake-projects
+SUBDIRS     = simet-api twamp-client-c tcpbw-client-c inetup-client-c simet-runner cmake-projects
 EXTRA_DIST  = autogen.sh version version.sh .dockerignore docker/ docs/
+
+if ENABLE_SSPOOFER
+SUBDIRS += sspoofer-client-c
+endif
 
 # we need to use an intermetiate variable, otherwise the shell dirties the
 # repository creating the output file *before* running the version.sh script
