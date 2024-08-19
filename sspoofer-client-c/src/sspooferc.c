@@ -2335,8 +2335,8 @@ static void print_version(void)
 static void print_usage(const char * const p, int mode) __attribute__((__noreturn__));
 static void print_usage(const char * const p, int mode)
 {
-    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-4|-6] [-t <timeout>] [-i <netdev> ] "
-        "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
+    fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-4|-6] [-t <timeout>] "
+        "[-d <agent-id-path> ] [-j <token-path> ] "
         "[-o <path>] [-r <mode>] "
         "<server name>[:<server port>] ...\n", p);
 
