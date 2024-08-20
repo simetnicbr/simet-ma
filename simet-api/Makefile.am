@@ -66,8 +66,10 @@ dist_bin_SCRIPTS += simet_issuebanner-generator.sh
 EXTRA_DIST += simet_issuebanner-generator.sh.in
 endif
 
+if ENABLE_SSPOOFER
 dist_bin_SCRIPTS += simet_spoofer_v2.sh
 EXTRA_DIST += simet_spoofer_v2.sh.in
+endif
 
 simet_read_vlabel.sh.in : simet_read_vlabel.$(sbprefix).sh.in
 	ln -sf "$^" "$@"
