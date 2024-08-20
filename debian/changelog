@@ -1,3 +1,11 @@
+simet-ma (0.18.11.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.11.1
+  * source: include --disable-simet-spoofer configure option
+  * sspoofer: remove left-over non-implemented options from usage help
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 20 Aug 2024 08:12:19 -0300
+
 simet-ma (0.18.11) unstable; urgency=medium
 
   * simet-ma version 0.18.11
