@@ -214,7 +214,7 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
  *
  *  Note: getaddrinfo needs to be family specific for timing, otherwise
  *  it calls into the stub or recursive resolver at least twice, for A and AAAA,
- *  which falsivies the measurement.
+ *  which falsifies the measurement.
  */
 
 static int sdnsa_reflect_query(const char * const domain,
