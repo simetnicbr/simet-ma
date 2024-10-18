@@ -1129,7 +1129,7 @@ static int receiveDownloadPackets(const MeasureContext * const ctx, ReportContex
 	}
     }
     if (bytes_total > 0) {
-	print_msg(MSG_NORMAL, "TCP: %" PRIu64 "bytes received (%.2f%% delivered to application)", bytes_total,
+	print_msg(MSG_NORMAL, "TCP: %" PRIu64 " bytes received (%.2f%% delivered to application)", bytes_total,
 		100 * (double)payload_total / (double)bytes_total);
     }
 
