@@ -75,8 +75,9 @@ simet2_agentinfo() {
 		SIMET2_AGENT_ENVNAME=$(. /etc/openwrt_release && printf '%s' "$DISTRIB_ID") || return 1
 		SIMET2_AGENT_ENVVERSION=$(. /etc/openwrt_release && printf '%s %s' "$DISTRIB_DESCRIPTION" "$DISTRIB_REVISION") || return 1
 	fi
-	SIMET2_MAHOSTNAME=$(uci get system.@system[0].hostname 2>/dev/null) || SIMET2_MAHOSTNAME=
-	SIMET2_MADESCRIPTION=$(uci get system.@system[0].description 2>/dev/null) || SIMET2_MADESCRIPTION=
+	engineconf=$(ubus call simet_ma simet_engine_status 2>/dev/null) || engineconf="{}"
+	SIMET2_MAHOSTNAME=$(jsonfilter -s "$engineconf" -e '@.hostname' 2>/dev/null || uci get system.@system[0].hostname 2>/dev/null) || SIMET2_MAHOSTNAME=
+	SIMET2_MADESCRIPTION=$(jsonfilter -s "$engineconf" -e '@.description' 2>/dev/null || uci get system.@system[0].description 2>/dev/null) || SIMET2_MADESCRIPTION=
 	SIMET2_DEVICE_MODEL=$(get_model.sh 2>/dev/null | tr -s '_' ' ') || SIMET2_DEVICE_MODEL=
 	[ "$SIMET2_DEVICE_MODEL" = "unknown" ] && SIMET2_DEVICE_MODEL=
 	:
