@@ -1,3 +1,11 @@
+simet-ma (0.18.11.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.11.2
+  * simet-api: simetbox: fix lack of system hostname and description in
+    registration metadata for OpenWRT 23 and later (and possibly OpenWRT 22).
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 17 Jan 2025 15:55:09 -0300
+
 simet-ma (0.18.11.1) unstable; urgency=medium
 
   * simet-ma version 0.18.11.1
