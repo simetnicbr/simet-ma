@@ -92,7 +92,7 @@ get_pairing_info() {
 		elif [ -n "$PFNAME$PSNAME" ] ; then
 			PNAME="\"$PFNAME$PSNAME\""
 		fi
-		[ -z "$PNAME" ] && PAIRED=true
+		[ -n "$PNAME" ] && PAIRED=true
 	fi
 	:
 }
