@@ -129,7 +129,7 @@ discover_init() {
     --location \
     --connect-timeout 10 \
     --max-time 15 \
-    --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY;engine_name=$SIMET_ENGINE_NAME" > "$BASEDIR/msmt_profiles.json" \
+    --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY&engine_name=$SIMET_ENGINE_NAME" > "$BASEDIR/msmt_profiles.json" \
   & _curl3_pid=$!
 
   rc=0
