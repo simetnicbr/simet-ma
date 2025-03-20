@@ -1,3 +1,11 @@
+simet-ma (0.18.11.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.11.4
+  * deb: fix simet-ma.cron.weekly fallback package list
+  * simet-api: (simetbox) do not use curl -f when we want %http_code
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 20 Mar 2025 12:56:46 -0300
+
 simet-ma (0.18.11.3) unstable; urgency=medium
 
   * simet-ma version 0.18.11.3
