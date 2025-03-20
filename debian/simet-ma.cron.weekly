@@ -5,8 +5,8 @@
 # Distributed under the GPLv3+ license with additional terms and permissions
 # Refer to the COPYING file on the program source for details
 
-SIMET_PACKAGES="$(dpkg-query --showformat '${Package}\t${db:Status-Abbrev}\n' --show 'simet*' | sed -n -e '/[\t]i/ { s/\t.*// ; p }')" \
-	|| SIMET_PACKAGES="simet-ma simet-lmapd"
+SIMET_PACKAGES="$(dpkg-query --showformat '${Package}\t${db:Status-Abbrev}\n' --show 'simet*' | sed -n -e '/[\t]i/ { s/\t.*// ; p }')" || SIMET_PACKAGES=
+[ -z "$SIMET_PACKAGES" ] && SIMET_PACKAGES="simet-ma simet-lmapd"
 
 # Attempt to auto-update regardless of unattended-updates, otherwise we end up
 # with installs running very outdated software (well over an year old).  We
