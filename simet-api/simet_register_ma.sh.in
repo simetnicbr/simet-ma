@@ -63,6 +63,10 @@ clean_exit() {
 	update_lastrun || :
 	exit 0
 }
+abend_ratelimit() {
+	SIMETMA_UPDATE_LASTEXEC=1
+	abend "$@"
+}
 run_trap() {
 	# 128 + SIGTERM (15)
 	RC=143 abend "$0: received stop/interrupt signal"
@@ -149,14 +153,14 @@ write_lmap_agent() {
 write_access_tokens() {
 	if [ $# -lt 2 ] || [ -z "$1" ] || [ -z "$2" ] ; then
 		rm -f "$AGENT_VTK_FILE" "$AGENT_VIEW_CREDENTIALS_FILE"
-		simet_log simet-ma daemon.notice "SIMET: view_results token removed"
+		simet_log simet-ma daemon.notice "SIMET: view_results access token removed"
 	else
 		printf "%s" "$2" > "$AGENT_VTK_FILE"
 		VTK_CREDS_DIR=$(dirname "$AGENT_VIEW_CREDENTIALS_FILE")
 		#shellcheck disable=SC2174
 		[ -d "$AGENT_VIEW_CREDENTIALS_FILE" ] || mkdir -m 0775 -p "$VTK_CREDS_DIR"
 		printf '%s %s\n' "$1" "$2" > "$AGENT_VIEW_CREDENTIALS_FILE"
-		simet_log simet-ma daemon.info "SIMET: view_results token updated"
+		simet_log simet-ma daemon.info "SIMET: view_results access token updated"
 	fi
 	:
 }
@@ -183,7 +187,7 @@ __simet_consume_api_output() {
 	AID=
 	PAIRED=0
 	SID=$($JSONFILTER -i "$OUTFILE" -e "AID=@.agent_id" -e "AT=@.agent_token" -e "PAIRED=@.has_pairing") \
-		|| abend "illegal response from agent-registry service"
+		|| abend "unexpected or incorrect response from agent-registry service"
 	eval "$SID" || abend "internal error"
 	PAIREDTO=$($JSONFILTER -i "$OUTFILE" -e "@.participant_id") || PAIREDTO=
 	: > "$OUTFILE"
@@ -244,12 +248,45 @@ __simet_create_agent_apicall() {
 	:
 }
 __simet_create_agent_common() {
-	APIRES=$(__simet_create_agent_apicall "$@") || return 1
-	[ "$APIRES" -eq 201 ] || [ "$APIRES" -eq 410 ] && \
+	APIRES=$(__simet_create_agent_apicall "$@") || {
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
+		return 1
+	}
+	case "$APIRES" in
+	201)
 		SIMETMA_UPDATE_LASTEXEC=1
-	[ "$APIRES" -eq 201 ] || return 1
-	:
+		return 0
+		;;
+	410)
+		# DENY LISTED. FURTHER ACCESS EXPLICITLY UNAUTHORIZED. May retry in 24h
+		simet_log simet-ma daemon.crit "access to SIMET2 unauthorized"
+		SIMETMA_UPDATE_LASTEXEC=1
+		return 1
+		;;
+	429)
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "SIMET2 agent regitry service: too many requests from this client/network, try later"
+		return 1
+		;;
+	5??|408)
+		simet_log simet-ma daemon.err "SIMET2 register agent API: service temporarily unavailable, status $APIRES"
+		return 1
+		;;
+	4??)
+		simet_log simet-ma daemon.err "SIMET2 register agent API: client error, status $APIRES"
+		SIMETMA_UPDATE_LASTEXEC=1
+		return 1
+		;;
+	esac
+
+	simet_log simet-ma daemon.err "SIMET2 register agent API: server returned unexpected status $APIRES"
+	SIMETMA_UPDATE_LASTEXEC=1
+	return 1
 }
+
+# avoid updating the metadata twice for no good reason
+DIDMETADATAUPDATE=0
 
 __simet_modify_agent_apicall() {
 	curl $CURLOPT --retry 3 --retry-max-time 30 \
@@ -268,6 +305,60 @@ __simet_modify_agent_apicall() {
 	  || return 1
 	:
 }
+__simet_modify_agent() {
+	APIRES=$(__simet_modify_agent_apicall "$@") || {
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
+		return 1
+	}
+	case "$APIRES" in
+	200)
+		__simet_consume_api_output
+		DIDMETADATAUPDATE=1
+		return 0
+		;;
+	429)
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "SIMET2 agent registry service: too many requests from this client/network, try later"
+		return 1
+		;;
+	204)
+		simet_log simet-ma daemon.err "SIMET2 agent registry doesn't know our agent-id!"
+		;;
+	401|403)
+		simet_log simet-ma daemon.err "SIMET2 agent autentication token invalid, or expired!"
+		;;
+	410)
+		# It is not safe to invalidate credentials here (REALLY. DO NOT DO IT).
+		# There are border conditions at play here, this is the current best
+		# path forward: just error out.
+		simet_log simet-ma daemon.err "SIMET2 agent registry reports our identity has been disabled (while updating agent metadata). Please retry later."
+		;;
+	400)
+		# client software issue most likely. Must rate-limit.
+		SIMETMA_UPDATE_LASTEXEC=1
+		simet_log simet-ma daemon.err "SIMET2 server reports client error (while updating agent metadata)"
+		return 1
+		;;
+	5??|408)
+		# server errors and timeouts
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "SIMET2 agent registry service unavailable"
+		return 1
+		;;
+	4??)
+		simet_log simet-ma daemon.err "SIMET2 register agent API: client error, status $APIRES"
+		SIMETMA_UPDATE_LASTEXEC=1
+		return 1
+		;;
+	*)
+		simet_log simet-ma daemon.err "SIMET2 Agent Register API request returned unexpected status $APIRES"
+		;;
+	esac
+
+	SIMETMA_UPDATE_LASTEXEC=
+	return 1
+}
 __simet_modify_agent_pairing() {
 	# Note: if the vlabel subsystem failed, leave agent pairing state unchanged
 	[ "$1" = "FAILED" ] && return 1
@@ -280,42 +371,19 @@ __simet_modify_agent_pairing() {
 	SC="\"waiting_for_pairing\":$WFP,"
 	[ -n "$SCSECRET" ] && SC="$SC\"secret\":\"$SCSECRET\","
 
-	__simet_modify_agent_apicall "$SC" || return $?
+	__simet_modify_agent "$SC" || return $?
 	:
 }
 
-# avoid updating the metadata twice for no good reason
-DIDMETADATAUPDATE=0
-
 #overridable
 simet_register_vlabel() {
-	APIRES=$(__simet_modify_agent_pairing "$SIMET2_VLABEL") || {
-		simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
-		return 1
-	}
-	[ "$APIRES" -eq 200 ] || {
-		simet_log simet-ma daemon.err "SIMET2 Agent Register API reported error $APIRES"
-		return 1
-	}
-
-	__simet_consume_api_output
-	DIDMETADATAUPDATE=1
+	__simet_modify_agent_pairing "$SIMET2_VLABEL" || return $?
 	:
 }
 #overridable
 simet_update_agent_metadata() {
 	if [ "$DIDMETADATAUPDATE" != "1" ] ; then
-		APIRES=$(__simet_modify_agent_apicall "") || {
-			simet_log simet-ma daemon.err "could not talk to SIMET2 Agent Register API"
-			return 1
-		}
-		[ "$APIRES" -eq 200 ] || {
-			simet_log simet-ma daemon.err "SIMET2 Agent Register API reported error $APIRES"
-			return 1
-		}
-
-		__simet_consume_api_output
-		DIDMETADATAUPDATE=1
+		__simet_modify_agent "" || return $?
 	fi
 	:
 }
@@ -390,26 +458,34 @@ __simet_invalidate_all() {
 #overridable
 simet_refresh_agent_status() {
 	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
-		-H "Authorization: Bearer $AT" \
-		-X GET -o "$OUTFILE" -w "%{http_code}" \
-		"${API_SIMET_AGENT_REG}/v2/agents/$AID" ) || return 1
+		  -H "Authorization: Bearer $AT" \
+		  -X GET -o "$OUTFILE" -w "%{http_code}" \
+		  "${API_SIMET_AGENT_REG}/v2/agents/$AID" ) || {
+		SIMETMA_UPDATE_LASTEXEC=
+		return 1
+	}
 	case "$APIRES" in
 	204)
-		simet_log simet-ma daemon.err "server doesn't know our agent-id!"
+		simet_log simet-ma daemon.err "SIMET2 agent registry doesn't know our agent-id!"
 		;;
-	401)
-		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
-		;;
-	403)
-		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
+	401|403)
+		simet_log simet-ma daemon.err "SIMET2 agent autentication token invalid, or expired!"
 		;;
 	410)
+		# MUST rate-limit 410
+		# A 410 status from this endpoint means the SIMET2 AR or the SIMET2 support
+		# team needs to force an agent-id change.  There are many reasons for this
+		# procedure, including remotely-initiated requests for measurement history
+		# removal, or starting a new measurement timeline, etc.
 		SIMETMA_UPDATE_LASTEXEC=1
-		simet_log simet-ma deamon.err "server reports our agent-id is outdated or duplicated (was it cloned? or from an old backup?)"
-		# in case we fail to get a new one, ensure it is gone
+		simet_log simet-ma daemon.warn "SIMET2 agent registry reports our agent-id has been revoked or disabled"
+
+		# Any further access using a revoked agent-id is explicitly unauthorized,
+		# so immediately erase it.  We will request a new agent-id later.
 		__simet_invalidate_all agstat_410
 		;;
 	200)
+		SIMETMA_UPDATE_LASTEXEC=1
 		__simet_consume_api_output
 		return 0
 		;;
@@ -418,14 +494,29 @@ simet_refresh_agent_status() {
 		SIMETMA_UPDATE_LASTEXEC=1
 		clean_exit
 		;;
-	500|400|404)
+	429)
 		SIMETMA_UPDATE_LASTEXEC=
-		abend "SIMET2 agent registry service unavailable"
+		simet_log simet-ma daemon.err "SIMET2 agent regitry service: too many requests from this client/network"
+		return 1
+		;;
+	5??|408|404|405)
+		# server errors and timeouts
+		SIMETMA_UPDATE_LASTEXEC=
+		abend "SIMET2 agent registry service temporarily unavailable, status $APIRES"
+		;;
+	4??)
+		# client software issue most likely. Must rate-limit.
+		# unlikely that recovery would help, it would just keep creating agents
+		abend_ratelimit "SIMET2 server reports client error, status $APIRES"
+		;;
+	*)
+		abend "SIMET2 agent registry: server returned unexpected status $APIRES"
 		;;
         esac
 
 	call simet_create_agent_for_recovery || abend "failed to create new identity for recovery"
 	call simet_save_pairing_recovery
+	SIMETMA_UPDATE_LASTEXEC=1
 	return 0
 }
 
@@ -436,40 +527,50 @@ __clean_participant_metadata_info() {
 __consume_participant_api_output() {
 	T=$($JSONFILTER -i "$OUTFILE" -t '@.attributes' 2>/dev/null) || return 1
 	[ "$T" = "object" ] || return 1
-	$JSONFILTER -i "$OUTFILE" -e '@.attributes' 2>/dev/null >"$AGENT_PARTICIPANT_INFO"
+	_ARC=0
+	$JSONFILTER -i "$OUTFILE" -e '@.attributes' 2>/dev/null >"$AGENT_PARTICIPANT_INFO" || _ARC=$?
 	: > "$OUTFILE"
+	return $_ARC
 }
 
 #overridable
 # overrides contents of OUTFILE!
 simet_update_participant_info() {
 	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
-		-H "Authorization: Bearer $AT" \
-		-X GET -o "$OUTFILE" -w "%{http_code}" \
-		"${API_SIMET_AGENT_REG}/v2/agents/$AID/participant" ) || return 1
+		  -H "Authorization: Bearer $AT" \
+		  -X GET -o "$OUTFILE" -w "%{http_code}" \
+		  "${API_SIMET_AGENT_REG}/v2/agents/$AID/participant" ) || {
+		SIMETMA_UPDATE_LASTEXEC=
+		return 1
+	}
 	case "$APIRES" in
 	204|410)
+		# not associated to a participant (anymore?) or agent-id being replaced
 		__clean_participant_metadata_info
 		return 0
 		;;
 	200)
-		__consume_participant_api_output
+		__consume_participant_api_output || return 1
 		return 0
-		;;
-	401)
-		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
-		;;
-	403)
-		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
 		;;
 	304)
 		# just keep the status quo, whatever it is. Meh.
 		return 0
 		;;
-	#500|400|404)
-		# SIMET2 agent registry unavailable
-		# nothing to do here right now.
-		#;;
+	401|403)
+		SIMETMA_UPDATE_LASTEXEC=1
+		simet_log simet-ma daemon.err "server reports invalid or expired agent autentication token!"
+		;;
+	5??|408)
+		# server errors and timeouts
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "SIMET2 agent registry service temporarily unavailable, status $APIRES"
+		;;
+	4??)
+		# client software issue most likely. Must rate-limit.
+		SIMETMA_UPDATE_LASTEXEC=1
+		simet_log simet-ma daemon.err "SIMET2 server reports client error, status $APIRES"
+		;;
         esac
 	return 1
 }
@@ -541,7 +642,12 @@ simet_pairing_flow() {
 		# PAIREDTO and PAIRED will be correctly set and up-to-date.
 	elif [ "$SIMET2_VLABEL" != "FAILED" ] ; then
 		if [ "$PAIRED" != "true" ] && [ "$PAIRED" != 1 ] ; then
-			call simet_attempt_pairing_recovery && call simet_refresh_agent_status
+			# It is normal for this to fail.
+			call simet_attempt_pairing_recovery && {
+				# but this shouldn't fail
+				call simet_refresh_agent_status || \
+					simet_log simet-ma daemon.warn "could not receive updated registration information, local information may be outdated."
+			}
 		fi
 
 		# update the pairing secret in the AR, in case it could be
@@ -549,11 +655,12 @@ simet_pairing_flow() {
 		call simet_register_vlabel || true
 	fi
 
-	call simet_update_participant_info || \
-		simet_log simet-ma daemon.warn "SIMET: API error while updating pairing information"
+	call simet_update_participant_info || {
+		simet_log simet-ma daemon.warn "SIMET: API error while requesting updated association information"
+	}
 
 	if [ "$PAIRED" = "true" ] || [ "$PAIRED" = 1 ] ; then
-		simet_log simet-ma daemon.notice "SIMET: this MA is paired to a participant in the SIMET2 web portal"
+		simet_log simet-ma daemon.notice "SIMET: this MA is associated to a participant in the SIMET2 web portal"
 		call simet_log_participant_info || :
 		[ -n "$AGENT_PAIRBKP_FILE" ] && rm -f "$AGENT_PAIRBKP_FILE"
 		[ -n "$AGENT_PAIR_FILE" ] && {
@@ -561,10 +668,12 @@ simet_pairing_flow() {
 			[ -r "$AGENT_PAIR_FILE" ] && OLDPAIR=$(cat "$AGENT_PAIR_FILE")
 			[ x"$OLDPAIR" != x"$PAIREDTO" ] && echo "$PAIREDTO" > "$AGENT_PAIR_FILE"
 		}
-		call_hook pairing_paired
+		call_hook pairing_paired || \
+			simet_log simet-ma daemon.warn "pairing_paired hook failed!"
 	else
 		rm -f "$AGENT_PAIR_FILE"
-		call_hook pairing_unpaired
+		call_hook pairing_unpaired || \
+			simet_log simet-ma daemon.warn "pairing_paired hook failed!"
 	fi
 }
 
@@ -575,12 +684,14 @@ __invalidate_tokens() {
 __consume_tokens_api_output() {
 	VTK=
 	SID=$($JSONFILTER -i "$OUTFILE" -e "VTK=@.access_tokens.view_results") \
-		|| abend "illegal response from agent-registry service"
+		|| abend "unexpected or incorrect response from agent-registry service"
 	eval "$SID" || abend "internal error"
 	: > "$OUTFILE"
 
-	call write_access_tokens "$1" "$VTK" || \
+	call write_access_tokens "$1" "$VTK" || {
 		simet_log simet-ma daemon.err "failed to store access tokens"
+		return 1
+	}
 	:
 }
 
@@ -589,29 +700,47 @@ simet_update_tokens() {
 	AGENT_ID="$1"
 	AGENT_TOKEN="$2"
 	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
-		-H "Authorization: Bearer ${AGENT_TOKEN}" \
-		-X GET -o "$OUTFILE" -w "%{http_code}" \
-		"${API_SIMET_AGENT_REG}/v2/agents/${AGENT_ID}/access_tokens" ) || return 1
+		  -H "Authorization: Bearer ${AGENT_TOKEN}" \
+		  -X GET -o "$OUTFILE" -w "%{http_code}" \
+		  "${API_SIMET_AGENT_REG}/v2/agents/${AGENT_ID}/access_tokens" ) || {
+		SIMETMA_UPDATE_LASTEXEC=
+		return 1
+	}
 	case "$APIRES" in
-	204)
-		simet_log simet-ma daemon.err "server doesn't know our agent-id!"
-		;;
-	401)
-		simet_log simet-ma daemon.err "server reports our agent-id is outdated, in error, or unauthorized"
-		;;
-	403)
-		simet_log simet-ma daemon.err "agent token is invalid, or has expired"
-		;;
-	410)
-		simet_log simet-ma daemon.err "server requests removal of all access tokens"
-		__invalidate_tokens
-		;;
 	200)
-		__consume_tokens_api_output "$AGENT_ID"
+		__consume_tokens_api_output "$AGENT_ID" || return 1
 		return 0
 		;;
-	500|400|404)
-		simet_log simet-ma daemon.err "SIMET2 agent registry service unavailable"
+	304)
+		# keep current tokens, if any
+		return 0
+		;;
+	204)
+		simet_log simet-ma daemon.err "SIMET2 agent registry doesn't know our agent-id!"
+		__invalidate_tokens
+		;;
+	401|403)
+		SIMETMA_UPDATE_LASTEXEC=1
+		simet_log simet-ma daemon.err "SIMET2 agent autentication token invalid, or expired!"
+		__invalidate_tokens
+		;;
+	410)
+		simet_log simet-ma daemon.warn "SIMET2 agent registry requested removal of current access tokens"
+		__invalidate_tokens
+		;;
+	5??|408)
+		# server errors and timeouts
+		SIMETMA_UPDATE_LASTEXEC=
+		simet_log simet-ma daemon.err "SIMET2 agent registry service temporarily unavailable, status $APIRES"
+		simet_log simet-ma daemon.err "SIMET: secondary access tokens could not be refreshed, and might not work"
+		;;
+	4??)
+		# client software issue most likely. Must rate-limit.
+		SIMETMA_UPDATE_LASTEXEC=1
+		simet_log simet-ma daemon.err "SIMET2 server reports client error, status $APIRES"
+		;;
+	*)
+		simet_log simet-ma daemon.warn "SIMET2 agent registry: server returned unexpected status $APIRES"
 		;;
         esac
 	return 1
@@ -624,8 +753,8 @@ simet_detect_cloned_id() {
 	# for now, if it was foreign, reset id. SIMETBox can do
 	# better (it overrides this), and so could x86 with
 	# dmidecode and UUIDs.
-	[ $1 -eq 0 ] && \
-		simet_log simet-ma daemon.warn "SIMET: vlabel flagged as foreign: assuming agent credentials came from other device"
+	[ "$1" -eq 0 ] && \
+		simet_log simet-ma daemon.warn "SIMET: virtual label flagged as foreign: assuming agent credentials came from other device"
 	return "$1"
 }
 
@@ -671,41 +800,44 @@ gettoken() {
 	[ -e "$SIMET_RUNSTATE_DIR/vlabel-was-foreign" ] && VL_GOOD=0
 	call simet_detect_cloned_id "$VL_GOOD" && __simet_invalidate_all "ma_foreign"
 
-	call_hook before_reginfo
+	call_hook before_reginfo || abend_ratelimit "before_reginfo hook failed"
 
 	if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
 		call simet_create_agent || abend "could not register measurement agent"
 	else
-		call simet_refresh_agent_status || abend "could not update registration"
+		call simet_refresh_agent_status || abend "request for updated measurement agent registration data failed"
 	fi
 
-	call_hook after_reginfo
+	call_hook after_reginfo || abend_ratelimit "after_reginfo hook failed"
 
 	if [ ! -r "$AGENT_ID_FILE" ] || [ -z "$AID" ] || [ ! -r "$AGENT_TOKEN_FILE" ] || [ -z "$AT" ] ; then
-		call_hook failed_to_register
+		call_hook failed_to_register || true
 		abend "failed to register, please retry later"
 	fi
 
-	call simet_pairing_flow
+	call simet_pairing_flow || abend_ratelimit "simet_pairing_flow() call failed, please retry later"
 
-	call simet_update_agent_metadata
+	call simet_update_agent_metadata || \
+		simet_log simet-ma daemon.warn "registration metadata update either failed, or was rejected"
 
 	if call simet_update_tokens "$AID" "$AT" ; then
-		SIMETMA_UPDATE_LASTEXEC=1
 		call_hook access_tokens_updated || true
 	else
-		simet_log simet-ma daemon.err "SIMET: failed to retrieve access tokens"
+		simet_log simet-ma daemon.err "failed to retrieve access tokens"
 	fi
+
 
 	rm -f "$OUTFILE"
 	OUTFILE=
 
 	if [ x"$AID" != x"$OLDAID" ] || [ x"$AT"  != x"$OLDAT"  ] ; then
-		simet_log simet-ma daemon.notice "SIMET: agent-id or authorization token has changed"
+		simet_log simet-ma daemon.notice "agent-id or authorization token has changed"
 		trap 'trap "" TERM ; call simet_restart_services || true' EXIT
-		call_hook reginfo_changed
+		call_hook reginfo_changed || \
+			simet_log simet-ma daemon.warn "reginfo_changed hook failed, MA or UI state may be incorrect/outdated"
 	else
-		call_hook reginfo_unchanged
+		call_hook reginfo_unchanged || \
+			simet_log simet-ma daemon.warn "reginfo_unchanged hook failed"
 	fi
 
 	simet_log simet-ma daemon.info "SIMET: LMAP measurement agent id: $AID"
