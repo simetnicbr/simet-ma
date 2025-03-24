@@ -9,7 +9,7 @@
 test -f /opt/simet/bin/simet_register_ma.sh && {
 	start-stop-daemon -c nicbr-simet --start --name simet_reg_ma \
 		--startas /opt/simet/bin/simet_register_ma.sh \
-		-- --boot >/dev/null 2>&1 || true
+		-- --daily >/dev/null 2>&1 || true
 
 	# Attempt to contact the controller if the main schedule is too old
 	[ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
