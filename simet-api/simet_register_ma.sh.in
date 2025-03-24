@@ -19,6 +19,13 @@
 #   --boot   (optional) shorten wait times and not restart the service
 #            do nothing if already sucessfully run in the last 24H.
 #
+#   --daily  (optional): do nothing if already sucessfully run in
+#            the last 24H.  Use it in *all* periodic calls that
+#            are not in a per-device *randomized* once-every-24H
+#            regime, otherwise many devices might contact the SIMET2
+#            servers at the same time, which is a grave violation of
+#            the SIMET2 terms of service.
+#
 # Pairing is disabled by having an empty virtual label (empty
 # contents inside the file referenced by $AGENT_VLABEL_FILE)
 
@@ -71,13 +78,17 @@ USERAGENT=$(get_http_useragent)
 CURLOPT="$CURL_APIOPT --max-filesize 4000"
 CURLOPT2=
 
-SIMETMA_BOOTMODE=
+SIMETMA_24HMODE=
 case "$1" in
 	--boot)
 		shift
 		CURLOPT2="$CURLOPT --retry 3 --retry-max-time 30"
 		SIMETMA_RECONFIG=
-		SIMETMA_BOOTMODE=1
+		SIMETMA_24HMODE=1
+	;;
+	--daily)
+		shift
+		SIMETMA_24HMODE=1
 	;;
 esac
 CURLOPT="$CURLOPT $CURLOPT2"
@@ -632,7 +643,7 @@ gettoken() {
 	AID=$OLDAID
 	AT=$OLDAT
 
-	[ -n "$SIMETMA_BOOTMODE" ] && {
+	[ -n "$SIMETMA_24HMODE" ] && {
 		# Read last *successful* execution time from lockfile
 		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_TOKEN_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
 		[ "$LASTEXEC" -ge 0 ] || LASTEXEC=0
