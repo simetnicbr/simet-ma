@@ -26,8 +26,9 @@
 #            servers at the same time, which is a grave violation of
 #            the SIMET2 terms of service.
 #
-# Pairing is disabled by having an empty virtual label (empty
-# contents inside the file referenced by $AGENT_VLABEL_FILE)
+# Pairing (association of the MA to a participant in the web portals)
+# is disabled by having an empty virtual label (empty contents inside
+# the file referenced by $AGENT_VLABEL_FILE)
 
 set -e
 set -o pipefail
