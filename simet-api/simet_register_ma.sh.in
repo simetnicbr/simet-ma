@@ -41,6 +41,9 @@ SIMETMA_REGMA_LOCK="${SIMET_LOCK_DIR}/simet_register_ma.lock"
 RC=1
 OUTFILE=
 SIMETMA_UPDATE_LASTEXEC=
+reset_lastrun() {
+	printf "0" > "$AGENT_TOKEN_LOCK" || :
+}
 update_lastrun() {
 	# note: remember to remove or zero-out this file when updating the package
 	[ -n "$SIMETMA_UPDATE_LASTEXEC" ] && {
@@ -644,13 +647,28 @@ gettoken() {
 	AT=$OLDAT
 
 	[ -n "$SIMETMA_24HMODE" ] && {
-		# Read last *successful* execution time from lockfile
-		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_TOKEN_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
-		[ "$LASTEXEC" -ge 0 ] || LASTEXEC=0
+		# Read last execution time from lockfile
+		LASTEXEC=$( FOO=$(sed -n -e '1 { p; q; }' "$AGENT_TOKEN_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null \
+			|| LASTEXEC=-1
 
-		# do nothing if time delta is less than 24h
-		TIMEDELTA=$(( $(date +%s -u) - LASTEXEC )) || TIMEDELTA=172800
-		[ "$TIMEDELTA" -ge 86400 ] || return 0
+		# ensure lastrun timestamp is numeric non-negative, otherwise
+		# reset it just in case we don't update it, and allow execution.
+		[ "$LASTEXEC" -ge 0 ] 2>/dev/null || {
+			LASTEXEC=0
+			reset_lastrun
+		}
+
+		# should TIMEDELTA calculation fail for some reason, allow execution
+		[ "$LASTEXEC" -gt 0 ] && TIMEDELTA=$(( $(date +%s -u) - LASTEXEC )) && {
+			# reset timestamp if it is in the future, in case we don't
+			# update it on this run.
+			[ "$TIMEDELTA" -ge 0 ] || reset_lastrun
+
+			# do nothing (return with status 0) if time delta is less than 24h
+			# (and lastexec timestamp was *not* in the future)
+			[ "$TIMEDELTA" -ge 0 ] && [ "$TIMEDELTA" -lt 86400 ] \
+				&& return 0
+		}
 	}
 
 	OUTFILE=$(mktemp -q -t simet-at-register.$$.XXXXXXXXXX) || abend "failed to create tmpfile"
