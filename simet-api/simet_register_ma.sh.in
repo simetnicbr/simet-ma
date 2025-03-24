@@ -135,6 +135,7 @@ write_lmap_agent() {
 		HASHNEW=$(__gethash "$OUTFILE") || return 1
 		[ x"$HASHOLD" != x"$HASHNEW" ] && {
 			LMAP_AGENT_DIR=$(dirname "$LMAP_AGENT_FILE")
+			#shellcheck disable=SC2174
 			[ -d "$LMAP_AGENT_DIR" ] || mkdir -m 0770 -p "$LMAP_AGENT_DIR"
 			cp -f "$OUTFILE" "$LMAP_AGENT_FILE" && { chmod 0660 "$LMAP_AGENT_FILE" 2>/dev/null || : ; }
 		}
@@ -152,6 +153,7 @@ write_access_tokens() {
 	else
 		printf "%s" "$2" > "$AGENT_VTK_FILE"
 		VTK_CREDS_DIR=$(dirname "$AGENT_VIEW_CREDENTIALS_FILE")
+		#shellcheck disable=SC2174
 		[ -d "$AGENT_VIEW_CREDENTIALS_FILE" ] || mkdir -m 0775 -p "$VTK_CREDS_DIR"
 		printf '%s %s\n' "$1" "$2" > "$AGENT_VIEW_CREDENTIALS_FILE"
 		simet_log simet-ma daemon.info "SIMET: view_results token updated"
