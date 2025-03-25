@@ -260,6 +260,7 @@ __simet_create_agent_common() {
 		;;
 	410)
 		# DENY LISTED. FURTHER ACCESS EXPLICITLY UNAUTHORIZED. May retry in 24h
+		__simet_remove_identity
 		simet_log simet-ma daemon.crit "access to SIMET2 unauthorized"
 		SIMETMA_UPDATE_LASTEXEC=1
 		return 1
@@ -439,10 +440,7 @@ backup_invalid_id() {
 }
 
 # pairing not cleaned up here
-# $1: reason a-z0-9_, to name bkp files
-__simet_invalidate_all() {
-	call backup_invalid_id "$1"
-	simet_log simet-ma daemon.notice "removing agent-id and tokens"
+__simet_remove_identity() {
 	OLDAT=
 	OLDAID=
 	AT=
@@ -453,6 +451,14 @@ __simet_invalidate_all() {
 	[ -n "$V1_AGENT_TOKEN_FILE" ] && rm -f "$V1_AGENT_TOKEN_FILE"
 
 	[ -d "$SIMET_RUNSTATE_DIR" ] && rm -f "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
+	:
+}
+# pairing not cleaned up here
+# $1: reason a-z0-9_, to name bkp files
+__simet_invalidate_all() {
+	call backup_invalid_id "$1"
+	simet_log simet-ma daemon.notice "removing agent-id and tokens"
+	__simet_remove_identity || :
 }
 
 #overridable
