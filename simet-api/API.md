@@ -399,10 +399,17 @@ into some details of the SIMET2 web API.
      agent token, LMAP config, and so on.  Take the exclusive lock
      when doing a non-atomic update.
 
+  $SIMET\_LOCK\_DIR  -  lock directory.  Holds most of the locks,
+     including the two locks above, and a few others used internally.
+
   Locks are empty files unless explicitly stated otherwise, and are
   always locked using flock(2).  Beware permission issues with the
   lock directory and lock files when scripts are run with different
   privilege levels (e.g. root and a non-privileged user).
+
+  When acquiring both the agent lock and the agent token lock, you *must*
+  acquire the agent lock first.  It is *mandatory* to have a timeout on
+  every lock wait, to avoid deadlocks.
 
 
 ## Hooks
