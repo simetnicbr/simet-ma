@@ -131,25 +131,24 @@ main(){
   fi
 
   if [ $SETLOCK != "true" ] || [ -z "$AGENT_LOCK" ] ; then
-    _main_locked || return $?
-    return 0
-  fi
-
-  [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || {
-    log_error "cannot create $AGENT_LOCK"
-    exit 1
-  }
-  (
-    for i in 1 2 3 4 5 ; do
-      flock -n -x 9 && {
-        _main_locked || exit $?
-        exit 0
+    _main_locked </dev/null || return $?
+  else
+    [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || {
+      log_error "cannot create $AGENT_LOCK"
+      exit 1
+    }
+    exec 9<"$AGENT_LOCK"
+    flock -n -x 9 || {
+      log_info "Waiting up to 15s to acquire the measurement lock..."
+      flock_retry 15 -x 9 || {
+	log_error "Measurement lock is already taken, exiting..."
+        exit 1
       }
-      sleep 1
-    done
-    log_error "Measurement lock is already taken, exiting..."
-    exit 1
-  ) </dev/null 9< "$AGENT_LOCK" || return $?
+    }
+    # Run in a subprocess with the lock FD closed
+    ( _main_locked ) </dev/null 9<&- || return $?
+    :
+  fi
   :
 }
 
