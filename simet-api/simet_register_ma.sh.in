@@ -700,6 +700,7 @@ gettoken() {
 	call simet_update_agent_metadata
 
 	if call simet_update_tokens "$AID" "$AT" ; then
+		SIMETMA_UPDATE_LASTEXEC=1
 		call_hook access_tokens_updated || true
 	else
 		simet_log simet-ma daemon.err "SIMET: failed to retrieve access tokens"
