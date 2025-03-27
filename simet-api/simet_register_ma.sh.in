@@ -37,7 +37,7 @@ SIMETMA_UPDATE_LASTEXEC=
 update_lastrun() {
 	# note: remember to remove or zero-out this file when updating the package
 	[ -n "$SIMETMA_UPDATE_LASTEXEC" ] && {
-		date +%s -u > "$AGENT_LOCK" || :
+		date +%s -u > "$AGENT_TOKEN_LOCK" || :
 	}
 	:
 }
@@ -634,7 +634,7 @@ gettoken() {
 
 	[ -n "$SIMETMA_BOOTMODE" ] && {
 		# Read last *successful* execution time from lockfile
-		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
+		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_TOKEN_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
 		[ "$LASTEXEC" -ge 0 ] || LASTEXEC=0
 
 		# do nothing if time delta is less than 24h

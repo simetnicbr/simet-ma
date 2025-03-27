@@ -116,9 +116,13 @@ case "$1" in
 		find /var/run/lmapd -maxdepth 2 \( -type f -o -type l \) -name lmap-schedule.json -exec chown -h nicbr-simet:nicbr-simet "{}" + || true
 	}
 	( . /opt/simet/lib/simet/simet_lib_config.sh && {
+		[ -n "$AGENT_TOKEN_LOCK" ] \
+			&& test -s "${AGENT_TOKEN_LOCK}" \
+			&& printf "0\n" > "${AGENT_TOKEN_LOCK}" \
+			|| true
 		[ -n "$AGENT_LOCK" ] \
 			&& test -s "${AGENT_LOCK}" \
-			&& printf "0\n" > "${AGENT_LOCK}" \
+			&& : > "${AGENT_LOCK}" \
 			|| true
 	} ) 2>/dev/null >/dev/null </dev/null || true
 
