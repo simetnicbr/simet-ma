@@ -250,11 +250,12 @@ lmap_channel_url() {
 
 # overridable
 simet_api_lmapputstate() {
+	cat >"$OUTFILE" || [ -s "$OUTFILE" ] || return 1
 	CHANNEL_URL=$(call lmap_channel_url "$1" "/v1/agents/$OLDAID/reported-state") || return 1
         [ -n "$CHANNEL_URL" ] || return 1
 	# shellcheck disable=SC2086
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-T - -f -o "$OUTFILE" \
+		-T "$OUTFILE" -f -o /dev/null \
 		-H "Authorization: Bearer $OLDAT" "$CHANNEL_URL"
 }
 

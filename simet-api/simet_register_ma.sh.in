@@ -229,22 +229,18 @@ __simet_agent_environment() {
 }
 
 __simet_create_agent_apicall() {
-	cat <<- EOFSCAG | \
-	  curl $CURLOPT --retry 30 --retry-max-time 300 \
-		-A "$USERAGENT" \
-		-H "Content-type: application/json" \
-		-X POST -o "$OUTFILE" -d @- -w "%{http_code}" \
-		"$API_SIMET_AGENT_REG/v2/agents" \
+	curl $CURLOPT --retry 30 --retry-max-time 300 \
+		-A "$USERAGENT" -H "Content-type: application/json" \
+		-X POST -o "$OUTFILE" -w "%{http_code}" \
+		--data-binary "{ $*
+		  $(call __simet_agent_attributes)
+		  $(call __simet_agent_environment)
+		  $(simet_jo_pairs 0 \
+			engine_name "@SIMET_ENGINE_NAME@" \
+			engine_version "@PACKAGEVERSION@" \
+			agent_family "$SIMET2_AGENT_FAMILY")
+		}" "$API_SIMET_AGENT_REG/v2/agents" \
 	  || return 1
-	{ $*
-	  $(call __simet_agent_attributes)
-	  $(call __simet_agent_environment)
-	  $(simet_jo_pairs 0 \
-		engine_name "@SIMET_ENGINE_NAME@" \
-		engine_version "@PACKAGEVERSION@" \
-		agent_family "$SIMET2_AGENT_FAMILY")
-	}
-	EOFSCAG
 	:
 }
 __simet_create_agent_common() {
@@ -256,25 +252,20 @@ __simet_create_agent_common() {
 }
 
 __simet_modify_agent_apicall() {
-	SC="$1"
-	cat <<- EOFSRAP | \
-	  curl $CURLOPT --retry 3 --retry-max-time 30 \
+	curl $CURLOPT --retry 3 --retry-max-time 30 \
 	     -A "$USERAGENT" \
-	     -X PUT -T - -H "Content-type: application/json" \
+	     -X PUT -H "Content-type: application/json" \
 	     -H "Authorization: Bearer $AT" \
 	     -o "$OUTFILE" -w "%{http_code}" \
-	     "${API_SIMET_AGENT_REG}/v2/agents/$AID" \
+	     --data-binary "{ $1
+		  $(call __simet_agent_attributes)
+		  $(call __simet_agent_environment)
+		  $(simet_jo_pairs 0 \
+			engine_name "@SIMET_ENGINE_NAME@" \
+			engine_version "@PACKAGEVERSION@" \
+			agent_family "$SIMET2_AGENT_FAMILY")
+		}" "${API_SIMET_AGENT_REG}/v2/agents/$AID" \
 	  || return 1
-	{
-	  $SC
-	  $(call __simet_agent_attributes)
-	  $(call __simet_agent_environment)
-	  $(simet_jo_pairs 0 \
-		engine_name "@SIMET_ENGINE_NAME@" \
-		engine_version "@PACKAGEVERSION@" \
-		agent_family "$SIMET2_AGENT_FAMILY")
-	}
-	EOFSRAP
 	:
 }
 __simet_modify_agent_pairing() {
@@ -499,18 +490,15 @@ simet_log_participant_info() {
 }
 
 __simet_pairing_recovery_apicall() {
-	cat <<- EOFSPRC | \
-	  curl $CURLOPT --retry 30 --retry-max-time 300 \
-		-A "$USERAGENT" \
-		-H "Authorization: Bearer $AT" \
+	curl $CURLOPT --retry 30 --retry-max-time 300 \
+		-A "$USERAGENT" -H "Authorization: Bearer $AT" \
 		-H "Content-type: application/json" \
-		-X POST -o "$OUTFILE" -d @- -w "%{http_code}" \
-		"$API_SIMET_AGENT_REG/v2/agent-recovery/$AID" \
+		-X POST -o "$OUTFILE" -w "%{http_code}" \
+		--data-binary "{
+			\"engine_name\":\"@SIMET_ENGINE_NAME@\",
+			\"participant_id\":\"$1\", \"secret\":\"$2\"
+		}" "$API_SIMET_AGENT_REG/v2/agent-recovery/$AID" \
 	  || return 1
-	{ "engine_name":"@SIMET_ENGINE_NAME@",
-	  "participant_id":"$1",
-	  "secret":"$2" }
-	EOFSPRC
 	:
 }
 __simet_attempt_pairing_recovery() {

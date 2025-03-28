@@ -166,8 +166,9 @@ simet_gen_local_schedule() {
 }
 
 simet_api_lmapputstate() {
+	cat >"$OUTFILE" || [ -s "$OUTFILE" ] || return 1
 	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-T - -f -o "$OUTFILE" \
+		-T "$OUTFILE" -f -o /dev/null \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/reported-state"
 }
