@@ -28,9 +28,8 @@ test -f /opt/simet/bin/simet_register_ma.sh && {
 	# Attempt to contact the controller if the main schedule is too old
 	# shellcheck disable=SC2015
 	[ -x /opt/simet/bin/simet_lmap-fetch-schedule.sh ] \
-		&& [ -n "$(find /var/run/lmapd/lmap-schedule.json -maxdepth 0 -type f -mtime +1)" ] \
-		&& /opt/simet/bin/simet_lmap-fetch-schedule.sh \
-		&& find /var/run/lmapd -maxdepth 2 \( -type f -o -type l \) -name lmap-schedule.json \
-			-exec chown -h nicbr-simet:nicbr-simet "{}" + 2>/dev/null || true
+		&& [ -n "$(find /var/run/lmapd/lmap-schedule.json -maxdepth 0 -type f -mtime +1 2>/dev/null)" ] \
+		&& start-stop-daemon -c nicbr-simet --start --name simetgetsched \
+			--startas /opt/simet/bin/simet_lmap-fetch-schedule.sh || true
 }
 :
