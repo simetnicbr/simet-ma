@@ -52,7 +52,7 @@ run_trap() {
 }
 
 COLLECTORS=
-CURLOPT=
+CURLOPT="$CURL_APIOPT"
 DO_QUEUE=1
 DO_SEND=1
 DO_RENDER=1
@@ -61,7 +61,7 @@ while [ $# -gt 0 ] ; do
     case "$1" in
 	--fast)
 	    # give up network operations faster
-	    CURLOPT="--retry 3 --retry-max-time 30"
+	    CURLOPT="$CURL_APIOPT_FAST"
 	    ;;
 	--queue)
 	    DO_QUEUE=1
@@ -96,6 +96,8 @@ while [ $# -gt 0 ] ; do
     shift
 done
 
+CURLOPT="$CURL_APIBASE $CURLOPT"
+
 # Do nothing when there are no input data files, otherwise lmapctl would
 # log errors.  Note: some versions of OpenWRT "find" lack -quit
 [ "$DO_RENDER" -ne 0 ] && [ -z "$(find .. -maxdepth 1 -type f -name '*.data' -print | head -n1)" ] && exit 0
@@ -123,7 +125,7 @@ send_report_to_collector() {
 
     malformed=0
     while [ $# -gt 0 ] ; do
-	APIRES=$( curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
 		--data-binary "@$OUTFILE" -X POST \
 		-o /dev/null -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \

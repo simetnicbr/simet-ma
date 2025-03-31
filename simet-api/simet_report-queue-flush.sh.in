@@ -41,14 +41,14 @@ abend() {
 }
 
 COLLECTORS=
-CURLOPT=
+CURLOPT="$CURL_APIOPT"
 MAX_SIZE=
 MAX_AGE=
 while [ $# -gt 0 ] ; do
     case "$1" in
 	--fast)
 	    # give up network operations faster
-	    CURLOPT="--retry 3 --retry-max-time 30"
+	    CURLOPT="$CURL_APIOPT_FAST"
 	    ;;
 	--max-age)
 	    shift
@@ -71,6 +71,8 @@ while [ $# -gt 0 ] ; do
     esac
     shift
 done
+
+CURLOPT="$CURL_APIBASE $CURLOPT"
 
 if [ -z "$AGENT_ID_FILE" ] || [ -z "$AGENT_TOKEN_FILE" ] || [ -z "$LMAP_REPORT_QUEUE_DIR" ] ; then
     abend "missing configuration: AGENT_ID_FILE, AGENT_TOKEN_FILE or LMAP_REPORT_QUEUE_DIR"
@@ -99,7 +101,7 @@ send_report_to_collector() {
 
     malformed=0
     while [ $# -gt 0 ] ; do
-	APIRES=$( curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
 		--data-binary "@$reportfn" -X POST \
 		-o /dev/null -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \

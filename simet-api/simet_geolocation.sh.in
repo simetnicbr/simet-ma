@@ -103,7 +103,7 @@ if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
 fi
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT --max-filesize 10000"
+CURLOPT="$CURL_APIBASE $CURL_APIOPT_FAST --max-filesize 10000"
 
 simet_get_geoloc_provider() {
   [ -w "$OUTFILE" ] || RC=3 abend "output tmpfile missing"

@@ -83,14 +83,14 @@ SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
 simet_load_hooks register_ma
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT --max-filesize 4000"
-CURLOPT2=
+CURLOPT="$CURL_APIOPT"
+CURLOPT_XTRA="--max-filesize 4000"
 
 SIMETMA_24HMODE=
 case "$1" in
 	--boot)
 		shift
-		CURLOPT2="$CURLOPT --retry 3 --retry-max-time 30"
+		CURLOPT="$CURL_APIOPT_FAST"
 		SIMETMA_RECONFIG=
 		SIMETMA_24HMODE=1
 	;;
@@ -99,7 +99,7 @@ case "$1" in
 		SIMETMA_24HMODE=1
 	;;
 esac
-CURLOPT="$CURLOPT $CURLOPT2"
+CURLOPT="$CURL_APIBASE $CURLOPT $CURLOPT_XTRA"
 
 # WARNING: we might be run from inside lmapd, which in turn
 # could signal us with SIGTERM when we send it a configuration
@@ -233,7 +233,7 @@ __simet_agent_environment() {
 }
 
 __simet_create_agent_apicall() {
-	curl $CURLOPT --retry 30 --retry-max-time 300 \
+	curl $CURLOPT \
 		-A "$USERAGENT" -H "Content-type: application/json" \
 		-X POST -o "$OUTFILE" -w "%{http_code}" \
 		--data-binary "{ $*
@@ -290,7 +290,7 @@ __simet_create_agent_common() {
 DIDMETADATAUPDATE=0
 
 __simet_modify_agent_apicall() {
-	curl $CURLOPT --retry 3 --retry-max-time 30 \
+	curl $CURLOPT \
 	     -A "$USERAGENT" \
 	     -X PUT -H "Content-type: application/json" \
 	     -H "Authorization: Bearer $AT" \
@@ -597,7 +597,7 @@ simet_log_participant_info() {
 }
 
 __simet_pairing_recovery_apicall() {
-	curl $CURLOPT --retry 30 --retry-max-time 300 \
+	curl $CURLOPT \
 		-A "$USERAGENT" -H "Authorization: Bearer $AT" \
 		-H "Content-type: application/json" \
 		-X POST -o "$OUTFILE" -w "%{http_code}" \
