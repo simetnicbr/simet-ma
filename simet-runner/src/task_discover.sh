@@ -92,43 +92,34 @@ discover_init() {
   mkdir -p "$BASEDIR/serversel"
 
   local _curl1_pid
-  curl \
+  curl $CURL_APIBASE $CURL_APIOPT_FAST \
     --request GET \
     --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
-    --location \
-    --connect-timeout 10 \
-    --max-time 15 \
     --url "$API_SERVICE_DISCOVERY" > "$BASEDIR/services.json" \
   & _curl1_pid=$!
 
   local _curl2_pid
   local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
-  curl \
+  curl $CURL_APIBASE $CURL_APIOPT_FAST \
     --request GET \
     --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
-    --location \
-    --connect-timeout 10 \
-    --max-time 15 \
     --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
   & _curl2_pid=$!
 
   local _curl3_pid
   local _curl3_endpoint="$API_MSMT_PROFILE"
-  curl \
+  curl $CURL_APIBASE $CURL_APIOPT_FAST \
     --request GET \
     --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
-    --location \
-    --connect-timeout 10 \
-    --max-time 15 \
     --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY&engine_name=$SIMET_ENGINE_NAME" > "$BASEDIR/msmt_profiles.json" \
   & _curl3_pid=$!
 

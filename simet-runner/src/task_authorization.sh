@@ -30,16 +30,13 @@ authorization() {
   local _endpoint="${1}measure-allowed"
   local _agent_token="$2"
 
-  curl \
+  curl $CURL_APIBASE $CURL_APIOPT_FAST \
     --request GET \
     --user-agent "$SIMET_USERAGENT" \
     --header "Authorization: Bearer $_agent_token" \
     --silent \
     --show-error \
     --fail \
-    --location \
-    --connect-timeout 10 \
-    --max-time 15 \
     --url "$_endpoint" > $BASEDIR/auth_response.json
   
   if [ "$?" -ne 0 ]; then

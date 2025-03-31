@@ -277,7 +277,7 @@ _main_orchestrate(){
     }
   else
     log_info "LMAPSENDREPORT config missing, trying a direct submission"
-    _resp=$(curl \
+    _resp=$(curl $CURL_APIBASE $CURL_APIOPT \
       --request POST \
       --user-agent "$SIMET_USERAGENT" \
       --header "Content-Type: application/yang.data+json" \
@@ -285,7 +285,6 @@ _main_orchestrate(){
       --data "@$_report_dir/result.json"  \
       --silent \
       --fail \
-      --location \
       --show-error \
       --verbose \
       "${_endpoint}measure" 2>&1
