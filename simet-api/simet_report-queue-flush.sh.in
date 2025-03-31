@@ -99,11 +99,12 @@ send_report_to_collector() {
 
     malformed=0
     while [ $# -gt 0 ] ; do
-	APIRES=$( gzip -cd "$reportfn" | curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
-		--data-binary @- -X POST \
+	APIRES=$( curl $CURL_APIOPT $CURLOPT -A "$USERAGENT" \
+		--data-binary "@$reportfn" -X POST \
 		-o /dev/null -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
 		-H "Content-Type: application/yang.data+json" \
+		-H "Content-Encoding: gzip" \
 		"$1" ) || APIRES=
 
 	case "$APIRES" in
