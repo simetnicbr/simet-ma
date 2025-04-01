@@ -72,11 +72,6 @@ run_trap() {
 	RC=143 abend "$0: received stop/interrupt signal"
 }
 
-# FIXME: We can and should remove this after the "point of no return"
-# of support for downgrading without MA measurement continuity loss.
-V1_AGENT_ID_FILE="@SIMETCONFDIR@/agent-id"
-V1_AGENT_TOKEN_FILE="@SIMETCONFDIR@/agent.jwt"
-
 SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
 
 # Load hooks and overrides
@@ -392,14 +387,7 @@ simet_update_agent_metadata() {
 # used only for *first* register, not for recovery
 #overridable
 simet_create_agent() {
-	V1AID=
-	V1AT=
-	V1JSON=
-	[ -r "$V1_AGENT_ID_FILE" ] && V1AID=$(cat "$V1_AGENT_ID_FILE")
-	[ -r "$V1_AGENT_TOKEN_FILE" ] && V1AT=$(cat "$V1_AGENT_TOKEN_FILE")
-	[ -n "$V1AID" ] && [ -n "$V1AT" ] && V1JSON="\"agent_id\":\"$V1AID\",\"agent_token\":\"$V1AT\","
-
-	__simet_create_agent_common "$V1JSON" || return $?
+	__simet_create_agent_common "" || return $?
 
 	[ -n "$AGENT_PAIRBKP_FILE" ] && rm -f "$AGENT_PAIRBKP_FILE"
 	[ -n "$AGENT_PAIR_FILE" ] && rm -f "$AGENT_PAIR_FILE"
@@ -447,9 +435,6 @@ __simet_remove_identity() {
 	AID=
 	call write_agent_creds || rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE"
 	__invalidate_tokens
-	[ -n "$V1_AGENT_ID_FILE" ] && rm -f "$V1_AGENT_ID_FILE"
-	[ -n "$V1_AGENT_TOKEN_FILE" ] && rm -f "$V1_AGENT_TOKEN_FILE"
-
 	[ -d "$SIMET_RUNSTATE_DIR" ] && rm -f "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
 	:
 }
