@@ -215,10 +215,10 @@ _main_orchestrate(){
   local _loopcounter=1
   local _collector_endpoint=
 
-  discover_init && {
-    subtask_serverselection || :
-    report_servicelist_output
-  }
+  discover_init || exit 1
+  subtask_serverselection || :
+  report_servicelist_output
+
   discover_next_peer
   while [ $? -eq 0 ]; do
     local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
