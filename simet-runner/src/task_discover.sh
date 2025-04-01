@@ -98,7 +98,8 @@ discover_init() {
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
-    --url "$API_SERVICE_DISCOVERY" > "$BASEDIR/services.json" \
+    --output "$BASEDIR/services.json" \
+    --url "$API_SERVICE_DISCOVERY" \
   & _curl1_pid=$!
 
   local _curl2_pid
@@ -109,7 +110,8 @@ discover_init() {
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
-    --url "$_curl2_endpoint/$AGENT_ID" > "$BASEDIR/serversel/twampquick_parameters.json" \
+    --output "$BASEDIR/serversel/twampquick_parameters.json" \
+    --url "$_curl2_endpoint/$AGENT_ID" \
   & _curl2_pid=$!
 
   local _curl3_pid
@@ -120,7 +122,8 @@ discover_init() {
     --header "Authorization: Bearer $AGENT_TOKEN" \
     --silent \
     --fail \
-    --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY&engine_name=$SIMET_ENGINE_NAME" > "$BASEDIR/msmt_profiles.json" \
+    --output "$BASEDIR/msmt_profiles.json" \
+    --url "$_curl3_endpoint/$AGENT_ID?agent_family=$SIMET2_AGENT_FAMILY&engine_name=$SIMET_ENGINE_NAME" \
   & _curl3_pid=$!
 
   rc=0

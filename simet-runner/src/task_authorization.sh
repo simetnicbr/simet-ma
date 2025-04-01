@@ -37,12 +37,12 @@ authorization() {
     --silent \
     --show-error \
     --fail \
-    --url "$_endpoint" > $BASEDIR/auth_response.json
-  
-  if [ "$?" -ne 0 ]; then
+    --output "$BASEDIR/auth_response.json" \
+    --url "$_endpoint" \
+  || {
     log_error "Authorization request failed at: $_endpoint"
     return 1
-  fi
+  }
  
   local _allowed=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measureAllowed")
   if [ $_allowed != "true" ]; then
