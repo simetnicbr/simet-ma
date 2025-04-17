@@ -1,0 +1,85 @@
+RELEASE NOTE HIGHLIGHTS FOR FIRMWARE VENDORS
+============================================
+
+v0.18.12:
+
+* Due to the simet_register-ma.sh locking changes, the way the file
+  defined by AGENT_TOKEN_LOCK has to be handled changed:
+
+    * It must be truncated to size zero on simet-ma package updates
+
+    * It must be removed on reboot/poweroff: this is usually a
+      side-effect of a proper platform that uses tmpfs for /run,
+      /var/run, /var/lock and other ephemeral folders.
+
+* The reference cronjobs and post-install scripts in debian/ went
+  through important changes: platforms that used those as guidelines
+  must carefully check the changes, and incorporate them.
+
+  The daily and weekly cron job scripts now have a defensive five-minute
+  random start spread, as a defense against group-sync.
+
+  Note: the OpenWRT reference packaging does not have daily or weekly
+  cronjobs, and did not trigger a group-sync.
+
+* The measurement engine had important changes re. timeouts, which come
+  into play during server overload spikes.  Error handling for API
+  requests and some log messages have been changed as well.
+
+* This release fixes important locking issues in simet_register-ma.sh.
+
+  On simet-ma before v0.18.12, it is possible for concurrent runs of
+  simet_register-ma.sh to corrupt the local registration database.
+
+  Any eventual registration inconsistency will be auto-healed by a
+  non-concurrent sucessful run of simet_register-ma.sh.
+
+  The auto-healing is complete for embedded devices, which can recover
+  their past identity through the virtual label.  Non-embedded devices
+  might receive a brand new registration that will not be associated to
+  any entitiy (schools, healtcare unit, ISP, or SIMET portal user).
+
+* Ratelimiting of periodic and event-driven invocations of SIMET-MA
+  components was revised and fixed.
+
+  Periodic invocations (e.g. cronjobs, periodic timers), and system-hook
+  invocations (e.g. WAN connected events, boot events) *must* use either
+  the --boot or --daily CLI options of the Measurement Engine scripts.
+
+  E.g.: simet_register-ma.sh --boot.
+
+  When a script supports both --daily and --boot, --daily allows for
+  longer timeouts, so it has increased chance of success.  --boot is
+  used when you cannot have the script waiting for minutes, and would
+  rather it fail.
+
+  The platform must ensure simet_register-ma.sh calls done from
+  boot/startup scripts, and system hook scripts (such as when the
+  network becomes available) uses either the --boot or --daily options.
+
+  The platform should have simet_register-ma.sh calls scheduled to
+  periodically run (every 24h) at a **device-specific** time (note: not
+  device-model specific.  The goal here is for it to run at a time that
+  could be anywhere in the day, but which will be choosen by each
+  specific device so that there is no group behavior).  THIS
+  simet_register-ma.sh call MUST NOT use the --boot or --daily options.
+
+  All other periodic and system-hook invocations of simet_register-ma
+  must use either the --boot, or the --daily option.
+
+* Periodic calls of scripts of the SIMET measurement engine must not
+  group-sync
+
+  Please add an extra layer of defense against group-sync in periodic
+  jobs: add an extra random wait of up to five or ten minutes (with a
+  granularity of one second) at the start of the periodic jobs, which
+  will spread any possible group-sync behavior if the PRNGs are not
+  themselves group-sync'd.
+
+  BEWARE BAD PRNG SEEDING: when it is time-based, it *can* cause group
+  sync.  Always use device-specific information (e.g. the last 24 bits
+  of its MAC address) as part of the seed for the PRNG.
+
+  Note that the LMAP schedules used internally by the SIMET measurement
+  engine do add random jitter to the start time of measumenent runs.
+
