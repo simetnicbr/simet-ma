@@ -13,15 +13,18 @@ SIMET_PACKAGES="$(dpkg-query --showformat '${Package}\t${db:Status-Abbrev}\n' --
 # do restrict ourselves to just the core SIMET packages, and any dependencies
 # that have versioned requirements.
 test -f /opt/simet/bin/simet_register_ma.sh && {
-	# Sleep for a random time before we do this, at least 10 minutes
-	# some code from cron-apt, thanks!
-	# shellcheck disable=SC2039
-	if [ -z "$RANDOM" ] ; then
-		RANDOM=$(( $(dd if=/dev/urandom bs=4 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 4096 )) || RANDOM=1
-	fi
-	# shellcheck disable=SC2039
-	TIME=$((RANDOM % 1800 + 600)) || TIME=1
-	sleep $TIME || :
+	# Random sleep (limited to 300 seconds)
+	#
+	# This is required to break group sync behavior caused
+	# by the fixed-local-time running of cron.daily in many distros.
+
+	# shellcheck disable=SC3028
+	SLTIME="$RANDOM"
+	[ "$SLTIME" -ge 0 ] 2>/dev/null \
+		|| SLTIME=$(( $(dd if=/dev/urandom bs=4 count=1 2> /dev/null | cksum | cut -d ' ' -f 1) % 4096 )) || :
+	[ "$SLTIME" -ge 0 ] 2>/dev/null || SLTIME=$$
+	sleep $((SLTIME % 300 + 1)) || :
+
 	# update package lists
 	apt-get update -qq || true
 	# self-heal anything can be self-healed by apt
