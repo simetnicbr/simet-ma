@@ -29,13 +29,15 @@ set -o pipefail
 
 umask 0002
 
+SIMETMA_REGMA_LOCK="${SIMET_LOCK_DIR}/simet_register_ma.lock"
+
 RC=1
 OUTFILE=
 SIMETMA_UPDATE_LASTEXEC=
 update_lastrun() {
 	# note: remember to remove or zero-out this file when updating the package
 	[ -n "$SIMETMA_UPDATE_LASTEXEC" ] && {
-		date +%s -u > "$AGENT_LOCK" || :
+		date +%s -u > "$AGENT_TOKEN_LOCK" || :
 	}
 	:
 }
@@ -632,7 +634,7 @@ gettoken() {
 
 	[ -n "$SIMETMA_BOOTMODE" ] && {
 		# Read last *successful* execution time from lockfile
-		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
+		LASTEXEC=$( FOO=$(sed -n -e '1 { p;q }' "$AGENT_TOKEN_LOCK" | tr -dc 0-9) && printf "%d\n" "$FOO" ) 2>/dev/null || LASTEXEC=0
 		[ "$LASTEXEC" -ge 0 ] || LASTEXEC=0
 
 		# do nothing if time delta is less than 24h
@@ -691,5 +693,31 @@ gettoken() {
 	:
 }
 
+# Refuse to run if we are already running
+[ -r "$SIMETMA_REGMA_LOCK" ] || touch "$SIMETMA_REGMA_LOCK" || abend "cannot create $SIMETMA_REGMA_LOCK"
+exec 7<"$SIMETMA_REGMA_LOCK"
+flock -n -x 7 || {
+	printf "%s: already running\n" "$0" >&2
+	clean_exit
+}
+
+# Block some measurements by taking a shared lock on the agent lock
+# If this fails, we don't care
 [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || abend "cannot create $AGENT_LOCK"
-( flock -n -s 9 && gettoken ) </dev/null 9< "$AGENT_LOCK"
+exec 8<"$AGENT_LOCK"
+flock -n -s 8 || {
+	simet_log simet-ma daemon.info "waiting up to 30s for the currently running measurement to complete..."
+	flock_retry 30 -s 8 || simet_log simet-ma daemon.info "measurement still running, continuing anyway..."
+}
+
+# Acquire the agent token lock
+[ -r "$AGENT_TOKEN_LOCK" ] || touch "$AGENT_TOKEN_LOCK" || abend "cannot create $AGENT_TOKEN_LOCK"
+exec 9<"$AGENT_TOKEN_LOCK"
+flock -n -x 9 || {
+	simet_log simet-ma daemon.info "waiting up to 30s to acquire the agent registration lock"
+	flock_retry 30 -x 9 || abend "failed to acquire the agent registration lock, giving up"
+}
+
+# shield the FDs using a subprocess where they're closed
+( gettoken ) < /dev/null 7<&- 8<&- 9<&-
+:

@@ -74,6 +74,20 @@ simet2_agentinfo() {
 	:
 }
 
+# runs flock in a loop, useful because flock -w is not widely available
+# usage: flock_retry <timeout> flock args...
+flock_retry() {
+	FLOCK_TO="$1"
+	shift || :
+	while [ "$FLOCK_TO" -ge 0 ] 2>/dev/null ; do
+		flock -n "$@" && break
+		FLOCK_TO=$((FLOCK_TO - 1))
+		sleep 1
+	done
+	flock -n "$@" || return $?
+	:
+}
+
 
 #
 # JSON output helpers

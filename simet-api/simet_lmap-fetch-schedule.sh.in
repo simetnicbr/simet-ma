@@ -23,9 +23,10 @@
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 . @SIMETLIBDIR@/simet_lib_lmapd.sh || exit 3
 
+SIMETMA_LMAPSCHED_LOCK="${SIMET_LOCK_DIR}/simet_lmap_schedule.lock"
+
 OUTFILE=
 RC=1
-
 abend() {
 	simet_log simet-lmapd daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
@@ -518,5 +519,22 @@ getschedule() {
 	done
 }
 
+# Refuse to run if we are already running
+[ -r "$SIMETMA_LMAPSCHED_LOCK" ] || touch "$SIMETMA_LMAPSCHED_LOCK" || abend "cannot create $SIMETMA_LMAPSCHED_LOCK"
+exec 8<"$SIMETMA_LMAPSCHED_LOCK"
+flock -n -x 8 || {
+       printf "%s: already running\n" "$0" >&2
+       clean_exit
+}
+
+# Acquire the agent token lock
 [ -r "$AGENT_TOKEN_LOCK" ] || touch "$AGENT_TOKEN_LOCK" || abend "cannot create $AGENT_TOKEN_LOCK"
-( flock -n -x 9 && getschedule ) </dev/null 9< "$AGENT_TOKEN_LOCK"
+exec 9<"$AGENT_TOKEN_LOCK"
+flock -n -x 9 || {
+	simet_log simet-ma daemon.info "waiting up to 30s to acquire the agent registration lock"
+	flock_retry 30 -x 9 || abend "failed to acquire the agent registration lock, giving up"
+}
+
+# shield the FDs using a subprocess where they're closed
+( getschedule ) < /dev/null 8<&- 9<&-
+:
