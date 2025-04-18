@@ -27,18 +27,28 @@ set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 
+TMPFILE=
 OUTFILE=
 RC=1
-abend() {
-  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-  simet_log simet-ma daemon.err "geolocation: error: $*"
+error_exit() {
+  [ -n "$OUTFILE" ] && rm -f "$OUTFILE"
+  [ -n "$TMPFILE" ] && rm -f "$TMPFILE"
   exit "$RC"
 }
+clean_exit() {
+  RC=0 error_exit
+}
+abend() {
+  simet_log simet-ma daemon.err "geolocation: error: $*" || :
+  error_exit
+}
 soft_abend() {
-  [ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-  [ -n "$FAIL_SILENTLY" ] && exit 0
-  simet_log simet-ma daemon.err "geolocation: error: $*"
-  exit "$RC"
+  [ -n "$FAIL_SILENTLY" ] && clean_exit
+  abend "$@"
+}
+run_trap() {
+	# 128 + SIGTERM (15)
+	RC=143 abend "$0: received stop/interrupt signal"
 }
 
 # Handle command line
@@ -73,7 +83,7 @@ done
 API_SIMET_GEO=${API_SIMET_GEO:-https://api.simet.nic.br/geolocation}
 
 [ -n "$GEOLOC_DISABLE" ] && {
-	[ -n "$FAIL_SILENTLY" ] && exit 0
+	[ -n "$FAIL_SILENTLY" ] && clean_exit
 	[ -n "$CACHE_ONLY" ] \
 		|| simet_log simet-ma daemon.info "geolocation: disabled by configuration"
 	exit 26
@@ -93,14 +103,18 @@ if [ -z "$OLDAT" ] || [ -z "$OLDAID" ] ; then
 fi
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT --max-filesize 10000"
+CURLOPT="$CURL_APIBASE $CURL_APIOPT_FAST --max-filesize 10000"
 
 simet_get_geoloc_provider() {
-  LSK=$(curl $CURLOPT -A "$USERAGENT" \
-       -X GET -f -H "Authorization: Bearer $OLDAT" \
-       "${API_SIMET_GEO}/v1/geolocation_providers?agent_id=$OLDAID;type=googlelocationservice_v1") \
+  [ -w "$OUTFILE" ] || RC=3 abend "output tmpfile missing"
+  curl $CURLOPT -A "$USERAGENT" \
+	-o "$OUTFILE" \
+	-X GET -f -H "Authorization: Bearer $OLDAT" \
+	"${API_SIMET_GEO}/v1/geolocation_providers?agent_id=$OLDAID;type=googlelocationservice_v1" \
      || RC=22 abend "could not fetch geolocation credentials"
-  [ -z "$LSK" ] && exit 0
+  [ -s "$OUTFILE" ] || clean_exit
+  LSK=$(cat "$OUTFILE") || abend "failed to read credentials from tmpfile"
+  [ -z "$LSK" ] && clean_exit
   LS_TYPE=$($JSONFILTER -s "$LSK" -e '@.type') || RC=23 abend "could not process geolocation credentials"
   [ "$LS_TYPE" != "googlelocationservice_v1" ] && RC=26 soft_abend "permission to geolocate denied by server"
   LS_URI=$($JSONFILTER -s "$LSK" -e '@.uri') || RC=23 abend "could not process location services URI"
@@ -201,7 +215,7 @@ persist_geoloc_RAM() {
   if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] ; then
     RC=3 abend "internal error: persist_geoloc_RAM() parameter went MIA!"
   fi
-  rm -f "${GEOLOC_CACHE}" 2>/dev/null && ( echo "$1" ; echo "$2" "$3" "$4" ) > "${GEOLOC_CACHE}"
+  rm -f "${GEOLOC_CACHE}" && ( echo "$1" ; echo "$2" "$3" "$4" ) > "${GEOLOC_CACHE}"
   :
 }
 
@@ -228,16 +242,16 @@ _check_cache_age() {
 
 _read_cache() {
   [ -r "$GEOLOC_CACHE" ] || return 1;
-  GEO_UTIME=$(sed -n -e '1 { p ; q }' "$GEOLOC_CACHE") || return 1
+  GEO_UTIME=$(sed -n -e '1 { p ; q ; }' "$GEOLOC_CACHE") || return 1
   [ -z "$GEO_UTIME" ] && return 1
   # Shell could be limited to 32bits, not y2038-safe
   time_delta=$(( $(date +%s -u) - GEO_UTIME )) || return 1
   _check_cache_age "$time_delta" || return 1
-  GEO_LAT=$(sed -n -e '2 {s/ .*// ; p ; q}' "${GEOLOC_CACHE}")
+  GEO_LAT=$(sed -n -e '2 {s/ .*// ; p ; q ; }' "${GEOLOC_CACHE}")
   [ -z "$GEO_LAT" ] && return 1
-  GEO_LNG=$(sed -n -e '2 {s/^ *[^ ]\+ *// ; s/ *[^ ]\+ *$// ; p ; q}' "${GEOLOC_CACHE}")
+  GEO_LNG=$(sed -n -e '2 {s/^ *[^ ]\+ *// ; s/ *[^ ]\+ *$// ; p ; q ; }' "${GEOLOC_CACHE}")
   [ -z "$GEO_LNG" ] && return 1
-  GEO_ACC=$(sed -n -e '2 {s/^ *[^ ]\+ \+[^ ]\+ *// ; p ; q}' "${GEOLOC_CACHE}")
+  GEO_ACC=$(sed -n -e '2 {s/^ *[^ ]\+ \+[^ ]\+ *// ; p ; q ; }' "${GEOLOC_CACHE}")
   [ -z "$GEO_ACC" ] && return 1
   :
 }
@@ -296,9 +310,12 @@ EOF2GOPB
 # Returns:
 # <stdout> : API result
 gmls_api_call() {
-  curl $CURLOPT -f -d @- -H "Content-type: application/json" -i "$LS_URI" ||
-    RC=24 soft_abend "could not contact location services API"
-  :
+  [ -r "$1" ] || RC=3 abend "missing API request body tmpfile"
+  [ -w "$OUTFILE" ] || RC=3 abend "missing API result output tmpfile"
+  curl $CURLOPT -f -o "$OUTFILE" --data-binary "@$1" -X POST \
+	 -H "Content-type: application/json" -i "$LS_URI" \
+    || RC=24 soft_abend "could not contact location services API"
+  cat "$OUTFILE" || RC=3 abend "failed to read tmpfile with the API result output"
 }
 
 ##
@@ -314,7 +331,8 @@ _geolocate() {
   BSSIDS=$(iwphy_scan | sort -u | tr -s ' \t\n' ' ') || return 1
   # do not "$BSSIDS".
   gmls_prelaunch $BSSIDS || return 1
-  gmls_generate_post_body $BSSIDS | gmls_api_call | \
+  gmls_generate_post_body $BSSIDS > "$TMPFILE" || abend "failed to store request body to tmpfile"
+  gmls_api_call "$TMPFILE" | \
     awk -- \
       'BEGIN { FS=":|," ; accuracy=0 ; code=200 ; n=0 }
       /"code"/     { code=$2 }
@@ -344,9 +362,14 @@ geolocate() {
 
 simet_read_geo_cache || {
   [ -n "$CACHE_ONLY" ] && RC=1 soft_abend "No valid geolocation cached data found"
-  geolocate || exit 1
+
+  OUTFILE=$(mktemp -q -t simet-geolocation.$$.XXXXXXXXXX) || RC=3 abend "failed to create tmpfile"
+  TMPFILE=$(mktemp -q -t simet-geolocation.$$.XXXXXXXXXX) || RC=3 abend "failed to create tmpfile"
+  # don't leave behind tmpfiles
+  trap 'run_trap' INT TERM QUIT
+
+  geolocate || RC=1 error_exit
   persist_geoloc_RAM "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
 }
 simet_output_geoloc_metric "$GEO_UTIME" "$GEO_LAT" "$GEO_LNG" "$GEO_ACC"
-
-exit 0
+clean_exit

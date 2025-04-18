@@ -126,6 +126,10 @@ case "$1" in
 			|| true
 	} ) 2>/dev/null >/dev/null </dev/null || true
 
+	# Remove stale APIv1 registration data
+	rm -f /opt/simet/etc/simet/agent-id
+	rm -f /opt/simet/etc/simet/agent.jwt
+
 	#FIXME:
 	# replace the [ -e ] test below if changes the contents of the
 	# generated crontab are absolutely required.

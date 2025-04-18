@@ -1,4 +1,6 @@
-CURL_APIOPT="--max-time 30 --connect-timeout 15 --retry 8 --location --post301 --post302 --proto =https -s"
+CURL_APIBASE="--connect-timeout 15 --location --post301 --post302 --proto =https -s"
+CURL_APIOPT="--max-time 75 --retry 8 --retry-max-time 300"
+CURL_APIOPT_FAST="--max-time 30 --retry 3 --retry-max-time 75"
 
 API_SIMET_AGENT_REG=https://api.simet.nic.br/agent-registry
 

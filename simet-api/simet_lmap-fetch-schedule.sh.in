@@ -84,8 +84,8 @@ LMAP_INSTANCES=$(lmapd_get_instance_list)
 [ -z "$LMAP_INSTANCES" ] && RC=3 abend "internal error: main lmap instance missing"
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT --max-filesize 1000000"
-CURLOPT2=
+CURLOPT="$CURL_APIOPT"
+CURLOPT_XTRA="--max-filesize 1000000"
 
 HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
 	|| RC=3 abend "neither md5sum nor sha256sum found!"
@@ -98,7 +98,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--boot)
 		shift
-		CURLOPT2="--retry 3 --retry-max-time 30"
+		CURLOPT="$CURL_APIOPT_FAST"
 		LMAP_RECONFIG=
 		;;
 	-l1)
@@ -123,6 +123,8 @@ while [ $# -gt 0 ]; do
 	esac
 	shift
 done
+
+CURLOPT="$CURL_APIBASE $CURLOPT $CURLOPT_XTRA"
 
 [ -n "$LMAP_REQUEST_INSTANCES" ] && LMAP_INSTANCES="$LMAP_REQUEST_INSTANCES"
 
@@ -250,11 +252,12 @@ lmap_channel_url() {
 
 # overridable
 simet_api_lmapputstate() {
+	cat >"$OUTFILE" || [ -s "$OUTFILE" ] || return 1
 	CHANNEL_URL=$(call lmap_channel_url "$1" "/v1/agents/$OLDAID/reported-state") || return 1
         [ -n "$CHANNEL_URL" ] || return 1
 	# shellcheck disable=SC2086
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-T - -f -o "$OUTFILE" \
+	curl $CURLOPT -A "$USERAGENT" \
+		-T "$OUTFILE" -f -o /dev/null \
 		-H "Authorization: Bearer $OLDAT" "$CHANNEL_URL"
 }
 
@@ -272,7 +275,7 @@ simet_api_lmapgetsched() {
 	CHANNEL_URL=$(call lmap_channel_url "$1" "/v1/agents/$OLDAID/required-config") || return 1
         [ -n "$CHANNEL_URL" ] || return 1
 	# shellcheck disable=SC2086
-	APIRES=$( curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
 		-o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${CHANNEL_URL}" ) || return 1
@@ -291,7 +294,7 @@ simet_api_lmapgetsched_v2() {
 	# GET would work as well, and could be used when there's no state to send
 	# shellcheck disable=SC2086
 	APIRES=$( call lmapd_lmapd_state "$1" | \
-		curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+		curl $CURLOPT -A "$USERAGENT" \
 		-T - -o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${CHANNEL_URL}" ) || return 1

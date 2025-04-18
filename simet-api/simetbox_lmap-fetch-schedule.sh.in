@@ -44,8 +44,8 @@ LMAP_SCHEDULE_FILE=$(lmapd_get_sched_filename main) \
 LMAP_RECONFIG=${LMAP_RECONFIG:-lmapd_lmapctl_reload main}
 
 USERAGENT=$(get_http_useragent)
-CURLOPT="$CURL_APIOPT --max-filesize 1000000"
-CURLOPT2=
+CURLOPT="$CURL_APIOPT"
+CURLOPT_XTRA="--max-filesize 1000000"
 
 HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
 	|| RC=3 abend "neither md5sum nor sha256sum found!"
@@ -53,10 +53,12 @@ HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
 case "$1" in
 	--boot)
 		shift
-		CURLOPT2="--retry 3 --retry-max-time 30"
+		CURLOPT="$CURL_APIOPT_FAST"
 		LMAP_RECONFIG=
 	;;
 esac
+
+CURLOPT="$CURL_APIBASE $CURLOPT $CURLOPT_XTRA"
 
 # $1: max; $2 base_mult; $3 period; $4 offset
 __gen_seq() {
@@ -166,8 +168,9 @@ simet_gen_local_schedule() {
 }
 
 simet_api_lmapputstate() {
-	curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
-		-T - -f -o "$OUTFILE" \
+	cat >"$OUTFILE" || [ -s "$OUTFILE" ] || return 1
+	curl $CURLOPT -A "$USERAGENT" \
+		-T "$OUTFILE" -f -o /dev/null \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/reported-state"
 }
@@ -181,7 +184,7 @@ simet_lmap_sendstate() {
 # APIRES = 204 -> revert to default schedule
 # APIRES = 304 -> keep current schedule (may happen even without e-tags)
 simet_api_lmapgetsched() {
-	APIRES=$( curl $CURLOPT $CURLOPT2 -A "$USERAGENT" \
+	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
 		-X GET -o "$OUTFILE" -w "%{http_code}" \
 		-H "Authorization: Bearer $OLDAT" \
 		"${LMAP_CHANNEL_URL}/v1/agents/$OLDAID/required-config" ) || return 1
