@@ -1,3 +1,53 @@
+simet-ma (0.18.12) unstable; urgency=medium
+
+  * simet-ma version 0.18.12
+  * FIRMWARE VENDOR NOTES: added docs/firmware_vendor_release_notes.txt
+    ALL FIRMWARE VENDORS MUST READ THIS FILE, IT HAS IMPORTANT NOTES FOR
+    INTEGRATION DETAILS THAT MUST BE OBSERVED FOR THE NEW VERSION OF SIMET-MA.
+  * ratelimit fixes and device-group-sync avoidance:
+    * simet-api, deb: move simet_register_ma lastrun data to AGENT_TOKEN_LOCK
+    * simet-api: simet_register-ma.sh: add --daily cli option:
+      Add a --daily CLI option (which is also implied by the already existing
+      --boot CLI option) that rate-limits simet_register_ma to run once every
+      24H.  Platforms must use either --boot or --daily when calling from
+      periodic jobs or system hooks that could trigger group-sync behavior
+      across devices.
+    * deb: simet-ma.cron.daily: switch to simet_register_ma --daily:
+      The (new) --daily option of simet_register_ma allows the MA to wait
+      longer for a successful reply from the SIMET2 servers, while still
+      applying the once-every-24-hours rate-limit.
+    * simet-api: simet_register_ma: harden timestamp handling
+    * simet-api: simet_register_ma: ratelimit successful runs
+    * deb: random delay for cron.daily, cron.weekly (5 minutes)
+  * simet-api/simet-runner locking fixes:
+    * simet-api: update lock documentation and add flock_retry() to simet_lib
+    * simet-api: fix simet_register_ma locking: lock itself to not run
+      concurrently.  Lock AGENT_TOKEN_LOCK (30s wait, then fail) and also
+      the AGENT_LOCK (30s wait, then proceed anyway).
+    * simet-api: fix simet_lmap-fetch-schedule locking: lock itself to not
+      run concurrently.  Lock AGENT_TOKEN_LOCK (30s wait, then fail).
+    * simet-runner: refactor locking, and wait up to 15s for the AGENT_LOCK
+      before failing (previously, it would wait only for 5s).
+  * deb: do not run simet_lmap-fetch-schedule as root in cron.daily.
+  * simet-api: do not use stdin to send request body data to curl --retry
+  * simet-api: simet_report-queue-flush: upload compressed reports as-is
+  * simet-api: simet_register_ma: rework API response handling:
+    Refactor the response status handling and error handling when doing SIMET2
+    API calls, improve error messages, and improve the rate-limiting when an
+    API call fails.
+  * simet-api: update timeouts and adjust retries:
+    Be consistent when handling timeouts and retries, and adjust them.  Add
+    CURL_APIBASE and CURL_APIOPT_FAST simet-ma.conf parameters with the cURL
+    base settings (to be used along with either CURL_APIOPT or the new
+    CURL_APIOPT_FAST).  Use CURL_APIOPT_FAST for "faster timeout", and use it
+    on --boot / --fast modes of the scripts.
+  * simet_runner: switch to global API curl options.
+  * simet-runner: exit earlier if discovery fails
+  * simet-runner: avoid use of stdout with curl --retry.
+  * deb, simet-api: simet_register_ma: remove API v1 migration.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 18 Apr 2025 17:27:29 -0300
+
 simet-ma (0.18.11.4) unstable; urgency=medium
 
   * simet-ma version 0.18.11.4
