@@ -110,7 +110,7 @@ __get_lang() {
 # $3 - language
 simet_generate_view_url() {
 	[ $# -lt 2 ] && return 1
-	[ -n "$3" ] && sl="&lang=$3"
+	[ -n "$3" ] && sl=";lang=$3"
 	printf 'https://dashboard.simet.nic.br/simet2/results/?matype=@URLMATYPE@&agentid=%s&authtoken=%s%s' "$1" "$2" "$sl"
 	:
 }
