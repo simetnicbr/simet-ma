@@ -1,3 +1,10 @@
+simet-ma (0.18.12.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.12.1
+  * simet-api: simet_view_results.sh: revert to ";" as URL query parameter separator
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 22 Apr 2025 15:30:12 -0300
+
 simet-ma (0.18.12) unstable; urgency=medium
 
   * simet-ma version 0.18.12
