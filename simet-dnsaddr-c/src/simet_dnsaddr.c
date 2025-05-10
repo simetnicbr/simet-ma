@@ -231,6 +231,9 @@ static int sdnsa_reflect_query(const char * const domain,
 
     retries = 3;
     do {
+        free(id);
+        id = NULL;
+
         if (sdnsa_get_randomstr(&id))
             goto err_exit;
 
@@ -288,6 +291,7 @@ static int sdnsa_reflect_query(const char * const domain,
 err_exit:
     free_const(node4);
     free_const(node6);
+    free(id);
 
     return result;
 }
