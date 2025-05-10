@@ -387,7 +387,7 @@ long sspoof_msmt_txpkt(struct sspoof_server * const sctx,
                                           &spoofaddr, &daddr, &udp_hdr, &payload);
         if (pkt_size <= 0) {
             rc = (int)pkt_size;
-            print_err("unexpected failure: could not create RAW packet: %s", strerror(rc));
+            print_err("unexpected failure: could not create RAW packet: %s", strerror(-rc));
             goto close_exit;
         }
 
