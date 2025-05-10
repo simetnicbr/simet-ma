@@ -238,7 +238,7 @@ static ssize_t fill_udp46_hdr(uint8_t * const datagram, const uint16_t buffer_le
 
     /* partial checksum, RFC1624 */
     uint16_t ph_csum = nbo_inet_csum(&udp_ph, udp_ph_len, 0);
-    udp_hdr->check = nbo_inet_csum(udp_hdr, sizeof(udp_hdr), ph_csum);
+    udp_hdr->check = nbo_inet_csum(udp_hdr, sizeof(struct udphdr), ph_csum);
 
     /* RFC 768: all zeros means not-calculated cksum, so a real csum of
      * all-zeroes should be transmitted as all-ones
