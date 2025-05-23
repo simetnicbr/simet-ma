@@ -492,6 +492,8 @@ getschedule() {
 		#shellcheck disable=SC2015
 		call simet_lmap_download_schedule "$lmap_instance" && activate_schedule "$lmap_instance" || {
 			log_kept_same=1
+			OLDSCHED_FILE=$(lmapd_get_sched_filename "$lmap_instance") \
+				|| RC=3 abend "failed to retrieve schedule filename for lmap instance $lmap_instance"
 			grep -q -s -F '"ma-local_locally-generated-schedule"' "$OLDSCHED_FILE" && {
 				# refresh locally generated schedules
 				if call simet_gen_local_schedule "$lmap_instance" && activate_schedule "$lmap_instance" ; then
