@@ -1,3 +1,13 @@
+simet-ma (0.18.12.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.12.2
+  * sspoofer: fix UDP checksum generation on non-ILP64
+  * simet-api: actually refresh locally-generated schedules
+  * deb: require simet-lmapd 0.15.6 or newer
+  * minor fixes to sspoofer, simet-dnsaddr, tcpbwc, twampc
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 23 May 2025 08:11:38 -0300
+
 simet-ma (0.18.12.1) unstable; urgency=medium
 
   * simet-ma version 0.18.12.1
