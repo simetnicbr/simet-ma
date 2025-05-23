@@ -2230,9 +2230,11 @@ static int fread_agent_str(const char *path, const char ** const p)
 
     /* clamp maximum amount of RAM it could cost us to 256KiB */
     if (fstat(fileno(fp), &st)) {
+        e = errno; fclose(fp); errno = e;
         return -1;
     }
     if (st.st_size > 262144) {
+        fclose(fp);
         errno = EINVAL;
         return -1;
     }

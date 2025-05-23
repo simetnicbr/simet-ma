@@ -429,8 +429,10 @@ int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param)
     unsigned int packet_late_count = 0;
 
     assert(param);
+    if (!report || !report->result)
+        return EINVAL;
 
-    unsigned int np = (report && report->result) ? report->result->packets_received : 0;
+    unsigned int np = report->result->packets_received;
     /* skip guard packet, it is never reported or used */
     if (np == param->packets_max && np > 0)
         np--;

@@ -210,10 +210,6 @@ int main(int argc, char **argv) {
 	    }
 	    break;
 	case 'O':
-	    if (!optarg || !*optarg) {
-		print_err("missing output file name for -O");
-		exit(SEXIT_FAILURE);
-	    }
 	    streamdata_file = fopen(optarg, "w");
 	    if (!streamdata_file) {
 		print_err("could not create file %s: %s", optarg, strerror(errno));
@@ -253,7 +249,7 @@ int main(int argc, char **argv) {
 	    break;
 	case 'X':
 	    /* param=value pairs separated by C locale isspace() or ; */
-	    if (optarg) {
+	    {
 		char *strtokp = NULL;
 		char *subopt = strtok_r(optarg, " \t\v\f\n\r;", &strtokp);
 		while (subopt && *subopt) {
