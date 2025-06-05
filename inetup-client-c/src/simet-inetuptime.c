@@ -91,7 +91,7 @@ static int    client_boot_sync   = 0;
 
 static const int simet_uptime2_request_remotekeepalive = 1;
 
-static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
+static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT, SIGINT */
 static volatile int got_reload_signal = 0;  /* SIGHUP */
 
 static int got_disconnect_msg = 0;          /* MSG_DISCONNECT */
@@ -401,13 +401,21 @@ static void init_signals(void)
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = &handle_exitsig;
 
-    if (sigaction(SIGQUIT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL))
-        print_warn("failed to set signal handlers, precision during restarts will suffer");
+    if (sigaction(SIGQUIT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL)) {
+        print_warn("failed to set signal handlers for SIGQUIT, SIGTERM: precision during restarts will suffer");
+    }
+
+    sa.sa_flags = SA_RESETHAND;
+    if (sigaction(SIGINT, &sa, NULL)) {
+        print_warn("failed to set signal handler for SIGINT: precision during restarts will suffer");
+    }
 
     sa.sa_handler = &handle_reloadsig;
     sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGHUP, &sa, NULL))
-        print_warn("failed to set SIGHUP handler");
+    if (sigaction(SIGHUP, &sa, NULL)) {
+        print_err("failed to set SIGHUP handler");
+        exit(SEXIT_FAILURE);
+    }
 }
 
 /*
