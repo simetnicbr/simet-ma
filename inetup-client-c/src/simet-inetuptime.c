@@ -2535,8 +2535,7 @@ int main(int argc, char **argv) {
                 simet_uptime2_disconnect(s);
 
 #if 0
-            print_msg(MSG_DEBUG, "%s(%u): main loop, currently at state %u",
-                    str_ipv46(s->ai_family), s->connection_id, s->state);
+            protocol_trace(s, "main loop, currently at state %u", s->state);
 #endif
 
             switch (s->state) {
