@@ -20,6 +20,7 @@
 #define SIMET_INETUPTIME_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <time.h>
 #include <sys/socket.h>
 
@@ -57,6 +58,7 @@ enum simet_inetup_protocol_state {
     SIMET_INETUP_P_C_MAINLOOP,		/* keepalive and events loop */
     SIMET_INETUP_P_C_DISCONNECT,	/* send shutdown notification */
     SIMET_INETUP_P_C_DISCONNECT_WAIT,	/* wait for queue drain, force connection shutdown */
+    SIMET_INETUP_P_C_WAIT_DISCONNECTED, /* wait for a signal with connections shutdown */
     SIMET_INETUP_P_C_SHUTDOWN,		/* do nothing, terminal state */
 
     SIMET_INETUP_P_C_MAX
@@ -82,6 +84,7 @@ struct simet_inetup_server {
     time_t keepalive_clock;
     time_t remote_keepalive_clock;
     time_t disconnect_clock;
+    bool   is_shutdown;                  /* DISCONNECT will shutdown */
     unsigned int backoff_level;
     time_t backoff_clock;
     time_t backoff_reset_clock;
