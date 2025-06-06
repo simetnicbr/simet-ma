@@ -31,8 +31,8 @@ _authentication_agent_id(){
     exit 1
   fi
 
-  if [ ! -e "$AGENT_ID_FILE" ]; then
-    log_error "Exit. 'AGENT_ID_FILE' $AGENT_ID_FILE does not exist."
+  if [ ! -s "$AGENT_ID_FILE" ]; then
+    log_error "Exit. 'AGENT_ID_FILE' $AGENT_ID_FILE cannot be read or is empty."
     exit 1
   fi
   cat "$AGENT_ID_FILE"
@@ -44,8 +44,8 @@ _authentication_agent_token(){
     exit 1
   fi
 
-  if [ ! -e "$AGENT_TOKEN_FILE" ]; then
-    log_error "Exit. 'AGENT_TOKEN_FILE' $AGENT_TOKEN_FILE does not exist."
+  if [ ! -s "$AGENT_TOKEN_FILE" ]; then
+    log_error "Exit. 'AGENT_TOKEN_FILE' $AGENT_TOKEN_FILE cannot be read or is empty."
     exit 1
   fi
   cat "$AGENT_TOKEN_FILE"
