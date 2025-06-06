@@ -45,6 +45,7 @@ void SHA256_Init(SHA256_CTX *ctx)
 	ctx->state[5] = 0x9b05688cul;
 	ctx->state[6] = 0x1f83d9abul;
 	ctx->state[7] = 0x5be0cd19ul;
+	memset(ctx->buf, 0, sizeof(ctx->buf));
 }
 
 static inline uint32_t ror(uint32_t x, unsigned int n)
