@@ -2223,7 +2223,8 @@ static void print_usage(const char * const p, int mode) __attribute__((__noretur
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] [-i <netdev> ] "
-        "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
+        "[-m <string>] [-b <boot id>] [-M <string>] "
+        "-d <agent-id-path> -j <agent-token-path> "
         "<server name>[:<server port>] ...\n", p);
 
     if (mode) {
@@ -2242,7 +2243,7 @@ static void print_usage(const char * const p, int mode)
             "\n"
             "server name: DNS name of server(s)\n"
             "server port: TCP port on server\n"
-            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server");
+            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server\n");
     }
 
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -2505,6 +2506,15 @@ int main(int argc, char **argv) {
 
     if (!server_clusters) {
         print_err("at least one server is required");
+        print_usage(progname, 0);
+    }
+
+    if (!agent_id_file || !agent_id_file[0]) {
+        print_err("an agent-id file is required");
+        print_usage(progname, 0);
+    }
+    if (!agent_token_file || !agent_token_file[0]) {
+        print_err("an agent-token file is required");
         print_usage(progname, 0);
     }
 
