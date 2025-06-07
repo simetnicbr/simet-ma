@@ -80,6 +80,23 @@ static int fatal_enomem(void)
     exit(SEXIT_OUTOFRESOURCE);
 }
 
+static void empty_dns_addrinfo_result_list(struct dns_addrinfo_head *list)
+{
+    if (list) {
+        struct dns_addrinfo_result *p = list->head;
+
+        list->head = NULL;
+        list->tail = NULL;
+
+        while (p) {
+            struct dns_addrinfo_result * const n = p->next;
+            p->next = NULL;
+            free(p);
+            p = n;
+        }
+    }
+}
+
 static int sdnsa_get_randomstr(char ** const s)
 {
     if (!s)
@@ -236,6 +253,8 @@ static int sdnsa_reflect_query(const char * const domain,
 
         if (sdnsa_get_randomstr(&id))
             goto err_exit;
+
+        empty_dns_addrinfo_result_list(dnsres_nocache);
 
         free_const(node4); node4 = sdnsa_get_reflect_domain(0, id, domain);
         rc4 = sdnsa_getaddrinfo(AF_INET, node4, dnsres_nocache);
