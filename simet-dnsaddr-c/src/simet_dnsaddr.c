@@ -218,6 +218,7 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
 
 /*
  * Query:  REFLECT
+ *  0. Prime parent zones
  *  1. not-in-cache query
  *  1.1. Select random ID to bypass cache
  *  1.2. query IPv4 and IPv6
@@ -235,6 +236,7 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
  */
 
 static int sdnsa_reflect_query(const char * const domain,
+                               struct dns_addrinfo_head * const dnsres_priming,
                                struct dns_addrinfo_head * const dnsres_nocache,
                                struct dns_addrinfo_head * const dnsres_cached)
 {
@@ -245,6 +247,27 @@ static int sdnsa_reflect_query(const char * const domain,
     int retries;
 
     int result = SEXIT_INTERNALERR;
+
+    /* Attempt to prime parent zone record.  Since there could be
+     * several resolvers, do it several times.
+     *
+     * Store the results because we might see interesting resolver
+     * IP addresses when cold, and somehow train the local resolver
+     * with the priming to prefer one of them, and thus not see them
+     * again in the cache/nocache measurements.
+     *
+     * Priming ensures far better reproducibility between runs. */
+    const char * const primenode = "parent_priming";
+    node4 = sdnsa_get_reflect_domain(0, primenode, domain);
+    node6 = sdnsa_get_reflect_domain(1, primenode, domain);
+    if (!node4 || !node6)
+        goto err_exit;
+    retries = 5;
+    do {
+        sdnsa_getaddrinfo(AF_INET,  node4, dnsres_priming);
+        sdnsa_getaddrinfo(AF_INET6, node6, dnsres_priming);
+    } while (--retries > 0);
+    id = NULL;
 
     retries = 3;
     do {
@@ -448,9 +471,10 @@ int main(int argc, char **argv) {
 
     struct dns_addrinfo_head dnsres_nocache = {};
     struct dns_addrinfo_head dnsres_cached = {};
-    int rc = sdnsa_reflect_query(simet_dns_domain, &dnsres_nocache, &dnsres_cached);
+    struct dns_addrinfo_head dnsres_priming = {};
+    int rc = sdnsa_reflect_query(simet_dns_domain, &dnsres_priming, &dnsres_nocache, &dnsres_cached);
     if (!rc) {
-        rc = sdnsa_render_report(&dnsres_nocache, &dnsres_cached, report_mode);
+        rc = sdnsa_render_report(&dnsres_priming, &dnsres_nocache, &dnsres_cached, report_mode);
         if (rc) {
             if (rc < 0) {
                 print_err("report: failed to render report: %s", strerror(-rc));
@@ -460,6 +484,7 @@ int main(int argc, char **argv) {
     }
 
 #ifdef VALGRIND_BUILD
+    empty_dns_addrinfo_result_list(&dnsres_priming);
     empty_dns_addrinfo_result_list(&dnsres_nocache);
     empty_dns_addrinfo_result_list(&dnsres_cached);
 #endif

@@ -348,7 +348,8 @@ err_exit:
     return rc;
 }
 
-int sdnsa_render_report(struct dns_addrinfo_head * const data_nocache,
+int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
+                        struct dns_addrinfo_head * const data_nocache,
                         struct dns_addrinfo_head * const data_cached,
                         enum report_mode report_mode)
 {
@@ -377,6 +378,11 @@ int sdnsa_render_report(struct dns_addrinfo_head * const data_nocache,
     json_object_object_add(jtbl, "row", jrows); /* must not json_object_put(jrows) on error */
 
     /* Fill in rows with REFLECT measurement data */
+    if (data_priming && data_priming->head) { /* optional */
+        rc = sdnsa_render_reflect(jrows, "reflect-priming", data_priming);
+        if (rc)
+            goto err_exit;
+    }
     if (data_nocache) {
         rc = sdnsa_render_reflect(jrows, "reflect-nocache", data_nocache);
         if (rc)
