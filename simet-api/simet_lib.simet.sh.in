@@ -1,4 +1,6 @@
 #!/bin/sh
+# shellcheck disable=SC3043
+#
 # SIMET-MA os-specific compatibility layer (shell script) - LSB distro
 # Copyright (c) 2018,2019 NIC.br <medicoes@simet.nic.br>
 #
@@ -60,9 +62,12 @@ get_http_useragent()
 # sets environment variables that match the environment
 # shellcheck disable=SC2034
 simet2_agentinfo() {
+	local _s2_agi_uname
+	_s2_agi_uname="$(uname -m)" || _s2_agi_uname="unknown"
+
 	SIMET2_AGENT_ENVNAME=$(lsb_release -s -i) || SIMET2_AGENT_ENVNAME="(generic)"
 	SIMET2_AGENT_ENVVERSION=$(lsb_release -s -d) || SIMET2_AGENT_ENVVERSION="unknown"
-	SIMET2_AGENT_ENVVERSION="$SIMET2_AGENT_ENVVERSION; $(uname -m)" || AGENTENV="$AGENTENV; unknown"
+	SIMET2_AGENT_ENVVERSION="$SIMET2_AGENT_ENVVERSION; $_s2_agi_uname"
 	# MA HOSTNAME from config file, or from system if set to 'auto'
 	[ "$SIMET2_MAHOSTNAME" = "auto" ] && {
 		SIMET2_MAHOSTNAME=$(sed -n 'p;q' /etc/hostname || hostname --fqdn) 2>/dev/null || SIMET2_MAHOSTNAME=
