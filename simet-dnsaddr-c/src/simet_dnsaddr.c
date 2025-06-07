@@ -216,18 +216,16 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
 
 /*
  * Query:  REFLECT
- *  1. Select random ID to bypass cache
- *  2. timestamp
- *  3.   Query up to 3 times.
- *  4. timestamp, this is the not-in-cache delay
- *  5. if failed, exit with error.
- *  6. report for the no-cache delay.
+ *  1. not-in-cache query
+ *  1.1. Select random ID to bypass cache
+ *  1.2. query IPv4 and IPv6
+ *  1.3. discard results if either IPv4 or IPv6 failed, and retry
  *
- *  1. timestamp, query, timestamp
- *  2. repeat 5 times.  Record each delay.
- *  3. report for the in-cache delay.
+ *  2. in-cache query
+ *  2.1. query IPv4 and IPv6
+ *  2.2. repeat 2.1 up to 10 times or up to 3 failures.  Record each delay.
  *
- *  6. Report the set of IP addresses returned from all queries (they could be different).
+ *  3. Report the set of IP addresses returned from all queries (they could be different).
  *
  *  Note: getaddrinfo needs to be family specific for timing, otherwise
  *  it calls into the stub or recursive resolver at least twice, for A and AAAA,
