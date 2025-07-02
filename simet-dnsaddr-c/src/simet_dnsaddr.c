@@ -155,8 +155,8 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
     struct timespec ts1, ts2;
     int eai;
 
-    if (!node || !node[9])
-        return SEXIT_FAILURE;
+    if (!node || !node[0])
+        return SEXIT_INTERNALERR;
 
     int fast_retries = 5;
     clock_gettime(CLOCK_MONOTONIC, &ts1);
@@ -242,22 +242,28 @@ static int sdnsa_reflect_query(const char * const domain,
     int rc4, rc6;
     int retries;
 
-    int result = SEXIT_FAILURE;
+    int result = SEXIT_INTERNALERR;
 
     retries = 3;
     do {
         free(id);
         id = NULL;
 
-        if (sdnsa_get_randomstr(&id))
+        if (sdnsa_get_randomstr(&id)) {
+            result = SEXIT_FAILURE;
             goto err_exit;
+        }
 
         empty_dns_addrinfo_result_list(dnsres_nocache);
 
         free_const(node4); node4 = sdnsa_get_reflect_domain(0, id, domain);
+        if (!node4)
+            goto err_exit;
         rc4 = sdnsa_getaddrinfo(AF_INET, node4, dnsres_nocache);
 
         free_const(node6); node6 = sdnsa_get_reflect_domain(1, id, domain);
+        if (!node6)
+            goto err_exit;
         rc6 = sdnsa_getaddrinfo(AF_INET6, node6, dnsres_nocache);
     } while (--retries > 0 && rc4 && rc6);
     if (rc4 && rc6) {
@@ -443,6 +449,12 @@ int main(int argc, char **argv) {
     int rc = sdnsa_reflect_query(simet_dns_domain, &dnsres_nocache, &dnsres_cached);
     if (!rc) {
         rc = sdnsa_render_report(&dnsres_nocache, &dnsres_cached, report_mode);
+        if (rc) {
+            if (rc < 0) {
+                print_err("report: failed to render report: %s", strerror(-rc));
+                rc = SEXIT_FAILURE;
+            }
+        }
     }
 
 #ifdef VALGRIND_BUILD
