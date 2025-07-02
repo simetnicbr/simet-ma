@@ -104,11 +104,8 @@ static int sdnsa_get_randomstr(char ** const s)
 
     uint8_t buf[sizeof(uint64_t)];
     if (simet_getrandom(buf, sizeof(buf))) {
-        /* could not get real random data, fudge it */
-        struct timespec ts_now = {};
-        clock_gettime(CLOCK_REALTIME, &ts_now);
-        *(uint32_t *)(&buf) = (getpid() ^ ts_now.tv_sec) & 0xffffU;
-        *(uint32_t *)(&buf[4]) = (getppid() ^ ts_now.tv_nsec) & 0xffffU;
+        /* could not get real random data, fail */
+        return -EINVAL;
     }
 
     char b64buf[16] = "a"; /* ensure hostname starts with letter just in case */
