@@ -102,26 +102,31 @@ static int sdnsa_get_randomstr(char ** const s)
     if (!s)
         return -EINVAL;
 
-    uint8_t buf[sizeof(uint64_t)];
+    uint8_t buf[32];  /* do not make it too large, see static_assert below */
     if (simet_getrandom(buf, sizeof(buf))) {
         /* could not get real random data, fail */
         return -EINVAL;
     }
 
-    char b64buf[16] = "a"; /* ensure hostname starts with letter just in case */
+    /* A DNS label name is limited to 63 characters */
+    char b64buf[64] = "a"; /* ensure hostname starts with letter just in case */
+
+    /* If buf is too large for b64buf to hold base64(buf), it would -ENOSPC */
+    static_assert(sizeof(b64buf) > (4 * sizeof(buf) / 3) + 1, "buf[] is too large for b64buf[]");
+
     ssize_t rc = base64safe_encode(buf, sizeof(buf), &b64buf[1], sizeof(b64buf)-1, 0);
-    if (rc < 8)
+    if (rc < (ssize_t)sizeof(buf))  /* paranoia, rc < 1 would be enough */
         return -EINVAL;
 
     /* there should be enough entropy even with case-insensitive DNS */
 
-    *s = strndup(b64buf, (size_t) rc); /* rc >= 8 */
+    *s = strndup(b64buf, (size_t) rc); /* rc > 1 */
     return (*s != NULL)? 0 : -EINVAL;
 }
 
 static const char *sdnsa_get_reflect_domain(int is_ip6, const char * const id, const char * const domain)
 {
-    char node[64] = "";
+    char node[250] = "";
 
     if (!domain)
         return NULL;
