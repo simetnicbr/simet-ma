@@ -245,6 +245,8 @@ static int xx_json_object_int64_add(json_object *jo, const char *tag, int64_t va
     return 0;
 }
 
+#endif
+
 /* returns NZ on error */
 static int xx_json_object_bool_add(json_object *jo, const char *tag, bool value)
 {
@@ -258,7 +260,6 @@ static int xx_json_object_bool_add(json_object *jo, const char *tag, bool value)
     }
     return 0;
 }
-#endif
 
 static int xx_json_array_object_as_str_add(json_object *ja, json_object * const jobjvalue)
 {
@@ -274,6 +275,32 @@ static int xx_json_array_object_as_str_add(json_object *ja, json_object * const 
 
     errno = EINVAL;
     return -EINVAL;
+}
+
+/* helper for result column with an { "error":<boll> } object */
+static int xx_json_array_res_error(json_object *ja, bool value)
+{
+    if (!ja) {
+        errno = EINVAL;
+        return -EINVAL;
+    }
+
+    json_object *jo = json_object_new_object();
+    if (!jo) {
+        errno = ENOMEM;
+        return -ENOMEM;
+    }
+
+    int rc = 0;
+    if (!xx_json_object_bool_add(jo, "error", value)) {
+        rc = xx_json_array_object_as_str_add(ja, jo);
+    } else {
+        rc = -errno;
+    }
+    json_object_put(jo);
+
+    errno = -rc;
+    return rc;
 }
 
 /*
@@ -374,9 +401,62 @@ err_exit:
     return rc;
 }
 
+static int sdnsa_render_dnssec(json_object * const jrows,
+                               const char * const mtype,
+                               struct dns_addrinfo_head * const data)
+{
+    json_object *jo = NULL;
+    int rc = -EINVAL;
+
+    if (!jrows || !mtype || !data)
+        return -EINVAL;
+
+    print_msg(MSG_DEBUG, "report: generating report for %s", mtype);
+
+    unsigned long rowcount = 0;
+    for (struct dns_addrinfo_result *r = data->head; r != NULL; r = r->next) {
+        /* open new data row, contents will go in jrowdata */
+        if ((jo = json_object_new_object()) == NULL)
+            goto err_exit;
+        json_object *jrowdata = json_object_new_array();
+        if (!jrowdata) {
+            goto err_exit;
+        }
+        json_object_object_add(jo, "value", jrowdata); /* jo owns jrowdata */
+
+        /* fill in row through jrowdata */
+        /* This assumes the DNSSEC queries were NOT made against a Reflect node,
+         * thus last_resolver is something returned by the DNSSEC nodes, but NOT
+         * the IP address of a recursive resolver */
+        if (xx_json_array_opt_string_add(jrowdata, mtype)
+                || xx_json_array_opt_string_add(jrowdata, "none")
+                || xx_json_array_opt_string_add(jrowdata, "")
+                || xx_json_array_int64str_add(jrowdata, r->query_time_us)
+                || xx_json_array_res_error(jrowdata, !!(r->last_resolver.sa.sa_family == AF_UNSPEC)))
+            goto err_exit;
+
+        /* add row to table */
+        json_object_array_add(jrows, jo); /* jrows owns jo and jrowdata */
+        jo = NULL;
+
+        rowcount++;
+    }
+
+    print_msg(MSG_DEBUG, "report: %s: added %lu rows to report", mtype, rowcount);
+
+    rc = (rowcount > 0)? 0 : -ENODATA;
+
+err_exit:
+    json_object_put(jo);
+    return rc;
+}
+
+
 int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
                         struct dns_addrinfo_head * const data_nocache,
                         struct dns_addrinfo_head * const data_cached,
+                        struct dns_addrinfo_head * const data_dnssec_valid,
+                        struct dns_addrinfo_head * const data_dnssec_invalid,
                         enum report_mode report_mode)
 {
     struct sdnsa_report_ctx rctx = {};
@@ -418,6 +498,22 @@ int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
         rc = sdnsa_render_reflect(jrows, "reflect-cached", data_cached);
         if (rc)
             goto err_exit;
+    }
+
+    /* Fill in rows with DNSSEC measurement data */
+    if (data_dnssec_valid && data_dnssec_valid->head) { /* optional */
+        rc = sdnsa_render_dnssec(jrows, "dnssec-valid", data_dnssec_valid);
+        if (rc) {
+            goto err_exit;
+        }
+
+        /* non-optional if we have dnssec_valid */
+        if (data_dnssec_invalid) {
+            rc = sdnsa_render_dnssec(jrows, "dnssec-invalid", data_dnssec_invalid);
+            if (rc) {
+                goto err_exit;
+            }
+        }
     }
 
     json_object_array_add(rctx.root, jtbl);

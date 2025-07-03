@@ -47,6 +47,8 @@ struct dns_addrinfo_head {
 int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
                         struct dns_addrinfo_head * const data_nocache,
                         struct dns_addrinfo_head * const data_cached,
+                        struct dns_addrinfo_head * const data_dnssec_valid,
+                        struct dns_addrinfo_head * const data_dnssec_invalid,
                         enum report_mode report_mode);
 
 #endif /* REPORT_H_ */
