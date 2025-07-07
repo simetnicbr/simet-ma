@@ -445,6 +445,11 @@ int main(int argc, char **argv) {
         rc = sdnsa_render_report(&dnsres_nocache, &dnsres_cached, report_mode);
     }
 
+#ifdef VALGRIND_BUILD
+    empty_dns_addrinfo_result_list(&dnsres_nocache);
+    empty_dns_addrinfo_result_list(&dnsres_cached);
+#endif
+
     return rc;
 }
 
