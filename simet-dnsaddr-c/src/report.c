@@ -62,6 +62,7 @@ enum {
     msmt_tbl_col_sa_f,
     msmt_tbl_col_addr,
     msmt_tbl_col_querytime,
+    msmt_tbl_col_result,
     MSMT_TBL_COL_MAX
 };
 const char * const msmt_report_col_names[MSMT_TBL_COL_MAX] = {
@@ -69,6 +70,7 @@ const char * const msmt_report_col_names[MSMT_TBL_COL_MAX] = {
     [msmt_tbl_col_sa_f] = "ip-family",
     [msmt_tbl_col_addr] = "resolver-ip-address",
     [msmt_tbl_col_querytime] = "query-time-microseconds",
+    [msmt_tbl_col_result] = "result",
 };
 
 /*
@@ -130,7 +132,6 @@ static json_object * xx_json_object_new_sockaddr_as_str(const sockaddr_any_t_ *v
     return NULL;
 }
 
-#if 0
 static json_object * xx_json_object_new_string_opt(const char *s)
 {
     if (s) {
@@ -140,6 +141,7 @@ static json_object * xx_json_object_new_string_opt(const char *s)
     }
 }
 
+#if 0
 /* returns NZ on error */
 static int xx_json_add_int64str(json_object *jo, const char * const tag, const int64_t v)
 {
@@ -251,6 +253,22 @@ static int xx_json_object_bool_add(json_object *jo, const char *tag, bool value)
 }
 #endif
 
+static int xx_json_array_object_as_str_add(json_object *ja, json_object * const jobjvalue)
+{
+    if (ja) {
+        json_object *js = xx_json_object_new_string_opt(
+                (jobjvalue)? json_object_to_json_string_ext(jobjvalue, JSON_C_TO_STRING_PLAIN) : "{}");
+        if (!js || json_object_array_add(ja, js)) {
+            errno = ENOMEM;
+            return -ENOMEM;
+        }
+        return 0;
+    }
+
+    errno = EINVAL;
+    return -EINVAL;
+}
+
 /*
  * LMAP Report
  *
@@ -329,7 +347,8 @@ static int sdnsa_render_reflect(json_object * const jrows,
         if (xx_json_array_opt_string_add(jrowdata, mtype)
                 || xx_json_array_opt_string_add(jrowdata, str_ip46(r->last_resolver.sa.sa_family))
                 || xx_json_array_sockaddr_add(jrowdata, &r->last_resolver)
-                || xx_json_array_int64str_add(jrowdata, r->query_time_us))
+                || xx_json_array_int64str_add(jrowdata, r->query_time_us)
+                || xx_json_array_object_as_str_add(jrowdata, NULL))
             goto err_exit;
 
         /* add row to table */
