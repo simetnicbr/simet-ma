@@ -107,6 +107,8 @@ static const char *str_ip46(int ai_family)
             return "ip4";
         case AF_INET6:
             return "ip6";
+        case AF_UNSPEC:
+            return "none";
     }
     return "ip";
 }
@@ -126,10 +128,15 @@ static json_object * xx_json_object_new_sockaddr_as_str(const sockaddr_any_t_ *v
 {
     char buf[INET6_ADDRSTRLEN];
 
-    if (v && !getnameinfo(&v->sa, sizeof(*v), buf, sizeof(buf), NULL, 0, NI_NUMERICHOST)) {
-            return json_object_new_string(buf);
+    if (!v)
+        return NULL;
+
+    buf[0] = '\0';
+    if (v->sa.sa_family != AF_UNSPEC &&
+            getnameinfo(&v->sa, sizeof(*v), buf, sizeof(buf), NULL, 0, NI_NUMERICHOST)) {
+        return NULL;
     }
-    return NULL;
+    return json_object_new_string(buf);
 }
 
 static json_object * xx_json_object_new_string_opt(const char *s)
