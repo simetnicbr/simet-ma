@@ -51,6 +51,9 @@
 #include "report.h"
 
 #define SIMET_DNSREFLECT_DOMAIN "mp.dns.simet.nic.br"
+#define SIMET_DNSSEC_GOOD_NODE  "simet.nic.br"
+#define SIMET_DNSSEC_BAD_NODE   "dnssec-failed.org" /* also brokendnssec.net */
+#define SIMET_DNSSEC_UNSIGNED_NODE "microsoft.com"  /* FIXME */
 
 const char *progname = PACKAGE_NAME;
 
@@ -80,34 +83,69 @@ static int fatal_enomem(void)
     exit(SEXIT_OUTOFRESOURCE);
 }
 
+static void empty_dns_addrinfo_result_list(struct dns_addrinfo_head *list)
+{
+    if (list) {
+        struct dns_addrinfo_result *p = list->head;
+
+        list->head = NULL;
+        list->tail = NULL;
+
+        while (p) {
+            struct dns_addrinfo_result * const n = p->next;
+            p->next = NULL;
+            free(p);
+            p = n;
+        }
+    }
+}
+
 static int sdnsa_get_randomstr(char ** const s)
 {
     if (!s)
         return -EINVAL;
 
-    uint8_t buf[sizeof(uint64_t)];
+    uint8_t buf[32];  /* do not make it too large, see static_assert below */
     if (simet_getrandom(buf, sizeof(buf))) {
-        /* could not get real random data, fudge it */
-        struct timespec ts_now = {};
-        clock_gettime(CLOCK_REALTIME, &ts_now);
-        *(uint32_t *)(&buf) = (getpid() ^ ts_now.tv_sec) & 0xffffU;
-        *(uint32_t *)(&buf[4]) = (getppid() ^ ts_now.tv_nsec) & 0xffffU;
+        /* could not get real random data, fail */
+        return -EINVAL;
     }
 
-    char b64buf[16] = "a"; /* ensure hostname starts with letter just in case */
+    /* A DNS label name is limited to 63 characters */
+    char b64buf[64] = "a"; /* ensure hostname starts with letter just in case */
+
+    /* If buf is too large for b64buf to hold base64(buf), it would -ENOSPC */
+    static_assert(sizeof(b64buf) > (4 * sizeof(buf) / 3) + 1, "buf[] is too large for b64buf[]");
+
     ssize_t rc = base64safe_encode(buf, sizeof(buf), &b64buf[1], sizeof(b64buf)-1, 0);
-    if (rc < 8)
+    if (rc < (ssize_t)sizeof(buf))  /* paranoia, rc < 1 would be enough */
         return -EINVAL;
 
     /* there should be enough entropy even with case-insensitive DNS */
 
-    *s = strndup(b64buf, (size_t) rc); /* rc >= 8 */
+    *s = strndup(b64buf, (size_t) rc); /* rc > 1 */
     return (*s != NULL)? 0 : -EINVAL;
+}
+
+static const char *sdnsa_get_parent_domain(const char * const domain)
+{
+    if (!domain)
+        return NULL;
+
+    const char *r = strchr(domain, '.');
+    if (!r || !*r)
+        return domain;
+
+    int maxlen = 255;
+    while (--maxlen > 0 && *r == '.') {
+        r++;
+    }
+    return (maxlen > 0)? r : NULL;
 }
 
 static const char *sdnsa_get_reflect_domain(int is_ip6, const char * const id, const char * const domain)
 {
-    char node[64] = "";
+    char node[250] = "";
 
     if (!domain)
         return NULL;
@@ -138,8 +176,8 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
     struct timespec ts1, ts2;
     int eai;
 
-    if (!node || !node[9])
-        return SEXIT_FAILURE;
+    if (!node || !node[0])
+        return SEXIT_INTERNALERR;
 
     int fast_retries = 5;
     clock_gettime(CLOCK_MONOTONIC, &ts1);
@@ -199,18 +237,17 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
 
 /*
  * Query:  REFLECT
- *  1. Select random ID to bypass cache
- *  2. timestamp
- *  3.   Query up to 3 times.
- *  4. timestamp, this is the not-in-cache delay
- *  5. if failed, exit with error.
- *  6. report for the no-cache delay.
+ *  0. Prime parent zones
+ *  1. not-in-cache query
+ *  1.1. Select random ID to bypass cache
+ *  1.2. query IPv4 and IPv6
+ *  1.3. discard results if either IPv4 or IPv6 failed, and retry
  *
- *  1. timestamp, query, timestamp
- *  2. repeat 5 times.  Record each delay.
- *  3. report for the in-cache delay.
+ *  2. in-cache query
+ *  2.1. query IPv4 and IPv6
+ *  2.2. repeat 2.1 up to 10 times or up to 3 failures.  Record each delay.
  *
- *  6. Report the set of IP addresses returned from all queries (they could be different).
+ *  3. Report the set of IP addresses returned from all queries (they could be different).
  *
  *  Note: getaddrinfo needs to be family specific for timing, otherwise
  *  it calls into the stub or recursive resolver at least twice, for A and AAAA,
@@ -218,6 +255,7 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
  */
 
 static int sdnsa_reflect_query(const char * const domain,
+                               struct dns_addrinfo_head * const dnsres_priming,
                                struct dns_addrinfo_head * const dnsres_nocache,
                                struct dns_addrinfo_head * const dnsres_cached)
 {
@@ -227,20 +265,49 @@ static int sdnsa_reflect_query(const char * const domain,
     int rc4, rc6;
     int retries;
 
-    int result = SEXIT_FAILURE;
+    int result = SEXIT_INTERNALERR;
+
+    /* Attempt to prime parent zone record.  Since there could be
+     * several resolvers, do it several times.
+     *
+     * Store the results because we might see interesting resolver
+     * IP addresses when cold, and somehow train the local resolver
+     * with the priming to prefer one of them, and thus not see them
+     * again in the cache/nocache measurements.
+     *
+     * Priming ensures far better reproducibility between runs. */
+    const char * const primenode = "parent_priming";
+    node4 = sdnsa_get_reflect_domain(0, primenode, domain);
+    node6 = sdnsa_get_reflect_domain(1, primenode, domain);
+    if (!node4 || !node6)
+        goto err_exit;
+    retries = 5;
+    do {
+        sdnsa_getaddrinfo(AF_INET,  node4, dnsres_priming);
+        sdnsa_getaddrinfo(AF_INET6, node6, dnsres_priming);
+    } while (--retries > 0);
+    id = NULL;
 
     retries = 3;
     do {
         free(id);
         id = NULL;
 
-        if (sdnsa_get_randomstr(&id))
+        if (sdnsa_get_randomstr(&id)) {
+            result = SEXIT_FAILURE;
             goto err_exit;
+        }
+
+        empty_dns_addrinfo_result_list(dnsres_nocache);
 
         free_const(node4); node4 = sdnsa_get_reflect_domain(0, id, domain);
+        if (!node4)
+            goto err_exit;
         rc4 = sdnsa_getaddrinfo(AF_INET, node4, dnsres_nocache);
 
         free_const(node6); node6 = sdnsa_get_reflect_domain(1, id, domain);
+        if (!node6)
+            goto err_exit;
         rc6 = sdnsa_getaddrinfo(AF_INET6, node6, dnsres_nocache);
     } while (--retries > 0 && rc4 && rc6);
     if (rc4 && rc6) {
@@ -296,6 +363,172 @@ err_exit:
     return result;
 }
 
+/* similar to sdnsa_getaddrinfo(), but for error responses from dnssec failures only */
+static int sdnsa_getaddrinfo_error(int af, const char * node, struct dns_addrinfo_head *result)
+{
+    /* we give a hint for SOCK_DGRAM UDP so that we don't get multiple answers for tcp, udp, raw... */
+    struct addrinfo hints = { .ai_socktype = SOCK_DGRAM, .ai_protocol = IPPROTO_UDP, .ai_family = af };
+
+    struct addrinfo *addr = NULL, *rp;
+    struct sockaddr *sa = NULL;
+
+    struct timespec ts1, ts2;
+    int eai;
+
+    if (!node || !node[0])
+        return SEXIT_INTERNALERR;
+
+    int fast_retries = 5;
+    clock_gettime(CLOCK_MONOTONIC, &ts1);
+    do {
+        eai = getaddrinfo(node, NULL, &hints, &addr);
+    } while (eai == EAI_SYSTEM && errno == EINTR && (--fast_retries) > 0);
+    clock_gettime(CLOCK_MONOTONIC, &ts2);
+    long long delta_us = timespec_sub_microseconds(&ts2, &ts1);
+
+    print_msg(MSG_TRACE, "getaddrinfo(%s) took %lld microseconds: %s", node, delta_us,
+                         (eai)? gai_strerror(eai) : "no error");
+
+    /* For DNSSEC, we get either success, EAI_NODATA or EAI_NONAME
+     * anything else is an unexpected failure (network error, etc) */
+    if (eai != EAI_NODATA && eai != EAI_NONAME && eai != 0) {
+        return SEXIT_FAILURE;
+    }
+
+    if (result) {
+        if (eai) {
+            struct dns_addrinfo_result * n = calloc(1, sizeof(struct dns_addrinfo_result));
+            if (!n) {
+                fatal_enomem();
+                /* not reached */
+            }
+            n->last_resolver.sa.sa_family = AF_UNSPEC;
+            n->query_time_us = delta_us;
+            /* n->result = ?; -- right now, error: true is implied by AF_UNSPEC */
+
+            n->next = NULL;
+            if (!result->head)
+                result->head = n;
+            if (result->tail)
+                result->tail->next = n;
+            result->tail = n;
+        } else {
+            for (rp = addr; rp != NULL; rp = rp->ai_next) {
+                if (rp->ai_family == AF_INET || rp->ai_family == AF_INET6) {
+                    if (sa && !memcmp(sa, rp->ai_addr, rp->ai_addrlen)) {
+                        continue; /* dedup just in case */
+                    }
+                    struct dns_addrinfo_result * n = calloc(1, sizeof(struct dns_addrinfo_result));
+                    if (!n) {
+                        fatal_enomem();
+                        /* not reached */
+                    }
+                    if (rp->ai_addrlen > sizeof(n->last_resolver)) {
+                        print_err("internal error: addrinfo buffer too small");
+                        exit(SEXIT_INTERNALERR);
+                    }
+                    memcpy(&n->last_resolver, rp->ai_addr, rp->ai_addrlen);
+                    n->query_time_us = delta_us;
+
+                    n->next = NULL;
+                    if (!result->head)
+                        result->head = n;
+                    if (result->tail)
+                        result->tail->next = n;
+                    result->tail = n;
+
+                    sa = rp->ai_addr; /* not owned */
+                }
+            }
+        }
+    }
+
+    freeaddrinfo(addr);
+    addr = NULL; sa = NULL;
+    return 0;
+}
+/*
+ * Query:  DNSSEC
+ *
+ *  0. Prime parent zone validation (so that DS, DNSKEY, RRSIGs are cached)
+ *  1. maybe-in-cache query for unsigned, valid and invalid DNSSEC domain
+ *  1.1. query valid domain for RR type A
+ *  1.2. query invalid domain for RR type A
+ *  1.3. query unsigned domain for RR type A (dnssec not active for zone)
+ *  2.   repeat (1.1, 1.2, 1.3) up to 10 times, tolerate no failures from
+ *       1.1. or 1.3 (control).
+ *
+ *  The measurement failed if either 1.1 or 1.3 fails (no report).  If
+ *  both 1.1 and 1.3 succeeded, the measuremet was a success: report as
+ *  measurement result whether 1.2 failed (DNSSEC validation is working)
+ *  or succeded (DNSSEC is not being validated).  Note the inverted logic
+ *  in 1.2.
+ *
+ *  Note: getaddrinfo needs to be family specific for timing, otherwise
+ *  it calls into the stub or recursive resolver at least twice, for A and
+ *  AAAA, which falsifies query-time measurements.
+ */
+
+static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_valid,
+                              struct dns_addrinfo_head * const dnsres_dnssec_invalid)
+{
+    int retries;
+
+    /* Attempt to prime parent zone records.
+     *
+     * Since there could be several resolvers, do it several times.  We
+     * want the DNSSEC related records *for the parent zone* to be
+     * in-cache.  This better reflects what happens, e.g., for DNSSEC
+     * validations of top-level and popular domains.
+     *
+     * This also reduces the chances of a timeout the first time we ask
+     * for a DNSSEC-signed node from a resolver.  The deeper the DNS
+     * hierarchy, the more queries the recursive resolver will need to do
+     * to retrieve and validate the parent zones, and that can easily add
+     * up into the seconds range when such RRs are not yet in cache.
+     *
+     * Notes:
+     * 1. It doesn't matter if we use AF_INET or AF_INET6, but using
+     * AF_UNSPEC is less clear, since it does A and AAAA lookups
+     * separately, internally to getaddrinfo().  Therefore, we use
+     * AF_INET and look for RRsets of type A.
+     *
+     * 2. This is not expected to work when the parent zone has no type A
+     * records: the resolver has no reason to try to validate the zone
+     * (and thus request the DNSSEC-related RRs for it) when it gets a
+     * NODATA answer from the authoritative.  OTOH, if the parent zone
+     * is something like "br", or "org", then any RRsets needed to
+     * validate it are very very likely to already be in cache.
+     */
+    retries = 5;
+    const char * const parent_zone1 = sdnsa_get_parent_domain(SIMET_DNSSEC_GOOD_NODE);
+    const char * const parent_zone2 = sdnsa_get_parent_domain(SIMET_DNSSEC_BAD_NODE);
+    do {
+        sdnsa_getaddrinfo(AF_INET, parent_zone1, NULL);
+        sdnsa_getaddrinfo(AF_INET, parent_zone2, NULL);
+    } while (--retries > 0);
+    /* DO NOT free() parent_zone1, parent_zone2, they are not owned */
+
+    /* Now, query for a signed and a badly-signed node in a DNSSEC-signed
+     * zone, and also for an unsigned record in an DNSSEC-unsigned zone
+     * (which is also valid).  Record the query time for each one.
+     *
+     * Do it 10 times.  Fail the measurement early on error.
+     */
+    int rc = 0;
+    for (int i = 0; i < 10 && !rc; i++) {
+        rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_GOOD_NODE, dnsres_dnssec_valid);
+        if (!rc) {
+            /* Does not consider EAI_NODATA, EAI_NONAME or success an error */
+            rc = sdnsa_getaddrinfo_error(AF_INET, SIMET_DNSSEC_BAD_NODE, dnsres_dnssec_invalid);
+        }
+        if (!rc) {
+            rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_UNSIGNED_NODE, NULL);
+        }
+    }
+
+    return (!rc)? 0 : SEXIT_FAILURE;
+}
 
 /*
  * Command line and main executable
@@ -423,10 +656,39 @@ int main(int argc, char **argv) {
 
     struct dns_addrinfo_head dnsres_nocache = {};
     struct dns_addrinfo_head dnsres_cached = {};
-    int rc = sdnsa_reflect_query(simet_dns_domain, &dnsres_nocache, &dnsres_cached);
+    struct dns_addrinfo_head dnsres_priming = {};
+    struct dns_addrinfo_head dnsres_dnssec_valid = {};
+    struct dns_addrinfo_head dnsres_dnssec_invalid = {};
+    int rc = sdnsa_reflect_query(simet_dns_domain, &dnsres_priming, &dnsres_nocache, &dnsres_cached);
     if (!rc) {
-        rc = sdnsa_render_report(&dnsres_nocache, &dnsres_cached, report_mode);
+        /* REFLECT is required for DNSSEC analysis, so we only test DNSSEC
+         * when REFLECT suceeded.  We still report REFLECT even if DNSSEC
+         * measurement fails */
+        if (sdnsa_dnssec_query(&dnsres_dnssec_valid, &dnsres_dnssec_invalid)) {
+            /* DNSSEC measurement failed, remove it from report */
+            empty_dns_addrinfo_result_list(&dnsres_dnssec_valid);
+            empty_dns_addrinfo_result_list(&dnsres_dnssec_invalid);
+        }
     }
+    if (!rc) {
+        rc = sdnsa_render_report(&dnsres_priming, &dnsres_nocache, &dnsres_cached,
+                                 &dnsres_dnssec_valid, &dnsres_dnssec_invalid,
+                                 report_mode);
+        if (rc) {
+            if (rc < 0) {
+                print_err("report: failed to render report: %s", strerror(-rc));
+                rc = SEXIT_FAILURE;
+            }
+        }
+    }
+
+#ifdef VALGRIND_BUILD
+    empty_dns_addrinfo_result_list(&dnsres_priming);
+    empty_dns_addrinfo_result_list(&dnsres_nocache);
+    empty_dns_addrinfo_result_list(&dnsres_cached);
+    empty_dns_addrinfo_result_list(&dnsres_dnssec_valid);
+    empty_dns_addrinfo_result_list(&dnsres_dnssec_invalid);
+#endif
 
     return rc;
 }
