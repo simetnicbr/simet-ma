@@ -165,6 +165,7 @@ static const char *sdnsa_get_reflect_domain(int is_ip6, const char * const id, c
     return strdup(node);
 }
 
+/* -1 for timeout (EAI_AGAIN), 0 for OK, >0: SEXIT */
 static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head *result)
 {
     /* we give a hint for SOCK_DGRAM UDP so that we don't get multiple answers for tcp, udp, raw... */
@@ -189,7 +190,7 @@ static int sdnsa_getaddrinfo(int af, const char * node, struct dns_addrinfo_head
 
     if (eai) {
         print_msg(MSG_TRACE, "failed to resolve %s: %s", node, gai_strerror(eai));
-        return SEXIT_FAILURE;
+        return (eai == EAI_AGAIN) ? -1 : SEXIT_FAILURE;
     } else {
         print_msg(MSG_TRACE, "getaddrinfo(%s) took %lld microseconds", node, delta_us);
     }
@@ -392,7 +393,7 @@ static int sdnsa_getaddrinfo_error(int af, const char * node, struct dns_addrinf
     /* For DNSSEC, we get either success, EAI_NODATA or EAI_NONAME
      * anything else is an unexpected failure (network error, etc) */
     if (eai != EAI_NODATA && eai != EAI_NONAME && eai != 0) {
-        return SEXIT_FAILURE;
+        return (eai == EAI_AGAIN) ? -1 : SEXIT_FAILURE;
     }
 
     if (result) {
@@ -525,6 +526,8 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
         if (!rc) {
             rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_UNSIGNED_NODE, NULL);
         }
+        /* don't stop on timeouts (EAI_AGAIN) */
+        rc = (rc > 0)? rc : 0;
     }
 
     return (!rc)? 0 : SEXIT_FAILURE;
