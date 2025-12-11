@@ -1653,6 +1653,19 @@ static int uptimeserver_connect(struct simet_inetup_server * const s)
             s->peer_ai = s->peer_ai->ai_next;
             continue;
         }
+        /* some platforms do not honour SOCK_NONBLOCK in socket() */
+        int sk_flags = RETRY_EINTR(fcntl(s->conn.socket, F_GETFL));
+        if (sk_flags != -1 && !(sk_flags & O_NONBLOCK)) {
+            /* SOCK_NONBLOCK did not work... try to cope with it */
+            sk_flags = RETRY_EINTR(fcntl(s->conn.socket, F_SETFL, sk_flags | O_NONBLOCK));
+            if (sk_flags != -1) {
+                sk_flags = RETRY_EINTR(fcntl(s->conn.socket, F_GETFL));
+            }
+        }
+        if (sk_flags == -1 || !(sk_flags & O_NONBLOCK)) {
+            print_err("failed to set socket to NONBLOCK mode: %s, exiting...", strerror(errno));
+            exit(SEXIT_INTERNALERR);
+        }
 
         xx_set_tcp_timeouts(s);
 
