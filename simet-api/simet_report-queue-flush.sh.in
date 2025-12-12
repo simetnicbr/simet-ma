@@ -246,17 +246,20 @@ simet_reportqueue_runqueue() {
 
     stop_flush=0
     discard_all=0
+    should_sleep=0
     find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | sort | while read -r fn ; do
 	if [ "$stop_flush" -eq 0 ] && [ -n "$fn" ] ; then
 	    if [ "$discard_all" -eq 1 ] ; then
 		simet_log simet-ma daemon.info "discarding unsent report '$fn', report lost"
 		rm -f "$fn"
 	    elif [ -s "$fn" ] && gzip -t "$fn" >/dev/null 2>&1 ; then
+		[ "$should_sleep" -ne 0 ] && sleep "$should_sleep"
 		ASRC=0
 		#shellcheck disable=SC2086
 		send_report_to_collector "$fn" $COLLECTORS || ASRC=$?
 		case $ASRC in
-		    0)	;;
+		    0)	should_sleep=1
+			;;
 		    1)	stop_flush=1
 			;;
 		    2)	discard_all=1
