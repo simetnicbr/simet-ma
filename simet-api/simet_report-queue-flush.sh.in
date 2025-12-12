@@ -93,14 +93,22 @@ USERAGENT=$(get_http_useragent)
 # parameters:
 # $1 - report filename (must be a .gz file)
 # $2.. - collectors
-send_report_to_collector() {
+#
+# returns 1 if flushing should stop
+# returns 2 if queue should be discarded
+# note: subshell, cannot change globals
+send_report_to_collector() (
     reportfn="$1"
     shift
 
     [ -s "$reportfn" ] || return 0
 
     malformed=0
+    unauthorized=0
+    discard_queue=0
+    stop_flush=0
     while [ $# -gt 0 ] ; do
+	#shellcheck disable=SC2086
 	APIRES=$( curl $CURLOPT -A "$USERAGENT" \
 		--data-binary "@$reportfn" -X POST \
 		-o /dev/null -w "%{http_code}" \
@@ -118,16 +126,41 @@ send_report_to_collector() {
 	400)
 		malformed=1
 		;;
+	401|403)
+		unauthorized=1
+		;;
+	410)
+		discard_queue=1
+		;;
+	5??)
+		stop_flush=0
+		;;
+	*)
+		stop_flush=1
+		;;
 	esac
 	shift
     done
     if [ "$malformed" -eq 1 ] ; then
 	simet_log simet-ma daemon.warn "LMAP report rejected by all collectors, discarding it"
+
+	simet_log simet-ma daemon.info "discarding malformed report '$fn'"
 	rm -f "$reportfn"
 	return 0
+    elif [ "$unauthorized" -eq 1 ] ; then
+	simet_log simet-ma daemon.err "All LMAP collectors refused access"
+	return 1
+    elif [ "$discard_queue" -eq 1 ] ; then
+	simet_log simet-ma daemon.err "LMAP collector ordered us to discard the whole queue"
+
+	simet_log simet-ma daemon.info "discarding unsent report '$fn', report lost"
+	rm -f "$reportfn"
+	return 2
     fi
+
+    [ "$stop_flush" -ne 1 ] && return 0
     return 1
-}
+)
 
 # discards older unsent reports
 # what we have:
@@ -211,12 +244,34 @@ simet_reportqueue_runqueue() {
 
     # beware the stripped-down busybox "find" in OpenWRT!
 
+    stop_flush=0
+    discard_all=0
+    should_sleep=0
     find "$LMAP_REPORT_QUEUE_DIR" -type f -name '*.report.json.gz' -print | sort | while read -r fn ; do
-	if [ -s "$fn" ] && gzip -t "$fn" >/dev/null 2>&1 ; then
-	    send_report_to_collector "$fn" $COLLECTORS || :
-	else
-	    [ -s "$fn" ] && simet_log simet-ma daemon.warn "queued report '$fn' corrupt, discarding it..."
-	    [ -n "$fn" ] && rm -f "$fn"
+	if [ "$stop_flush" -eq 0 ] && [ -n "$fn" ] ; then
+	    if [ "$discard_all" -eq 1 ] ; then
+		simet_log simet-ma daemon.info "discarding unsent report '$fn', report lost"
+		rm -f "$fn"
+	    elif [ -s "$fn" ] && gzip -t "$fn" >/dev/null 2>&1 ; then
+		[ "$should_sleep" -ne 0 ] && sleep "$should_sleep"
+		ASRC=0
+		#shellcheck disable=SC2086
+		send_report_to_collector "$fn" $COLLECTORS || ASRC=$?
+		case $ASRC in
+		    0)	should_sleep=1
+			;;
+		    1)	stop_flush=1
+			;;
+		    2)	discard_all=1
+			simet_log simet-ma daemon.warn "discarding the whole unsent report queue..."
+			;;
+		    *)	stop_flush=1 # unknown error
+			;;
+		esac
+	    else
+		[ -s "$fn" ] && simet_log simet-ma daemon.warn "queued report '$fn' corrupt, discarding it..."
+		rm -f "$fn"
+	    fi
 	fi
     done
 
