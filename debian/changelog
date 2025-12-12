@@ -1,3 +1,13 @@
+simet-ma (0.18.13.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.13.1 release candidate 2
+  * simet-dnsaddr: tolerate resolver timeouts on dnssec measurement
+  * simet-api: interrupt report queue flush on errors
+  * simet-api: wait a bit between reports when flushing the report queue
+  * inetupc: inetup: detect failure to set NONBLOCK mode on socket
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Fri, 12 Dec 2025 10:31:23 -0300
+
 simet-ma (0.18.13) unstable; urgency=medium
 
   * simet-ma version 0.18.13
