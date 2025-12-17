@@ -1307,6 +1307,7 @@ int tcp_client_run(MeasureContext ctx)
     if ((rc = issue_simple_command(curl, 1)))
 	goto err_exit;
 
+#if 0
     /* shutdown upload direction */
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	if (sockList[i] != -1 && shutdown(sockList[i], SHUT_WR) == -1) {
@@ -1325,6 +1326,7 @@ int tcp_client_run(MeasureContext ctx)
 	rc = SEXIT_MP_TIMEOUT; /* FIXME: it aborted on us, really... */
 	goto err_exit;
     }
+#endif
 
     if ((rc = prepare_command_channel(curl, ctx.control_url, "/session/start-download", slist, ctx.timeout_test, ctx.family)))
 	goto err_exit;
