@@ -121,6 +121,8 @@ static void print_usage(const char * const p, int mode)
 		"\t-X\textended measurement parameter(s) separated by blank or ;\n"
 		"\t\ttxdelay=n  inter-stream start delay (< 0: RTT/(-n*streams). >= 0: delay in us)\n"
 		"\t\tpacing=n   approximate per-stream pacing rate in KiB/s, 0: system default\n"
+		"\t\ttcp_rcvlowat=n       adjusts SO_RCVLOWAT, 0: system default\n"
+		"\t\ttcp_notsent_lowat=n  adjusts TCP_NOTSENT_LOWAT, 0: system default\n"
 		"\nserver URL: measurement server URL\n\n");
     }
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -158,6 +160,20 @@ static int cmdline_extended_param(MeasureContext *ctx, char *param)
 	    data *= 1024; /* KiB/s -> bytes/s */
 	}
 	ctx->max_pacing_rate = (data > UINT32_MAX) ? UINT32_MAX : (uint32_t) data;
+	return 0;
+    } else if (!strcmp("tcp_notsent_lowat", param_name)) {
+	long data = atol(param_data);
+	if (data <= 0) {
+	    data = 0;
+	}
+	ctx->tcp_notsent_lowat = (data > INT32_MAX) ? INT32_MAX : (uint32_t) data;
+	return 0;
+    } else if (!strcmp("tcp_rcvlowat", param_name)) {
+	long data = atol(param_data);
+	if (data <= 0) {
+	    data = 0;
+	}
+	ctx->tcp_rcvlowat = (data > INT32_MAX) ? INT32_MAX : (uint32_t) data;
 	return 0;
     }
 

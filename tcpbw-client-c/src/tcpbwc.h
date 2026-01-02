@@ -98,7 +98,9 @@ typedef struct measure_context {
     unsigned int sample_period_ms;
     unsigned int stats_oversampling;
     int stream_start_delay;   /* n < 0: RTT/-n*stream_count; n >= 0: delay (us) */
-    unsigned int max_pacing_rate; /* 0: system default */
+    unsigned int max_pacing_rate;   /* 0: system default */
+    unsigned int tcp_rcvlowat;      /* 0: system default */
+    unsigned int tcp_notsent_lowat; /* 0: system default */
 
     size_t outgoing_mss;
     unsigned int rtt; /* smallest RTT (microseconds) */

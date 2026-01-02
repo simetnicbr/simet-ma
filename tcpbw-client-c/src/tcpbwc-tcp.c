@@ -320,6 +320,22 @@ static int create_measure_socket(const MeasureContext * const ctx, size_t * cons
 	print_warn("failed to enable TCP pacing (%u): %m", apace);
     }
 
+    /* enable socket watermarks, when requested */
+    uint32_t awatermark = (ctx->tcp_notsent_lowat > UINT32_MAX) ? UINT32_MAX : (uint32_t) ctx->tcp_notsent_lowat;
+#ifdef TCP_NOTSENT_LOWAT
+    if (awatermark > 0 && RETRY_EINTR(setsockopt(fd_measure, IPPROTO_TCP, TCP_NOTSENT_LOWAT, &awatermark, sizeof(awatermark)))) {
+	print_warn("failed to set TCP socket not-sent low watermark");
+    }
+#else
+    if (aswatermark > 0) {
+	print_warn("failed to enable TCP_NOTSENT_LOWAT: unavailable");
+    }
+#endif
+    awatermark = (ctx->tcp_rcvlowat > UINT32_MAX) ? UINT32_MAX : (uint32_t) ctx->tcp_rcvlowat;
+    if (awatermark > 0 && RETRY_EINTR(setsockopt(fd_measure, SOL_SOCKET, SO_RCVLOWAT, &awatermark, sizeof(awatermark)))) {
+	print_warn("failed to set TCP socket receive low watermark");
+    }
+
     return fd_measure;
 }
 
