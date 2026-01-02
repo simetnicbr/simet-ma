@@ -209,24 +209,32 @@ static ssize_t message_send(const int socket, const int timeout, const void * co
     return -1;
 }
 
-static int create_measure_socket(const char * const host, const char * const port, const char * const sessionid, size_t * const mss, unsigned int * const srtt, unsigned int pacerate)
+static int create_measure_socket(const MeasureContext * const ctx, size_t * const mss, unsigned int * const srtt)
 {
     const int one = 1;
     const int zero = 0;
     int fd_measure;
 
-    if (!sessionid || !port || !host)
+    if (!ctx || !ctx->port || !ctx->host_name) {
+	print_err("internal error: create_measure_socket(): bad context");
 	return -1;
+    }
+
+    const char * const sessionid = ctx->sessionid ? ctx->sessionid : ctx->token;
+    if (!sessionid) {
+	print_err("internal error: session-id missing and cannot fallback to a token");
+	return -1;
+    }
 
     const size_t sessionid_len = strlen(sessionid);
     if (sessionid_len > UINT_MAX) {
-	print_warn("session-id length too large");
+	print_err("internal error: session-id length too large");
 	return -1;
     }
 
     struct sockaddr_storage remote_addr_control;
     memset(&remote_addr_control, 0, sizeof(struct sockaddr_storage));
-    fd_measure = usock_inet_timeout(USOCK_TCP, host, port, &remote_addr_control, 2000);
+    fd_measure = usock_inet_timeout(USOCK_TCP, ctx->host_name, ctx->port, &remote_addr_control, 2000);
     if (fd_measure < 0) {
         print_warn("usock_inet_timeout fd_measure: %i", fd_measure);
         return -1;
@@ -307,7 +315,7 @@ static int create_measure_socket(const char * const host, const char * const por
     }
 
     /* enable TCP pacing, when requested */
-    uint32_t apace = (pacerate > UINT32_MAX) ? UINT32_MAX : (uint32_t) pacerate;
+    uint32_t apace = (ctx->max_pacing_rate > UINT32_MAX) ? UINT32_MAX : (uint32_t) ctx->max_pacing_rate;
     if (apace > 0 && RETRY_EINTR(setsockopt(fd_measure, SOL_SOCKET, SO_MAX_PACING_RATE, &apace, sizeof(apace)))) {
 	print_warn("failed to enable TCP pacing (%u): %m", apace);
     }
@@ -1230,9 +1238,7 @@ int tcp_client_run(MeasureContext ctx)
     for (unsigned int i = 0; i < ctx.numstreams; i++) {
 	size_t smss = 0;
 	unsigned int srtt = 0;
-	int m_socket = create_measure_socket(ctx.host_name, ctx.port,
-					     ctx.sessionid ? ctx.sessionid : ctx.token,
-					     &smss, &srtt, ctx.max_pacing_rate);
+	int m_socket = create_measure_socket(&ctx, &smss, &srtt);
 	if (m_socket != -1) {
 	    streamcount++;
 	    FD_SET(m_socket, &sockListFDs);
