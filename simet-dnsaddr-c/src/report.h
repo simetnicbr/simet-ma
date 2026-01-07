@@ -20,6 +20,7 @@
 #define REPORT_H_
 
 #include <inttypes.h>
+#include <stdbool.h>
 
 enum report_mode {
     SSPOOF_REPORT_MODE_FRAGMENT = 0, /* Array contents */
@@ -50,6 +51,11 @@ int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
                         struct dns_addrinfo_head * const data_dnssec_valid,
                         struct dns_addrinfo_head * const data_dnssec_invalid,
                         enum report_mode report_mode);
+
+static inline bool is_empty_dns_addrinfo_list(const struct dns_addrinfo_head * const l)
+{
+    return !(l && l->head);
+}
 
 #endif /* REPORT_H_ */
 

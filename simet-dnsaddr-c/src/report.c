@@ -501,18 +501,10 @@ int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
     }
 
     /* Fill in rows with DNSSEC measurement data */
-    if (data_dnssec_valid && data_dnssec_valid->head) { /* optional */
-        rc = sdnsa_render_dnssec(jrows, "dnssec-valid", data_dnssec_valid);
-        if (rc) {
-            goto err_exit;
-        }
-
-        /* non-optional if we have dnssec_valid */
-        if (data_dnssec_invalid) {
-            rc = sdnsa_render_dnssec(jrows, "dnssec-invalid", data_dnssec_invalid);
-            if (rc) {
-                goto err_exit;
-            }
+    /* Optional measurement, so we don't care if it throws an error */
+    if (!is_empty_dns_addrinfo_list(data_dnssec_valid) && !is_empty_dns_addrinfo_list(data_dnssec_invalid)) {
+        if (!sdnsa_render_dnssec(jrows, "dnssec-valid", data_dnssec_valid)) {
+            sdnsa_render_dnssec(jrows, "dnssec-invalid", data_dnssec_invalid);
         }
     }
 

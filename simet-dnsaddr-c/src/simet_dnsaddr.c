@@ -530,7 +530,9 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
         rc = (rc > 0)? rc : 0;
     }
 
-    return (!rc)? 0 : SEXIT_FAILURE;
+    return (!rc &&
+            !is_empty_dns_addrinfo_list(dnsres_dnssec_valid) &&
+            !is_empty_dns_addrinfo_list(dnsres_dnssec_invalid)) ? 0 : SEXIT_FAILURE;
 }
 
 /*
