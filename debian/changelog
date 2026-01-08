@@ -1,6 +1,14 @@
+simet-ma (0.18.13.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.13.2
+  * simet-dnsaddr: do not fail measurement if dnssec fails
+  * simet-dnsaddr: disable SDNSSEC measurement by default
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 08 Jan 2026 08:40:25 -0300
+
 simet-ma (0.18.13.1) unstable; urgency=medium
 
-  * simet-ma version 0.18.13.1 release candidate 2
+  * simet-ma version 0.18.13.1
   * simet-dnsaddr: tolerate resolver timeouts on dnssec measurement
   * simet-api: interrupt report queue flush on errors
   * simet-api: wait a bit between reports when flushing the report queue
