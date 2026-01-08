@@ -278,6 +278,7 @@ static int xx_json_array_object_as_str_add(json_object *ja, json_object * const 
 }
 
 /* helper for result column with an { "error":<boll> } object */
+static int xx_json_array_res_error(json_object *ja, bool value) __attribute__((__unused__));
 static int xx_json_array_res_error(json_object *ja, bool value)
 {
     if (!ja) {
@@ -401,6 +402,7 @@ err_exit:
     return rc;
 }
 
+#ifdef SIMET_SDNSSEC
 static int sdnsa_render_dnssec(json_object * const jrows,
                                const char * const mtype,
                                struct dns_addrinfo_head * const data)
@@ -450,7 +452,7 @@ err_exit:
     json_object_put(jo);
     return rc;
 }
-
+#endif /* SIMET_SDNSSEC */
 
 int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
                         struct dns_addrinfo_head * const data_nocache,
@@ -500,6 +502,7 @@ int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
             goto err_exit;
     }
 
+#ifdef SIMET_SDNSSEC
     /* Fill in rows with DNSSEC measurement data */
     /* Optional measurement, so we don't care if it throws an error */
     if (!is_empty_dns_addrinfo_list(data_dnssec_valid) && !is_empty_dns_addrinfo_list(data_dnssec_invalid)) {
@@ -507,6 +510,10 @@ int sdnsa_render_report(struct dns_addrinfo_head * const data_priming,
             sdnsa_render_dnssec(jrows, "dnssec-invalid", data_dnssec_invalid);
         }
     }
+#else
+    (void) data_dnssec_valid;
+    (void) data_dnssec_invalid;
+#endif
 
     json_object_array_add(rctx.root, jtbl);
     jtbl = NULL;

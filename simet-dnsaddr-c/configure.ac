@@ -122,6 +122,16 @@ dnl -----------------
 dnl Configure options
 dnl -----------------
 
+AC_ARG_ENABLE([sdnssec],
+    [AC_HELP_STRING([--enable-sdnssec],
+	[Enable SDNSSEC measurement])],
+    [AS_IF([test "x$enableval" != "xno"],
+        [
+	    AC_MSG_NOTICE([including SDNSSEC measurements])
+	    AC_DEFINE(SIMET_SDNSSEC, [1], [Define to enable SDNSSEC measurements])
+        ])
+    ])
+
 AC_ARG_ENABLE([valgrind-build],
     [AS_HELP_STRING([--enable-valgrind-build],
         [build for valgrind testing])],

@@ -127,6 +127,7 @@ static int sdnsa_get_randomstr(char ** const s)
     return (*s != NULL)? 0 : -EINVAL;
 }
 
+static const char *sdnsa_get_parent_domain(const char * const domain) __attribute__((__unused__));
 static const char *sdnsa_get_parent_domain(const char * const domain)
 {
     if (!domain)
@@ -365,6 +366,7 @@ err_exit:
 }
 
 /* similar to sdnsa_getaddrinfo(), but for error responses from dnssec failures only */
+static int sdnsa_getaddrinfo_error(int af, const char * node, struct dns_addrinfo_head *result) __attribute__((__unused__));
 static int sdnsa_getaddrinfo_error(int af, const char * node, struct dns_addrinfo_head *result)
 {
     /* we give a hint for SOCK_DGRAM UDP so that we don't get multiple answers for tcp, udp, raw... */
@@ -470,6 +472,7 @@ static int sdnsa_getaddrinfo_error(int af, const char * node, struct dns_addrinf
  *  AAAA, which falsifies query-time measurements.
  */
 
+#ifdef SIMET_SDNSSEC
 static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_valid,
                               struct dns_addrinfo_head * const dnsres_dnssec_invalid)
 {
@@ -534,6 +537,7 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
             !is_empty_dns_addrinfo_list(dnsres_dnssec_valid) &&
             !is_empty_dns_addrinfo_list(dnsres_dnssec_invalid)) ? 0 : SEXIT_FAILURE;
 }
+#endif
 
 /*
  * Command line and main executable
@@ -664,7 +668,10 @@ int main(int argc, char **argv) {
     struct dns_addrinfo_head dnsres_priming = {};
     struct dns_addrinfo_head dnsres_dnssec_valid = {};
     struct dns_addrinfo_head dnsres_dnssec_invalid = {};
+
     int rc = sdnsa_reflect_query(simet_dns_domain, &dnsres_priming, &dnsres_nocache, &dnsres_cached);
+
+#ifdef SIMET_SDNSSEC
     if (!rc) {
         /* REFLECT is required for DNSSEC analysis, so we only test DNSSEC
          * when REFLECT suceeded.  We still report REFLECT even if DNSSEC
@@ -675,6 +682,8 @@ int main(int argc, char **argv) {
             empty_dns_addrinfo_result_list(&dnsres_dnssec_invalid);
         }
     }
+#endif
+
     if (!rc) {
         rc = sdnsa_render_report(&dnsres_priming, &dnsres_nocache, &dnsres_cached,
                                  &dnsres_dnssec_valid, &dnsres_dnssec_invalid,
