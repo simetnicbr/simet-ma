@@ -24,7 +24,7 @@ export DEB_CFLAGS_MAINT_APPEND := -Wall -pipe
 SIMET_ENSURE_FILE_EXISTS=/opt/simet/bin/simet_register_ma.sh
 
 %:
-	dh $@
+	dh $@ --parallel
 
 # This is example for Cmake (See https://bugs.debian.org/641051 )
 #	-DCMAKE_LIBRARY_PATH=$(DEB_HOST_MULTIARCH)
