@@ -121,7 +121,7 @@ static void print_usage(const char * const p, int mode)
 		"\t-X\textended measurement parameter(s) separated by blank or ;\n"
 		"\t\ttxdelay=n  inter-stream start delay (< 0: RTT/(-n*streams). >= 0: delay in us)\n"
 		"\t\tpacing=n   approximate per-stream pacing rate in KiB/s, 0: system default\n"
-		"\t\ttcp_rcvlowat=n       adjusts SO_RCVLOWAT, 0: system default\n"
+		"\t\ttcp_rcvlowat=n       adjusts SO_RCVLOWAT (131071), 0: system default\n"
 		"\t\ttcp_notsent_lowat=n  adjusts TCP_NOTSENT_LOWAT, 0: system default\n"
 		"\nserver URL: measurement server URL\n\n");
     }
@@ -201,6 +201,7 @@ int main(int argc, char **argv) {
     MeasureContext ctx = {
 	.stream_start_delay = -2,
 	.max_pacing_rate = 0,
+	.tcp_rcvlowat = 131072,
     };
 
     int option;
