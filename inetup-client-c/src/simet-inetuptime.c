@@ -91,7 +91,7 @@ static int    client_boot_sync   = 0;
 
 static const int simet_uptime2_request_remotekeepalive = 1;
 
-static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT */
+static volatile int got_exit_signal = 0;    /* SIGTERM, SIGQUIT, SIGINT */
 static volatile int got_reload_signal = 0;  /* SIGHUP */
 
 static int got_disconnect_msg = 0;          /* MSG_DISCONNECT */
@@ -401,13 +401,21 @@ static void init_signals(void)
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = &handle_exitsig;
 
-    if (sigaction(SIGQUIT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL))
-        print_warn("failed to set signal handlers, precision during restarts will suffer");
+    if (sigaction(SIGQUIT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL)) {
+        print_warn("failed to set signal handlers for SIGQUIT, SIGTERM: precision during restarts will suffer");
+    }
+
+    sa.sa_flags = SA_RESETHAND;
+    if (sigaction(SIGINT, &sa, NULL)) {
+        print_warn("failed to set signal handler for SIGINT: precision during restarts will suffer");
+    }
 
     sa.sa_handler = &handle_reloadsig;
     sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGHUP, &sa, NULL))
-        print_warn("failed to set SIGHUP handler");
+    if (sigaction(SIGHUP, &sa, NULL)) {
+        print_err("failed to set SIGHUP handler");
+        exit(SEXIT_FAILURE);
+    }
 }
 
 /*
@@ -1450,17 +1458,39 @@ static void simet_uptime2_reconnect(struct simet_inetup_server * const s)
 }
 
 /* jump to the disconnect state, unless it is already disconnecting */
-static void simet_uptime2_disconnect(struct simet_inetup_server * const s)
+static void simet_uptime2_disconnect(struct simet_inetup_server * const s, bool is_shutdown)
 {
-    if (s->state != SIMET_INETUP_P_C_DISCONNECT &&
-            s->state != SIMET_INETUP_P_C_DISCONNECT_WAIT &&
-            s->state != SIMET_INETUP_P_C_SHUTDOWN) {
-        s->state = SIMET_INETUP_P_C_DISCONNECT;
-        s->disconnect_clock = 0;
+    bool change_state = false;
 
-        decline_as_telemetry_server(s);
+    if (is_shutdown) {
+        /* terminal disconnect (shutdown) */
 
-        protocol_msg(MSG_NORMAL, s, "client disconnecting...");
+        /* this forces any ongoing disconnect to be a shutdown */
+        s->is_shutdown = true;
+
+        change_state = (s->state != SIMET_INETUP_P_C_DISCONNECT &&
+                s->state != SIMET_INETUP_P_C_DISCONNECT_WAIT &&
+                s->state != SIMET_INETUP_P_C_SHUTDOWN);
+    } else {
+        /* non-terminal disconnect */
+
+        /* do nothing when already ongoing a terminal disconnect */
+        /* or when already idling disconnected */
+        if (s->state != SIMET_INETUP_P_C_DISCONNECT &&
+                s->state != SIMET_INETUP_P_C_DISCONNECT_WAIT &&
+                s->state != SIMET_INETUP_P_C_SHUTDOWN &&
+                s->state != SIMET_INETUP_P_C_WAIT_DISCONNECTED) {
+            s->is_shutdown = false;
+            change_state = true;
+        }
+    }
+    if (change_state) {
+            s->state = SIMET_INETUP_P_C_DISCONNECT;
+            s->disconnect_clock = 0;
+
+            decline_as_telemetry_server(s);
+
+            protocol_msg(MSG_NORMAL, s, "client disconnecting...");
     }
 }
 
@@ -1570,6 +1600,15 @@ static int uptimeserver_connect_init(struct simet_inetup_server * const s,
         tcpaq_close(&s->conn);
 
     assert(s->conn.socket == -1);
+
+    /* Can we actually connect? */
+    if (!agent_id || !agent_token) {
+        // typically happens on startup with missing credentials.
+        // We're disconnected, so jump straight to the state where we wait for signals
+        s->state = SIMET_INETUP_P_C_WAIT_DISCONNECTED;
+        s->disconnect_clock = 0;
+        return 0;
+    }
 
     /* Backoff timer */
     int waittime_left = timer_check(s->backoff_clock, backoff_times[s->backoff_level]);
@@ -1909,7 +1948,7 @@ static int uptimeserver_disconnect(struct simet_inetup_server *s)
     /* warning: state INIT might not have run! */
     if (s->conn.socket == -1) {
         /* not connected */
-        s->state = SIMET_INETUP_P_C_SHUTDOWN;
+        s->state = (s->is_shutdown)? SIMET_INETUP_P_C_SHUTDOWN : SIMET_INETUP_P_C_WAIT_DISCONNECTED;
         s->disconnect_clock = 0;
         return 0;
     }
@@ -1939,7 +1978,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
 {
     if (s->conn.socket == -1) {
         /* not connected */
-        s->state = SIMET_INETUP_P_C_SHUTDOWN;
+        s->state = (s->is_shutdown)? SIMET_INETUP_P_C_SHUTDOWN : SIMET_INETUP_P_C_WAIT_DISCONNECTED;
         s->disconnect_clock = 0;
         return 0;
     }
@@ -1956,7 +1995,7 @@ static int uptimeserver_disconnectwait(struct simet_inetup_server *s)
 
         protocol_msg(MSG_IMPORTANT, s, "client disconnected");
 
-        s->state = SIMET_INETUP_P_C_SHUTDOWN;
+        s->state = (s->is_shutdown)? SIMET_INETUP_P_C_SHUTDOWN : SIMET_INETUP_P_C_WAIT_DISCONNECTED;
         return 0;
     }
 
@@ -2192,7 +2231,8 @@ static void print_usage(const char * const p, int mode) __attribute__((__noretur
 static void print_usage(const char * const p, int mode)
 {
     fprintf(stderr, "Usage: %s [-q] [-v] [-h] [-V] [-t <timeout>] [-i <netdev> ] "
-        "[-d <agent-id-path> ] [-m <string>] [-b <boot id>] [-j <token-path> ] [-M <string>] "
+        "[-m <string>] [-b <boot id>] [-M <string>] "
+        "-d <agent-id-path> -j <agent-token-path> "
         "<server name>[:<server port>] ...\n", p);
 
     if (mode) {
@@ -2211,7 +2251,7 @@ static void print_usage(const char * const p, int mode)
             "\n"
             "server name: DNS name of server(s)\n"
             "server port: TCP port on server\n"
-            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server");
+            "\nNote: client will attempt to open one IPv4 and one IPv6 connection to the server\n");
     }
 
     exit((mode)? SEXIT_SUCCESS : SEXIT_BADCMDLINE);
@@ -2477,6 +2517,15 @@ int main(int argc, char **argv) {
         print_usage(progname, 0);
     }
 
+    if (!agent_id_file || !agent_id_file[0]) {
+        print_err("an agent-id file is required");
+        print_usage(progname, 0);
+    }
+    if (!agent_token_file || !agent_token_file[0]) {
+        print_err("an agent-token file is required");
+        print_usage(progname, 0);
+    }
+
     init_signals();
 
     print_msg(MSG_ALWAYS, PACKAGE_NAME " " PACKAGE_VERSION " starting...");
@@ -2491,8 +2540,7 @@ int main(int argc, char **argv) {
     struct pollfd *servers_pollfds = calloc(servers_count, sizeof(struct pollfd));
 
     if (load_agent_data(agent_id_file, agent_token_file)) {
-        print_err("failed to read agent identification credentials");
-        return SEXIT_FAILURE;
+        print_warn("failed to read measurement agent registration credentials");
     }
     if (load_netdev_file(monitor_netdev_file)) {
         print_err("failed to read network device name to monitor, disabling functionality");
@@ -2500,7 +2548,11 @@ int main(int argc, char **argv) {
 
     simet_uptime2_measurements_global_init();
 
-    print_msg(MSG_ALWAYS, "connecting to measurement peers...");
+    if (agent_id) {
+        print_msg(MSG_ALWAYS, "connecting to measurement peers...");
+    } else {
+        print_msg(MSG_ALWAYS, "waiting for reload signal to reattempt loading registration credentials...");
+    }
 
     /* state machine loop */
     do {
@@ -2532,11 +2584,10 @@ int main(int argc, char **argv) {
             int wait = 0;
 
             if (got_exit_signal)
-                simet_uptime2_disconnect(s);
+                simet_uptime2_disconnect(s, true);
 
 #if 0
-            print_msg(MSG_DEBUG, "%s(%u): main loop, currently at state %u",
-                    str_ipv46(s->ai_family), s->connection_id, s->state);
+            protocol_trace(s, "main loop, currently at state %u", s->state);
 #endif
 
             switch (s->state) {
@@ -2654,6 +2705,11 @@ int main(int argc, char **argv) {
                 uptimeserver_drain(s);
                 break;
 
+            case SIMET_INETUP_P_C_WAIT_DISCONNECTED:
+                servers_pollfds[j].fd = -1;
+                wait = INT_MAX;
+                break;
+
             case SIMET_INETUP_P_C_SHUTDOWN:
                 /* warning: state INIT might not have run! */
                 num_shutdown++;
@@ -2692,7 +2748,7 @@ int main(int argc, char **argv) {
                 for (j = 0; j < servers_count; j++) {
                     if (servers_pollfds[j].revents & (POLLRDHUP | POLLHUP | POLLERR)) {
                         if (servers[j]->state >= SIMET_INETUP_P_C_CONNECTED
-                            && servers[j]->state < SIMET_INETUP_P_C_SHUTDOWN)
+                            && servers[j]->state < SIMET_INETUP_P_C_WAIT_DISCONNECTED)
                         {
                             /* ugly, but less ugly than having reconnect close the socket immediately */
                             protocol_msg(MSG_NORMAL, servers[j], "connection to measurement peer lost");
@@ -2722,17 +2778,32 @@ int main(int argc, char **argv) {
         }
 
         if (got_reload_signal && !got_exit_signal) {
+            const bool had_agentid = (agent_id != NULL);
             got_reload_signal = 0;
             if (load_agent_data(agent_id_file, agent_token_file)) {
-                print_err("failed to reload agent identification credentials, using old");
+                if (had_agentid) {
+                    print_warn("agent registration credentials missing, disconnecting");
+                }
+                free_constchar(agent_id);    agent_id = NULL;
+                free_constchar(agent_token); agent_token = NULL;
             }
             if (load_netdev_file(monitor_netdev_file)) {
                 simet_uptime2_measurements_disable_netdev();
             }
             simet_uptime2_measurements_reconfig();
-            for (j = 0; j < servers_count; j++)
-                simet_uptime2_reconnect(servers[j]);
-            /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
+            if (agent_id) {
+                if (!had_agentid) {
+                    print_msg(MSG_ALWAYS, "agent registration credentials available, connecting...");
+                }
+                for (j = 0; j < servers_count; j++) {
+                    simet_uptime2_reconnect(servers[j]);
+                }
+                /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
+            } else {
+                for (j = 0; j < servers_count; j++) {
+                    simet_uptime2_disconnect(servers[j], false);
+                }
+            }
         }
     } while (1);
 
