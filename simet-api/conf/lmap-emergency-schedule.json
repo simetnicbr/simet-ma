@@ -6,12 +6,17 @@
     "execution-mode":"sequential",
     "action":[{"name":"simet.nic.br_reschedule","task":"simet.nic.br_reschedule"}]
   },
-  { "name":"ma-local_report-queue-flush",
-    "start":"every-fifteen-minutes",
+  { "name":"ma-local_emergency-registration-refresh",
+    "tag":["ma-local_locally-generated-schedule","ma-local_emergency-schedule"],
+    "start":"every-3to4-days",
     "execution-mode":"sequential",
-    "action":[{"name":"simet.nic.br_report-queue-flush","task":"simet.nic.br_report-queue-flush"}]
+    "action":[{
+      "name":"simet.nic.br_register",
+      "task":"simet.nic.br_register",
+      "option":[{"id":"emregop1","value":"--daily"}]
+    }]
   }
 ]},"events":{"event":[
-  { "name":"every-fifteen-minutes","random-spread":15,"periodic":{"interval":900} },
-  { "name":"every-hour","random-spread":90,"periodic":{"interval":3600} }
+  { "name":"every-hour","random-spread":90,"periodic":{"interval":3600} },
+  { "name":"every-3to4-days","random-spread":86400,"periodic":{"interval":259200} }
 ]} }}
