@@ -520,6 +520,7 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
      * Do it 10 times.  Fail the measurement early on error.
      */
     int rc = 0;
+    retries = 3;
     for (int i = 0; i < 10 && !rc; i++) {
         rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_GOOD_NODE, dnsres_dnssec_valid);
         if (!rc) {
@@ -529,8 +530,8 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
         if (!rc) {
             rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_UNSIGNED_NODE, NULL);
         }
-        /* don't stop on timeouts (EAI_AGAIN) */
-        rc = (rc > 0)? rc : 0;
+        /* don't stop on timeouts (EAI_AGAIN), accept 3 failures before giving up */
+        rc = (rc > 0 && retries-- > 0)? rc : 0;
     }
 
     return (!rc &&
