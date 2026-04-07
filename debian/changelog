@@ -1,3 +1,20 @@
+simet-ma (0.18.14) unstable; urgency=medium
+
+  * simet-ma version 0.18.14
+  * tcpbw: do not issue shutdown(SHUT_WR) after upload measurement
+  * tcpbw: allow adjustment of socket low watermarks
+  * tcpbw: default SO_RECVLOWAT to 128KiB
+  * simet-runner: do not run with empty agent-id or token
+  * inetup: disconnect from servers when MA is unregistered
+  * inetup: agent-id and token files are mandatory
+  * inetup: enhance signal handling
+  * simet-dnsaddr: allow 3 failures on dnssec measurement
+  * lmap: don't flush report queue on emergency schedule
+  * lmap: try to register every 3-4 days on emergency schedule
+  * deb: allow parallel builds
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 07 Apr 2026 09:14:22 -0300
+
 simet-ma (0.18.13.2) unstable; urgency=medium
 
   * simet-ma version 0.18.13.2
