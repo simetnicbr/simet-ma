@@ -58,6 +58,20 @@ static inline bool is_empty_dns_addrinfo_list(const struct dns_addrinfo_head * c
     return !(l && l->head);
 }
 
+static inline void append_dns_addrinfo_list_to_list(struct dns_addrinfo_head * const l, struct dns_addrinfo_head * const i) __attribute__((__unused__));
+static inline void append_dns_addrinfo_list_to_list(struct dns_addrinfo_head * const l, struct dns_addrinfo_head * const i)
+{
+    if (l && i && i->head && i->tail) {
+        if (l->head && l->tail) {
+            l->tail->next = i->head;
+            l->tail = i->tail;
+        } else {
+            l->head = i->head;
+            l->tail = i->tail;
+        }
+    }
+}
+
 #endif /* REPORT_H_ */
 
 /* vim: set et ts=8 sw=4 : */

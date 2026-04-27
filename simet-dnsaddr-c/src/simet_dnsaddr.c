@@ -522,16 +522,29 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
     int rc = 0;
     retries = 3;
     for (int i = 0; i < 10 && !rc; i++) {
-        rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_GOOD_NODE, dnsres_dnssec_valid);
+        struct dns_addrinfo_head q_valid = {};
+        struct dns_addrinfo_head q_invalid = {};
+
+        rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_UNSIGNED_NODE, NULL);
+        if (!rc) {
+            rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_GOOD_NODE, &q_valid);
+        }
         if (!rc) {
             /* Does not consider EAI_NODATA, EAI_NONAME or success an error */
-            rc = sdnsa_getaddrinfo_error(AF_INET, SIMET_DNSSEC_BAD_NODE, dnsres_dnssec_invalid);
+            rc = sdnsa_getaddrinfo_error(AF_INET, SIMET_DNSSEC_BAD_NODE, &q_invalid);
         }
         if (!rc) {
             rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_UNSIGNED_NODE, NULL);
         }
+
+        /* if this set of measurements was valid, store */
+        if (!rc) {
+            append_dns_addrinfo_list_to_list(dnsres_dnssec_valid, &q_valid);
+            append_dns_addrinfo_list_to_list(dnsres_dnssec_invalid, &q_invalid);
+        }
+
         /* don't stop on timeouts (EAI_AGAIN), accept 3 failures before giving up */
-        rc = (rc > 0 && retries-- > 0)? rc : 0;
+        rc = (rc > 0)? ((--retries > 0)? 0 : rc) : 0;
     }
 
     return (!rc &&
