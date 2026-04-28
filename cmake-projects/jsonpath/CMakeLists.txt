@@ -47,7 +47,6 @@ SET_SOURCE_FILES_PROPERTIES("parser.c" PROPERTIES GENERATED TRUE)
 
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
-SET(CMAKE_EXE_LINKER_FLAGS "-static")
 
 ADD_EXECUTABLE(jsonpath main.c ast.c lexer.c parser.c matcher.c)
 TARGET_LINK_LIBRARIES(jsonpath ubox-static ${json})
