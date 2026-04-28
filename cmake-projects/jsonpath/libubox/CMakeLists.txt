@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.5...3.13)
 INCLUDE(CheckLibraryExists)
 INCLUDE(CheckFunctionExists)
 
@@ -36,8 +36,8 @@ IF(NOT HAVE_GETTIME OR NOT HAVE_SHM)
 ENDIF()
 
 FILE(GLOB headers *.h)
-LIST(FILTER headers EXCLUDE REGEX "-priv.h$" )
 IF(OFF)
+LIST(FILTER headers EXCLUDE REGEX "-priv.h$" )
 INSTALL(FILES ${headers}
 	DESTINATION include/libubox
 )

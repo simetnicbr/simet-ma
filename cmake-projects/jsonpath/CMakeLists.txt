@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.5...3.10)
 
 PROJECT(jsonpath C)
 ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -Wmissing-declarations -Wno-error=unused-variable -ffunction-sections -D_GNU_SOURCE)
@@ -21,7 +21,7 @@ ENDIF()
 ADD_CUSTOM_COMMAND(
   OUTPUT lemon
   DEPENDS ${CMAKE_SOURCE_DIR}/contrib/lemon.c ${CMAKE_SOURCE_DIR}/contrib/lempar.c
-  COMMAND gcc -std=gnu17 -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
+  COMMAND gcc -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
   COMMENT "Generating lemon parser generator"
 )
 
