@@ -19,26 +19,35 @@ IF(JSONC_FOUND)
 ENDIF()
 
 ADD_CUSTOM_COMMAND(
-  OUTPUT contrib/lemon
-  DEPENDS contrib/lemon.c contrib/lempar.c
-  COMMAND gcc -std=gnu17 -o contrib/lemon contrib/lemon.c
+  OUTPUT lemon
+  DEPENDS ${CMAKE_SOURCE_DIR}/contrib/lemon.c ${CMAKE_SOURCE_DIR}/contrib/lempar.c
+  COMMAND gcc -std=gnu17 -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
   COMMENT "Generating lemon parser generator"
 )
 
 ADD_CUSTOM_COMMAND(
-  OUTPUT parser.c
-  DEPENDS parser.y contrib/lemon
-  COMMAND ./contrib/lemon parser.y
+  OUTPUT ${CMAKE_SOURCE_DIR}/parser.c
+  DEPENDS ${CMAKE_SOURCE_DIR}/parser.y lemon
+  COMMAND cd "${CMAKE_SOURCE_DIR}" && ${CMAKE_BINARY_DIR}/lemon -T${CMAKE_SOURCE_DIR}/contrib/lempar.c parser.y
   COMMENT "Generating parser.c"
 )
 
 FIND_PATH(ubox_include_dir libubox/list.h)
-INCLUDE_DIRECTORIES(${ubox_include_dir})
+IF(ubox_include_dir MATCHES "NOTFOUND$")
+  ADD_SUBDIRECTORY(libubox)
+  INCLUDE_DIRECTORIES(libubox)
+ELSE()
+  INCLUDE_DIRECTORIES(${ubox_include_dir})
+ENDIF()
 
 SET_PROPERTY(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "lemon;parser.h;parser.out")
 SET_SOURCE_FILES_PROPERTIES("parser.c" PROPERTIES GENERATED TRUE)
+
+SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+SET(BUILD_SHARED_LIBS OFF)
+
 ADD_EXECUTABLE(jsonpath main.c ast.c lexer.c parser.c matcher.c)
 find_library(json NAMES json-c)
-TARGET_LINK_LIBRARIES(jsonpath ubox ${json})
+TARGET_LINK_LIBRARIES(jsonpath ubox-static ${json})
 
 INSTALL(TARGETS jsonpath RUNTIME DESTINATION bin)

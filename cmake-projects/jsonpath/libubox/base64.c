@@ -66,7 +66,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "assert.h"
+#include "ubox_assert.h"
 #include "utils.h"
 
 static const char Base64[] =

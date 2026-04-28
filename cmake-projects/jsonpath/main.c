@@ -26,7 +26,7 @@
 	#include <json-c/json.h>
 #endif
 
-#include <libubox/list.h>
+#include "libubox/list.h"
 
 #include "lexer.h"
 #include "parser.h"
