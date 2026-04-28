@@ -1,3 +1,10 @@
+simet-ma (0.18.14.1) unstable; urgency=medium
+
+  * simet-dnsaddr: fix dnssec measurement retries
+  * jsonpath: don't statically link the executable
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 28 Apr 2026 14:22:19 -0300
+
 simet-ma (0.18.14) unstable; urgency=medium
 
   * simet-ma version 0.18.14
