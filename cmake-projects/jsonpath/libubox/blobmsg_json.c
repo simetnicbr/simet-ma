@@ -17,11 +17,7 @@
 #include "blobmsg.h"
 #include "blobmsg_json.h"
 
-#ifdef JSONC
-	#include <json.h>
-#else
-	#include <json/json.h>
-#endif
+#include <json.h>
 
 bool blobmsg_add_object(struct blob_buf *b, json_object *obj)
 {
@@ -151,15 +147,15 @@ static bool blobmsg_puts(struct strbuf *s, const char *c, int len)
 
 static void add_separator(struct strbuf *s)
 {
-	const char *indent_chars = "\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+	const char indent_chars[] = "\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 	size_t len;
 
 	if (!s->indent)
 		return;
 
 	len = s->indent_level + 1;
-	if (len > strlen(indent_chars))
-		len = strlen(indent_chars);
+	if (len > sizeof(indent_chars) - 1)
+		len = sizeof(indent_chars) - 1;
 
 	blobmsg_puts(s, indent_chars, len);
 }

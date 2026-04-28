@@ -45,7 +45,7 @@
 #include <string.h>
 
 #include "avl.h"
-#include "ubox_assert.h"
+#include "assert.h"
 #include "list.h"
 
 /**

@@ -26,7 +26,7 @@
 	#include <json-c/json.h>
 #endif
 
-#include "libubox/list.h"
+#include <libubox/list.h>
 
 #include "lexer.h"
 #include "parser.h"
@@ -46,7 +46,7 @@ print_usage(char *app)
 	"  # %s [-a] [-i <file> | -s \"json...\"] {-t <pattern> | -e <pattern>}\n"
 	"  -q		Quiet, no errors are printed\n"
 	"  -h, --help	Print this help\n"
-	"  -a		Implicitely treat input as array, useful for JSON logs\n"
+	"  -a		Implicitly treat input as array; useful for JSON logs\n"
 	"  -i path	Specify a JSON file to parse\n"
 	"  -s \"json\"	Specify a JSON string to parse\n"
 	"  -l limit	Specify max number of results to show\n"
@@ -59,7 +59,7 @@ print_usage(char *app)
 	"  This tool implements $, @, [], * and the union operator ','\n"
 	"  plus the usual expressions and literals.\n"
 	"  It does not support the recursive child search operator '..' or\n"
-	"  the '?()' and '()' filter expressions as those would require a\n"
+	"  the '?()' or '()' filter expressions as those would require a\n"
 	"  complete JavaScript engine to support them.\n\n"
 	"== Examples ==\n\n"
 	"  Display the first IPv4 address on lan:\n"
@@ -146,10 +146,8 @@ parse_json(FILE *fd, const char *source, const char **error, bool array_mode)
 		{
 			obj = parse_json_chunk(tok, array, buf, len, &err);
 
-			if (err == json_tokener_success && !array)
-				break;
-
-			if (err != json_tokener_continue)
+			if ((err == json_tokener_success && array_mode == false) ||
+			    (err != json_tokener_continue && err != json_tokener_success))
 				break;
 		}
 	}
@@ -467,13 +465,18 @@ int main(int argc, char **argv)
 {
 	bool array_mode = false;
 	int opt, rv = 0, limit = 0x7FFFFFFF;
+	bool t_e_flag = false;
 	FILE *input = stdin;
 	struct json_object *jsobj = NULL;
 	const char *jserr = NULL, *source = NULL, *separator = " ";
+	int te_opts[argc];
+	char *te_sources[argc];
+	int te_count = 0;
 
 	if (argc == 1)
 	{
 		print_usage(argv[0]);
+		rv = 1;
 		goto out;
 	}
 
@@ -518,30 +521,41 @@ int main(int argc, char **argv)
 
 		case 't':
 		case 'e':
-			if (!jsobj)
-			{
-				jsobj = parse_json(input, source, &jserr, array_mode);
+			t_e_flag = true;
 
-				if (!jsobj)
-				{
-					fprintf(stderr, "Failed to parse json data: %s\n",
-					        jserr);
-
-					rv = 126;
-					goto out;
-				}
-			}
-
-			if (!filter_json(opt, jsobj, optarg, separator, limit))
-				rv = 1;
-
+			// defer parsing and filtering
+			te_sources[te_count] = optarg;
+			te_opts[te_count] = opt;
+			te_count++;
 			break;
 
 		case 'q':
 			fclose(stderr);
 			break;
+		case '?':
+			/* invalid or unknown. getopt() prints the error to stderr */
+			rv = 1;
+			goto out;
+		}
+
+	}
+
+	// Deferred JSON parsing after option parsing is complete
+	if (!jsobj && t_e_flag)
+	{
+		jsobj = parse_json(input, source, &jserr, array_mode);
+		if (!jsobj)
+		{
+			fprintf(stderr, "Failed to parse JSON data: %s\n", jserr);
+			rv = 126;
+			goto out;
 		}
 	}
+
+	// Handle filtering and other JSON operations
+	for (int i = 0; i < te_count; i++)
+		if (!filter_json(te_opts[i], jsobj, te_sources[i], separator, limit))
+			rv = 1;
 
 out:
 	if (jsobj)

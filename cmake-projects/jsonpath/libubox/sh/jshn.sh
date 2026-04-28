@@ -23,7 +23,7 @@ __jshn_raw_append() {
 _jshn_append() {
 	# var=$1
 	local _a_value="$2"
-	eval "${JSON_PREFIX}$1=\"\${${JSON_PREFIX}$1} \$_a_value\""
+	eval "${JSON_PREFIX}$1=\"\${${JSON_PREFIX}$1}\${${JSON_PREFIX}$1:+ }\$_a_value\""
 }
 
 _get_var() {
@@ -150,10 +150,32 @@ json_add_string() {
 	_json_add_generic string "$1" "$2" "$cur"
 }
 
+json_push_string() {
+	local cur
+	_json_get_var cur JSON_CUR
+	[ "${cur%%[0-9]*}" = "J_A" ] || {
+		[ -n "$_json_no_warning" ] || \
+			echo "WARNING: Not in an array" >&2
+		return 1
+	}
+	_json_add_generic string "" "$1" "$cur"
+}
+
 json_add_int() {
 	local cur
 	_json_get_var cur JSON_CUR
 	_json_add_generic int "$1" "$2" "$cur"
+}
+
+json_push_int() {
+	local cur
+	_json_get_var cur JSON_CUR
+	[ "${cur%%[0-9]*}" = "J_A" ] || {
+		[ -n "$_json_no_warning" ] || \
+			echo "WARNING: Not in an array" >&2
+		return 1
+	}
+	_json_add_generic int "" "$1" "$cur"
 }
 
 json_add_boolean() {
@@ -162,10 +184,32 @@ json_add_boolean() {
 	_json_add_generic boolean "$1" "$2" "$cur"
 }
 
+json_push_boolean() {
+	local cur
+	_json_get_var cur JSON_CUR
+	[ "${cur%%[0-9]*}" = "J_A" ] || {
+		[ -n "$_json_no_warning" ] || \
+			echo "WARNING: Not in an array" >&2
+		return 1
+	}
+	_json_add_generic boolean "" "$1" "$cur"
+}
+
 json_add_double() {
 	local cur
 	_json_get_var cur JSON_CUR
 	_json_add_generic double "$1" "$2" "$cur"
+}
+
+json_push_double() {
+	local cur
+	_json_get_var cur JSON_CUR
+	[ "${cur%%[0-9]*}" = "J_A" ] || {
+		[ -n "$_json_no_warning" ] || \
+			echo "WARNING: Not in an array" >&2
+		return 1
+	}
+	_json_add_generic double "" "$1" "$cur"
 }
 
 json_add_null() {
@@ -174,7 +218,65 @@ json_add_null() {
 	_json_add_generic null "$1" "" "$cur"
 }
 
+json_push_null() {
+	local cur
+	_json_get_var cur JSON_CUR
+	[ "${cur%%[0-9]*}" = "J_A" ] || {
+		[ -n "$_json_no_warning" ] || \
+			echo "WARNING: Not in an array" >&2
+		return 1
+	}
+	_json_add_generic null "" "" "$cur"
+}
+
+json_add_fields() {
+	while [ "$#" -gt 0 ]; do
+		local field="$1"
+		shift
+
+		local name="${field%%=*}"
+		local val="${field#*=}"
+		[ "$name" != "$val" ] || val=""
+
+		local type="${name#*:}"
+		[ "$type" != "$name" ] || type=string
+		name="${name%%:*}"
+
+		case "$type" in
+			string|int|boolean|double)
+				local cur
+				_json_get_var cur JSON_CUR
+				_json_add_generic "$type" "$name" "$val" "$cur"
+			;;
+		esac
+	done
+}
+
+json_get_index() {
+	local __dest="$1"
+	local __cur __parent __seq
+	_json_get_var __cur JSON_CUR
+	_json_get_var __parent "U_$__cur"
+	if [ "${__parent%%[0-9]*}" != "J_A" ]; then
+		[ -n "$_json_no_warning" ] || \
+			echo "WARNING: Not inside an array" >&2
+		return 1
+	fi
+	__seq="S_$__parent"
+	eval "export -- \"$__dest=\${$__seq}\"; [ -n \"\${$__seq+x}\" ]"
+}
+
 # functions read access to json variables
+
+json_compact() {
+	JSON_NONEWLINE=1
+	JSON_INDENT=
+}
+
+json_pretty() {
+	JSON_NONEWLINE=
+	JSON_INDENT=1
+}
 
 json_load() {
 	eval "`jshn -r "$1"`"
@@ -185,10 +287,11 @@ json_load_file() {
 }
 
 json_dump() {
-	jshn "$@" ${JSON_PREFIX:+-p "$JSON_PREFIX"} -w 
+	jshn "$@" ${JSON_PREFIX:+-p "$JSON_PREFIX"} ${JSON_NONEWLINE:+-n} ${JSON_INDENT:+-i} -w
 }
 
 json_get_type() {
+	# target=$2
 	local __dest="$1"
 	local __cur
 
@@ -258,11 +361,11 @@ json_select() {
 	local type
 	local cur
 
-	[ -z "$1" ] && {
+	[ -z "$target" ] && {
 		_json_set_var JSON_CUR "J_V"
 		return 0
 	}
-	[[ "$1" == ".." ]] && {
+	[[ "$target" == ".." ]] && {
 		_json_get_var cur JSON_CUR
 		_json_get_var cur "U_$cur"
 		_json_set_var JSON_CUR "$cur"
@@ -276,13 +379,15 @@ json_select() {
 		;;
 		*)
 			[ -n "$_json_no_warning" ] || \
-				echo "WARNING: Variable '$target' does not exist or is not an array/object"
+				echo "WARNING: Variable '$target' does not exist or is not an array/object" >&2
 			return 1
 		;;
 	esac
 }
 
 json_is_a() {
+	# target=$1
+	# type=$2
 	local type
 
 	json_get_type type "$1"

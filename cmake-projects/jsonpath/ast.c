@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include "libubox/utils.h"
+#include <libubox/utils.h>
 
 struct jp_opcode *
 jp_alloc_op(struct jp_state *s, int type, int num, char *str, ...)

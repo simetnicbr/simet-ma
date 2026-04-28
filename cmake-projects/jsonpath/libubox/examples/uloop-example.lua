@@ -24,6 +24,23 @@ uloop.timer(function() print("2000 ms timer run"); end, 2000)
 -- timer example 3 (will never run)
 uloop.timer(function() print("3000 ms timer run"); end, 3000):cancel()
 
+-- periodic interval timer
+local intv
+intv = uloop.interval(function()
+	print(string.format("Interval expiration #%d - %dms until next expiration",
+		intv:expirations(), intv:remaining()))
+
+	-- after 5 expirations, lower interval to 500ms
+	if intv:expirations() >= 5 then
+		intv:set(500)
+	end
+
+	-- cancel after 10 expirations
+	if intv:expirations() >= 10 then
+		intv:cancel()
+	end
+end, 1000)
+
 -- process
 function p1(r)
 	print("Process 1 completed")
@@ -45,6 +62,22 @@ uloop.timer(
 		uloop.process("uloop_pid_test.sh", {"foo", "bar"}, {"PROCESS=2"}, p2)
 	end, 2000
 )
+
+-- SIGINT handler
+uloop.signal(function(signo)
+	print(string.format("Terminating on SIGINT (#%d)!", signo))
+
+	-- end uloop to terminate program
+	uloop.cancel()
+end, uloop.SIGINT)
+
+local sig
+sig = uloop.signal(function(signo)
+	print(string.format("Got SIGUSR2 (#%d)!", signo))
+
+	-- remove signal handler, next SIGUSR2 will terminate program
+	sig:delete()
+end, uloop.SIGUSR2)
 
 -- Keep udp_ev reference, events will be gc'd, even if the callback is still referenced
 -- .delete will manually untrack.

@@ -58,6 +58,8 @@ blob_buf_grow(struct blob_buf *buf, int required)
 {
 	int offset_head = attr_to_offset(buf, buf->head);
 
+	if ((buf->buflen + required) > BLOB_ATTR_LEN_MASK)
+		return false;
 	if (!buf->grow || !buf->grow(buf, required))
 		return false;
 
@@ -103,6 +105,7 @@ blob_buf_free(struct blob_buf *buf)
 {
 	free(buf->buf);
 	buf->buf = NULL;
+	buf->head = NULL;
 	buf->buflen = 0;
 }
 
@@ -320,7 +323,7 @@ blob_attr_equal(const struct blob_attr *a1, const struct blob_attr *a2)
 }
 
 struct blob_attr *
-blob_memdup(struct blob_attr *attr)
+blob_memdup(const struct blob_attr *attr)
 {
 	struct blob_attr *ret;
 	int size = blob_pad_len(attr);
