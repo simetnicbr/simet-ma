@@ -1,7 +1,13 @@
-diff --git a/cmake-projects/jsonpath/CMakeLists.txt b/cmake-projects/jsonpath/CMakeLists.txt
-index 3213379..f455318 100644
---- a/cmake-projects/jsonpath/CMakeLists.txt
-+++ b/cmake-projects/jsonpath/CMakeLists.txt
+diff --git jsonpath/CMakeLists.txt jsonpath/CMakeLists.txt
+index 3213379..ff41125 100644
+--- jsonpath/CMakeLists.txt
++++ jsonpath/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.10)
++cmake_minimum_required(VERSION 3.5...3.10)
+ 
+ PROJECT(jsonpath C)
+ ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -Wmissing-declarations -Wno-error=unused-variable -ffunction-sections -D_GNU_SOURCE)
 @@ -19,26 +19,35 @@ IF(JSONC_FOUND)
  ENDIF()
  
@@ -11,7 +17,7 @@ index 3213379..f455318 100644
 -  COMMAND gcc -std=gnu17 -o contrib/lemon contrib/lemon.c
 +  OUTPUT lemon
 +  DEPENDS ${CMAKE_SOURCE_DIR}/contrib/lemon.c ${CMAKE_SOURCE_DIR}/contrib/lempar.c
-+  COMMAND gcc -std=gnu17 -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
++  COMMAND gcc -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
    COMMENT "Generating lemon parser generator"
  )
  
@@ -46,10 +52,10 @@ index 3213379..f455318 100644
 +TARGET_LINK_LIBRARIES(jsonpath ubox-static ${json})
  
  INSTALL(TARGETS jsonpath RUNTIME DESTINATION bin)
-diff --git a/cmake-projects/jsonpath/ast.c b/cmake-projects/jsonpath/ast.c
+diff --git jsonpath/ast.c jsonpath/ast.c
 index 3f88d94..9a9b37a 100644
---- a/cmake-projects/jsonpath/ast.c
-+++ b/cmake-projects/jsonpath/ast.c
+--- jsonpath/ast.c
++++ jsonpath/ast.c
 @@ -21,7 +21,7 @@
  #include <stdlib.h>
  #include <stdarg.h>
@@ -59,10 +65,10 @@ index 3f88d94..9a9b37a 100644
  
  struct jp_opcode *
  jp_alloc_op(struct jp_state *s, int type, int num, char *str, ...)
-diff --git a/cmake-projects/jsonpath/main.c b/cmake-projects/jsonpath/main.c
+diff --git jsonpath/main.c jsonpath/main.c
 index 5758ab8..f468b02 100644
---- a/cmake-projects/jsonpath/main.c
-+++ b/cmake-projects/jsonpath/main.c
+--- jsonpath/main.c
++++ jsonpath/main.c
 @@ -26,7 +26,7 @@
  	#include <json-c/json.h>
  #endif
