@@ -2468,6 +2468,8 @@ int main(int argc, char **argv) {
                     intarg <= SIMET_UPTIME2_LONGEST_TIMEOUT) {
                 simet_uptime2_tcp_timeout = (unsigned int)intarg;
             } else {
+                print_err("invalid initial tcp timeout (must be an integer between %d and %d): %s",
+                        SIMET_UPTIME2_SHORTEST_TIMEOUT, SIMET_UPTIME2_LONGEST_TIMEOUT, optarg);
                 print_usage(progname, 1);
             }
             break;
