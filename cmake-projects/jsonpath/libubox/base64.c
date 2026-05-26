@@ -207,7 +207,7 @@ int b64_decode(const void *_src, void *dest, size_t targsize)
 	int state, ch;
 	size_t tarindex;
 	u_char nextbyte;
-	char *pos;
+	const char *pos;
 
 	state = 0;
 	tarindex = 0;

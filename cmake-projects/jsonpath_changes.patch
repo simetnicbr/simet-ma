@@ -1,25 +1,20 @@
-diff -ru orig.jsonpath/ast.c jsonpath/ast.c
---- orig.jsonpath/ast.c	2018-10-11 11:39:16.329251656 -0300
-+++ jsonpath/ast.c	2018-10-10 17:12:05.795452663 -0300
-@@ -21,7 +21,7 @@
- #include <stdlib.h>
- #include <stdarg.h>
- #include <string.h>
--#include <libubox/utils.h>
-+#include "libubox/utils.h"
+diff --git jsonpath/CMakeLists.txt jsonpath/CMakeLists.txt
+index 3213379..ff41125 100644
+--- jsonpath/CMakeLists.txt
++++ jsonpath/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.10)
++cmake_minimum_required(VERSION 3.5...3.10)
  
- struct jp_opcode *
- jp_alloc_op(struct jp_state *s, int type, int num, char *str, ...)
-diff -ru orig.jsonpath/CMakeLists.txt jsonpath/CMakeLists.txt
---- orig.jsonpath/CMakeLists.txt	2018-10-11 11:39:16.329251656 -0300
-+++ jsonpath/CMakeLists.txt	2018-10-11 11:37:43.100092488 -0300
-@@ -21,25 +21,35 @@
+ PROJECT(jsonpath C)
+ ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -Wmissing-declarations -Wno-error=unused-variable -ffunction-sections -D_GNU_SOURCE)
+@@ -19,26 +19,35 @@ IF(JSONC_FOUND)
  ENDIF()
  
  ADD_CUSTOM_COMMAND(
 -  OUTPUT contrib/lemon
 -  DEPENDS contrib/lemon.c contrib/lempar.c
--  COMMAND gcc -o contrib/lemon contrib/lemon.c
+-  COMMAND gcc -std=gnu17 -o contrib/lemon contrib/lemon.c
 +  OUTPUT lemon
 +  DEPENDS ${CMAKE_SOURCE_DIR}/contrib/lemon.c ${CMAKE_SOURCE_DIR}/contrib/lempar.c
 +  COMMAND gcc -o lemon -I "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/contrib/lemon.c"
@@ -50,16 +45,30 @@ diff -ru orig.jsonpath/CMakeLists.txt jsonpath/CMakeLists.txt
 +
 +SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 +SET(BUILD_SHARED_LIBS OFF)
-+SET(CMAKE_EXE_LINKER_FLAGS "-static")
 +
  ADD_EXECUTABLE(jsonpath main.c ast.c lexer.c parser.c matcher.c)
+ find_library(json NAMES json-c)
 -TARGET_LINK_LIBRARIES(jsonpath ubox ${json})
 +TARGET_LINK_LIBRARIES(jsonpath ubox-static ${json})
  
  INSTALL(TARGETS jsonpath RUNTIME DESTINATION bin)
-diff -ru orig.jsonpath/main.c jsonpath/main.c
---- orig.jsonpath/main.c	2018-10-11 11:39:16.333251706 -0300
-+++ jsonpath/main.c	2018-10-10 17:12:05.807452815 -0300
+diff --git jsonpath/ast.c jsonpath/ast.c
+index 3f88d94..9a9b37a 100644
+--- jsonpath/ast.c
++++ jsonpath/ast.c
+@@ -21,7 +21,7 @@
+ #include <stdlib.h>
+ #include <stdarg.h>
+ #include <string.h>
+-#include <libubox/utils.h>
++#include "libubox/utils.h"
+ 
+ struct jp_opcode *
+ jp_alloc_op(struct jp_state *s, int type, int num, char *str, ...)
+diff --git jsonpath/main.c jsonpath/main.c
+index 5758ab8..f468b02 100644
+--- jsonpath/main.c
++++ jsonpath/main.c
 @@ -26,7 +26,7 @@
  	#include <json-c/json.h>
  #endif

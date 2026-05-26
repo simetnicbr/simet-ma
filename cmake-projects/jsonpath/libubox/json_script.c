@@ -431,7 +431,7 @@ static int eval_string(struct json_call *call, struct blob_buf *buf, const char 
 	bool var = false;
 	char c = '%';
 
-	dest = blobmsg_alloc_string_buffer(buf, name, 1);
+	dest = blobmsg_alloc_string_buffer(buf, name, 0);
 	if (!dest)
 		return -1;
 
@@ -473,7 +473,7 @@ static int eval_string(struct json_call *call, struct blob_buf *buf, const char 
 			cur_len = end - str;
 		}
 
-		new_buf = blobmsg_realloc_string_buffer(buf, len + cur_len + 1);
+		new_buf = blobmsg_realloc_string_buffer(buf, len + cur_len);
 		if (!new_buf) {
 			/* Make eval_string return -1 */
 			var = true;
@@ -591,7 +591,7 @@ static int json_process_cmd(struct json_call *call, struct blob_attr *block)
 		case BLOBMSG_TYPE_STRING:
 			if (!i)
 				return __json_process_cmd(call, block);
-			/* fall through */
+			fallthrough;
 		default:
 			ret = json_process_cmd(call, cur);
 			if (ret < -1)

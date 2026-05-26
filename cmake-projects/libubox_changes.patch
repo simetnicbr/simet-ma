@@ -1,15 +1,21 @@
-diff --git a/cmake-projects/jsonpath/libubox/CMakeLists.txt b/cmake-projects/jsonpath/libubox/CMakeLists.txt
-index 1a1b7d5..f4b3675 100644
---- a/cmake-projects/jsonpath/libubox/CMakeLists.txt
-+++ b/cmake-projects/jsonpath/libubox/CMakeLists.txt
-@@ -37,6 +37,7 @@ IF(NOT HAVE_GETTIME)
+diff --git jsonpath/libubox/CMakeLists.txt jsonpath/libubox/CMakeLists.txt
+index bb67fec..598ce85 100644
+--- jsonpath/libubox/CMakeLists.txt
++++ jsonpath/libubox/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.13)
++cmake_minimum_required(VERSION 3.5...3.13)
+ INCLUDE(CheckLibraryExists)
+ INCLUDE(CheckFunctionExists)
+ 
+@@ -36,6 +36,7 @@ IF(NOT HAVE_GETTIME OR NOT HAVE_SHM)
  ENDIF()
  
  FILE(GLOB headers *.h)
 +IF(OFF)
+ LIST(FILTER headers EXCLUDE REGEX "-priv.h$" )
  INSTALL(FILES ${headers}
  	DESTINATION include/libubox
- )
 @@ -44,6 +45,7 @@ INSTALL(TARGETS ubox ubox-static
  	ARCHIVE DESTINATION lib
  	LIBRARY DESTINATION lib
@@ -34,10 +40,10 @@ index 1a1b7d5..f4b3675 100644
  
  ENDIF()
  
-diff --git a/cmake-projects/jsonpath/libubox/assert.h b/cmake-projects/jsonpath/libubox/assert.h
+diff --git jsonpath/libubox/assert.h jsonpath/libubox/assert.h
 deleted file mode 100644
 index 84f5471..0000000
---- a/cmake-projects/jsonpath/libubox/assert.h
+--- jsonpath/libubox/assert.h
 +++ /dev/null
 @@ -1,9 +0,0 @@
 -#pragma once
@@ -49,10 +55,10 @@ index 84f5471..0000000
 -#else
 -#include <assert.h>
 -#endif
-diff --git a/cmake-projects/jsonpath/libubox/avl.c b/cmake-projects/jsonpath/libubox/avl.c
+diff --git jsonpath/libubox/avl.c jsonpath/libubox/avl.c
 index 79ea5c7..d1d94ee 100644
---- a/cmake-projects/jsonpath/libubox/avl.c
-+++ b/cmake-projects/jsonpath/libubox/avl.c
+--- jsonpath/libubox/avl.c
++++ jsonpath/libubox/avl.c
 @@ -45,7 +45,7 @@
  #include <string.h>
  
@@ -62,10 +68,10 @@ index 79ea5c7..d1d94ee 100644
  #include "list.h"
  
  /**
-diff --git a/cmake-projects/jsonpath/libubox/base64.c b/cmake-projects/jsonpath/libubox/base64.c
-index 1bf2177..bdf4edd 100644
---- a/cmake-projects/jsonpath/libubox/base64.c
-+++ b/cmake-projects/jsonpath/libubox/base64.c
+diff --git jsonpath/libubox/base64.c jsonpath/libubox/base64.c
+index 1bf2177..9844e47 100644
+--- jsonpath/libubox/base64.c
++++ jsonpath/libubox/base64.c
 @@ -66,7 +66,7 @@
  #include <stdlib.h>
  #include <string.h>
@@ -75,11 +81,17 @@ index 1bf2177..bdf4edd 100644
  #include "utils.h"
  
  static const char Base64[] =
-diff --git a/cmake-projects/jsonpath/libubox/ubox_assert.h b/cmake-projects/jsonpath/libubox/ubox_assert.h
-new file mode 100644
-index 0000000..84f5471
+@@ -207,7 +207,7 @@ int b64_decode(const void *_src, void *dest, size_t targsize)
+ 	int state, ch;
+ 	size_t tarindex;
+ 	u_char nextbyte;
+-	char *pos;
++	const char *pos;
+ 
+ 	state = 0;
+ 	tarindex = 0;
 --- /dev/null
-+++ b/cmake-projects/jsonpath/libubox/ubox_assert.h
++++ jsonpath/libubox/ubox_assert.h
 @@ -0,0 +1,9 @@
 +#pragma once
 +
@@ -90,3 +102,17 @@ index 0000000..84f5471
 +#else
 +#include <assert.h>
 +#endif
+diff --git jsonpath/libubox/udebug.c jsonpath/libubox/udebug.c
+index e39a32c..abd1b7d 100644
+--- jsonpath/libubox/udebug.c
++++ jsonpath/libubox/udebug.c
+@@ -15,7 +15,9 @@
+  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
++#ifndef _GNU_SOURCE
+ #define _GNU_SOURCE
++#endif
+ #include <sys/types.h>
+ #include <sys/mman.h>
+ #include <sys/socket.h>

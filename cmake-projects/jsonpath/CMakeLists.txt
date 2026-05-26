@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.5...3.10)
 
 PROJECT(jsonpath C)
 ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -Wmissing-declarations -Wno-error=unused-variable -ffunction-sections -D_GNU_SOURCE)
@@ -7,14 +7,12 @@ IF(NOT APPLE)
   SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "-Wl,--gc-sections")
 ENDIF()
 
-find_library(json NAMES json-c json)
-
 IF(DEBUG)
   ADD_DEFINITIONS(-DDEBUG -g3)
 ENDIF()
 
 INCLUDE(FindPkgConfig)
-PKG_CHECK_MODULES(JSONC json-c json)
+PKG_CHECK_MODULES(JSONC json-c)
 IF(JSONC_FOUND)
   ADD_DEFINITIONS(-DJSONC)
   INCLUDE_DIRECTORIES(${JSONC_INCLUDE_DIRS})
@@ -49,6 +47,7 @@ SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
 
 ADD_EXECUTABLE(jsonpath main.c ast.c lexer.c parser.c matcher.c)
+find_library(json NAMES json-c)
 TARGET_LINK_LIBRARIES(jsonpath ubox-static ${json})
 
 INSTALL(TARGETS jsonpath RUNTIME DESTINATION bin)
