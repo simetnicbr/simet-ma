@@ -1,5 +1,20 @@
+simet-ma (0.18.14.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.14.2
+  * update vendored jsonpath to upstream commit
+    b9034210bd331749673416c6bf389cccd4e23610, with several fixes
+  * update vendored (and patched) libubox to upstream commit
+    f9b1f3ff17baeb490cc896a037f176c0240ae776
+  * jsonpath/libubox: fix base64.c compilation on newer gcc
+  * jsonpath: contrib/lemon.c: fix function prototypes for C23
+  * jsonpath, jsonpath/libubox: allow build on older cmake
+  * inetup: print error message on invalid -t argument
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 26 May 2026 15:59:11 -0300
+
 simet-ma (0.18.14.1) unstable; urgency=medium
 
+  * simet-ma version 0.18.14.1
   * simet-dnsaddr: fix dnssec measurement retries
   * jsonpath: don't statically link the executable
 
