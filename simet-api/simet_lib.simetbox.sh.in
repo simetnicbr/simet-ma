@@ -41,6 +41,12 @@ simet_log() {
 
 SIMET_MAC_LABEL=$(get_mac_address.sh 2>/dev/null | tr A-F a-f | tr -d ': -') || SIMET_MAC_LABEL=
 
+get_simet_machine_id()
+{
+	SIMET_MACHINEID=
+	return 1
+}
+
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
 get_http_useragent()

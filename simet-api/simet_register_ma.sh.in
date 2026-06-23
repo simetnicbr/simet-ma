@@ -73,6 +73,7 @@ run_trap() {
 }
 
 SIMETMA_RECONFIG=${SIMETMA_RECONFIG:-/etc/init.d/simet-ma reload}
+SIMET_MACHINEID=
 
 # Load hooks and overrides
 simet_load_hooks register_ma
@@ -207,16 +208,18 @@ __simet_agent_extra_attributes() {
 __simet_agent_attributes() {
 	local AMAC ADESC AHN AVEND
 	simet2_agentinfo && {
+		get_simet_machine_id 2>/dev/null || SIMET_MACHINEID=
 		AVEND=$(simet_jo_pairs 0 \
 			firmware_vendor "$SIMET2_FIRMWARE_VENDOR" \
 			device_model "$SIMET2_DEVICE_MODEL" \
 		  && printf ',')
 		AMAC=$(__simet_quoteornull "$SIMET_MAC_LABEL")
+		AMID=$(__simet_quoteornull "$SIMET_MACHINEID")
 		ADESC=$(__simet_quoteornull "$SIMET2_MADESCRIPTION")
 		AHN=$(__simet_quoteornull "$SIMET2_MAHOSTNAME")
 		AEXTRA=",$(call __simet_agent_extra_attributes)" || AEXTRA=
-		printf "\"attributes\":{%s\"mac_address\":%s,\"description\":%s,\"hostname\":%s%s}," \
-			"$AVEND" "$AMAC" "$ADESC" "$AHN" "$AEXTRA"
+		printf "\"attributes\":{%s\"mac_address\":%s,\"machine_id\":%s,\"description\":%s,\"hostname\":%s%s}," \
+			"$AVEND" "$AMAC" "$AMID" "$ADESC" "$AHN" "$AEXTRA"
 	}
 	:
 }

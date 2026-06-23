@@ -47,6 +47,17 @@ simet_log() {
 	SIMET_MAC_LABEL="$(@BINDIR@/simet_get_mac_address.sh 2>/dev/null | tr -dc '0-9a-zA-Z' | tr A-Z a-z )" || SIMET_MAC_LABEL=
 }
 
+get_simet_machine_id() {
+	local _mid
+	[ -z "$SIMET_MACHINEID" ] && {
+		# simet_hash errors out on missing and empty files
+		_mid=$(tr -d '[:space:][:cntrl:]' < /etc/machine-id | @BINDIR@/simet_hash) 2>/dev/null || _mid=
+		[ -n "$_mid" ] && SIMET_MACHINEID="M0${_mid}"
+	} 2>/dev/null
+	[ -z "$SIMET_MACHINEID" ] && return 1
+	:
+}
+
 # stdout: HTTP-compatible agent name/version string
 # Note: subshell function!
 get_http_useragent()
