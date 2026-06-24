@@ -327,7 +327,7 @@ static int create_measure_socket(const MeasureContext * const ctx, size_t * cons
 	print_warn("failed to set TCP socket not-sent low watermark");
     }
 #else
-    if (aswatermark > 0) {
+    if (awatermark > 0) {
 	print_warn("failed to enable TCP_NOTSENT_LOWAT: unavailable");
     }
 #endif
