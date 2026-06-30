@@ -1,3 +1,14 @@
+simet-ma (0.18.14.3) unstable; urgency=medium
+
+  * simet-api: slight better fix for simet2_agentinfo() error path
+  * simet-api: add machine_id agent attribute to MA registration,
+    using simet_hash (base64 SHA256) to protect the real machine_id
+  * simet-api: add simet_hash helper
+  * tcpbw: fix compilation when TCP_NOTSENT_LOWAT is undefined
+  * deb: debian/control: depend on anacron, to avoid group sync
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 30 Jun 2026 09:12:59 -0300
+
 simet-ma (0.18.14.2) unstable; urgency=medium
 
   * simet-ma version 0.18.14.2
