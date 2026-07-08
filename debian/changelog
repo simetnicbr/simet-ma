@@ -1,5 +1,16 @@
+simet-ma (0.18.14.4) unstable; urgency=medium
+
+  * simet-ma version 0.18.14.4
+  * simet-dnsaddr: change the dnssec zones
+  * simet-dnsaddr: accept EAI_EAGAIN on dnssec
+  * deb: enable SDNSSEC measurement
+  * deb: enable per-build autoconf caching
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Wed, 08 Jul 2026 17:35:56 -0300
+
 simet-ma (0.18.14.3) unstable; urgency=medium
 
+  * simet-ma version 0.18.14.3
   * simet-api: slight better fix for simet2_agentinfo() error path
   * simet-api: add machine_id agent attribute to MA registration,
     using simet_hash (base64 SHA256) to protect the real machine_id
