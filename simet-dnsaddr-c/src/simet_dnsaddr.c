@@ -393,10 +393,13 @@ static int sdnsa_getaddrinfo_error(int af, const char * node, struct dns_addrinf
     print_msg(MSG_TRACE, "getaddrinfo(%s) took %lld microseconds: %s", node, delta_us,
                          (eai)? gai_strerror(eai) : "no error");
 
-    /* For DNSSEC, we get either success, EAI_NODATA or EAI_NONAME
-     * anything else is an unexpected failure (network error, etc) */
-    if (eai != EAI_NODATA && eai != EAI_NONAME && eai != 0) {
-        return (eai == EAI_AGAIN) ? -1 : SEXIT_FAILURE;
+    /* For DNSSEC, depending on what is generating the answers and libc, we get:
+     * success (bad!), EAI_AGAIN (from SRVFAIL, the better answer), EAI_NODATA or
+     * EAI_NONAME.
+     *
+     * Anything else is an unexpected failure (network error, etc) */
+    if (eai != EAI_NODATA && eai != EAI_NONAME && eai != EAI_AGAIN && eai != 0) {
+        return SEXIT_FAILURE;
     }
 
     if (result) {
@@ -518,7 +521,11 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
      * zone, and also for an unsigned record in an DNSSEC-unsigned zone
      * (which is also valid).  Record the query time for each one.
      *
-     * Do it 10 times.  Fail the measurement early on error.
+     * Do it 10 times.  Fail the measurement early on error on the
+     * control measurements.
+     *
+     * A timeout *only* on DNSSEC_BAD_NODE when all other nodes worked
+     * is accepted, as it is what usually happens on SRVFAIL.
      */
     int rc = 0;
     retries = 3;
@@ -531,7 +538,7 @@ static int sdnsa_dnssec_query(struct dns_addrinfo_head * const dnsres_dnssec_val
             rc = sdnsa_getaddrinfo(AF_INET, SIMET_DNSSEC_GOOD_NODE, &q_valid);
         }
         if (!rc) {
-            /* Does not consider EAI_NODATA, EAI_NONAME or success an error */
+            /* Does not consider EAI_AGAIN, EAI_NODATA, EAI_NONAME or success an error */
             rc = sdnsa_getaddrinfo_error(AF_INET, SIMET_DNSSEC_BAD_NODE, &q_invalid);
         }
         if (!rc) {
