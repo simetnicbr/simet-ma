@@ -50,10 +50,11 @@
 #include "logger.h"
 #include "report.h"
 
-#define SIMET_DNSREFLECT_DOMAIN "mp.dns.simet.nic.br"
-#define SIMET_DNSSEC_GOOD_NODE  "simet.nic.br"
-#define SIMET_DNSSEC_BAD_NODE   "dnssec-failed.org" /* also brokendnssec.net */
-#define SIMET_DNSSEC_UNSIGNED_NODE "microsoft.com"  /* FIXME */
+/* Must be absolute names, so ensure there's a trailing "." */
+#define SIMET_DNSREFLECT_DOMAIN    "mp.dns.simet.nic.br."
+#define SIMET_DNSSEC_GOOD_NODE     "www.ceptro.br."
+#define SIMET_DNSSEC_BAD_NODE      "signfail.ceptro.br." // also signexpired.ceptro.br.
+#define SIMET_DNSSEC_UNSIGNED_NODE "simet-ma.unsigned.ds.mp.dns.simet.nic.br."
 
 const char *progname = PACKAGE_NAME;
 
