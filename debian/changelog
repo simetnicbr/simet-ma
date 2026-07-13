@@ -1,3 +1,13 @@
+simet-ma (0.18.14.5) unstable; urgency=medium
+
+  * simet-ma version 0.18.14.5
+  * simet-api: fix measurement spreading on some platforms
+    This change corrects the spreading of measurements by the MA fleet
+    over the day, but it will change most MA's choosen time of the day
+    for measurements as a side efect.
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Mon, 13 Jul 2026 08:11:29 -0300
+
 simet-ma (0.18.14.4) unstable; urgency=medium
 
   * simet-ma version 0.18.14.4
