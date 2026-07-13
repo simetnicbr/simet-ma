@@ -24,13 +24,17 @@
 SIMETMA_LMAPSCHED_LOCK="${SIMET_LOCK_DIR}/simet_lmap_schedule.lock"
 
 OUTFILE=
+RC=1
 abend() {
 	simet_log simet-lmapd daemon.err "$*"
 	[ -n "$OUTFILE" ] && rm -f "$OUTFILE" 2>/dev/null
-	exit 1
+	exit "$RC"
 }
 run_trap() {
 	abend "$0: received stop/interrupt signal"
+}
+lmap_log_err() {
+	simet_log simet-lmapd daemon.err "$*"
 }
 
 # if this is missing, the MA will have *no* hardcoded schedule
@@ -61,6 +65,7 @@ esac
 CURLOPT="$CURL_APIBASE $CURLOPT $CURLOPT_XTRA"
 
 # $1: max; $2 base_mult; $3 period; $4 offset
+# period is to be a mutiple of base_mult or the sequence will be incorrect
 __gen_seq() {
 	local value_max="$1" value_units="$2"
 	local value_step="$3" value_offset="$4"
@@ -69,12 +74,17 @@ __gen_seq() {
 	[ -z "$value_step" ] && value_step=1
 	[ -z "$value_offset" ] && value_offset=0
 
-	[ "$value_step" -eq 0 ] && return 1
+	[ "$value_step" -eq 0 ] && {
+		value_step=720
+		lmap_log_err "internal error: missing measurement period, using 720 minutes" >/dev/null
+	}
 	[ "$value_step" -le "$value_units" ] && {
 		printf '"*"'
 		return 0
 	}
-	[ $((value_step % value_units)) -ne 0 ] && return 1
+	[ $((value_step % value_units)) -ne 0 ] && {
+		lmap_log_err "measurement period $value_step not a multiple of $value_units, scheduling will be incorrect" >/dev/null
+	}
 
 	s=$(((value_step / value_units) % value_max))
 	b=$(((value_offset / value_units) % value_max))
@@ -84,7 +94,8 @@ __gen_seq() {
 	elif [ "$s" -eq 0 ] ; then
 		res="$b"
 	else
-		[ $((value_max % s)) -ne 0 ] && return 2
+		[ $((value_max % s)) -ne 0 ] && \
+			lmap_log_err "last measurement period will be cut short" >/dev/null
 		res=
 		b=$((b % s))
 		while [ "$b" -lt "$value_max" ] ; do
@@ -113,12 +124,20 @@ __clamp_spread() {
 #overridable
 #clobbers $OUTFILE contents!
 simet_gen_local_schedule() {
-	local awkseed RND RND1 RND2
+	local RND RND1 RND2
 	local engineconf
 
-	# stable-per-device pseudo-random sequence for awk, fallback to time-based seed
-	awkseed=$(printf '%s' "$SIMET_MAC_LABEL" | sed -E -e '1 {s/.*(.{5})$/0x\1/;q}') || awkseed=
-	RND=$(awk "BEGIN { srand($awkseed); printf \"RND1=%d ; RND2=%d\",rand()*1440,rand()*1440 }") && eval "$RND"
+	RND="$SIMET_MAC_LABEL"
+	[ -z "$RND" ] && RND=$(sed -n '1 { p; q; }' < "$AGENT_ID_FILE") 2>/dev/null
+	[ -z "$RND" ] && RND=$(cat /proc/sys/kernel/random/boot_id) 2>/dev/null
+	[ -n "$RND" ] && RND=$(printf "%s" "$RND" | $HASHSUM)
+	RND1=$(printf "%d" "$(printf "%s" "$RND" | sed -E 's/^(.{5}).*/0x\1/')")     2>/dev/null || RND1=
+	RND2=$(printf "%d" "$(printf "%s" "$RND" | sed -E 's/^.{5}(.{5}).*/0x\1/')") 2>/dev/null || RND2=
+
+	#shellcheck disable=SC2015
+	[ -n "$RND1" ] && [ -n "$RND2" ] && RND1=$(( RND1 % 1440 )) && RND2=$(( RND2 % 1440 )) \
+		&& [ "$RND1" -ge 0 ] && [ "$RND2" -ge 0 ] \
+		|| RC=3 abend "internal error: failed to generate scheduling time seed"
 
 	# Last resort config and/or defaults
 	T_PERIODIC_TEST_SPREAD="${SIMET_PERIODIC_TEST_SPREAD_SECONDS:-300}"
