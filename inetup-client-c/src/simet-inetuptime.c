@@ -2146,6 +2146,7 @@ static int validate_nonempty(const char * const vname, const char * const v)
     return 0;
 }
 
+/* returns -1 on error, 0 on change, 1 on no-error + no-change */
 static int load_agent_data(const char * const aid_path, const char * const atoken_path)
 {
     const char *new_aid  = NULL;
@@ -2172,22 +2173,25 @@ static int load_agent_data(const char * const aid_path, const char * const atoke
         goto err_out;
     }
 
-    rc = 0;
+    rc = 1;
 
     /* We only change agent-id,token as a set */
-    if (new_aid) {
+    if (xstrcmp(agent_id, new_aid)) {
         free_constchar(agent_id);
         agent_id = new_aid;
         new_aid = NULL;
+        rc = 0;
     }
-    if (new_atok) {
+    if (xstrcmp(agent_token, new_atok)) {
         free_constchar(agent_token);
         agent_token = new_atok;
         new_atok = NULL;
+        rc = 0;
     }
 
-    if (agent_id)
+    if (agent_id && !rc) {
         print_msg(MSG_NORMAL, "agent-id: %s", agent_id);
+    }
 
 err_out:
     free_constchar(new_aid);
@@ -2802,29 +2806,39 @@ int main(int argc, char **argv) {
 
         if (got_reload_signal && !got_exit_signal) {
             const bool had_agentid = (agent_id != NULL);
+            bool config_changed = false;
+            int r;
+
             got_reload_signal = 0;
-            if (load_agent_data(agent_id_file, agent_token_file)) {
+            print_msg(MSG_DEBUG, "reloading configuration...");
+
+            if ((r = load_agent_data(agent_id_file, agent_token_file)) < 0) {
                 if (had_agentid) {
                     print_warn("agent registration credentials missing, disconnecting");
                 }
                 free_constchar(agent_id);    agent_id = NULL;
                 free_constchar(agent_token); agent_token = NULL;
             }
+            config_changed |= (r != 1);
+
             if (load_netdev_file(monitor_netdev_file)) {
                 simet_uptime2_measurements_disable_netdev();
             }
             simet_uptime2_measurements_reconfig();
-            if (agent_id) {
-                if (!had_agentid) {
-                    print_msg(MSG_ALWAYS, "agent registration credentials available, connecting...");
-                }
-                for (j = 0; j < servers_count; j++) {
-                    simet_uptime2_reconnect(servers[j]);
-                }
-                /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
-            } else {
-                for (j = 0; j < servers_count; j++) {
-                    simet_uptime2_disconnect(servers[j], false);
+
+            if (config_changed) {
+                if (agent_id) {
+                    if (!had_agentid) {
+                        print_msg(MSG_ALWAYS, "agent registration credentials available, connecting...");
+                    }
+                    for (j = 0; j < servers_count; j++) {
+                        simet_uptime2_reconnect(servers[j]);
+                    }
+                    /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
+                } else {
+                    for (j = 0; j < servers_count; j++) {
+                        simet_uptime2_disconnect(servers[j], false);
+                    }
                 }
             }
         }
