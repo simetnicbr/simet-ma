@@ -2214,11 +2214,12 @@ static void free_server_clusters(struct sspoof_server_cluster ** psc)
  */
 
 /* returns 0 ok, (-1, errno set) on error. *p unchanged on error */
+/* WARNING: does not free previous contents of *p */
 static int fread_agent_str(const char *path, const char ** const p)
 {
     FILE *fp;
     struct stat st;
-    char *b;
+    char *b = NULL;
     int n, e;
 
     assert(path && p);
@@ -2249,10 +2250,11 @@ static int fread_agent_str(const char *path, const char ** const p)
     if (n == 1 && e != ENOMEM) {
         *p = b;
         return 0;
-    } else {
-        errno = e;
-        return -1;
     }
+
+    free(b);
+    errno = e;
+    return -1;
 }
 
 static int validate_nonempty(const char * const vname, const char * const v)
@@ -2266,40 +2268,49 @@ static int validate_nonempty(const char * const vname, const char * const v)
 
 static int load_agent_data(const char * const aid_path, const char * const atoken_path)
 {
-    const char *new_aid = agent_id;
-    const char *new_atok = agent_token;
+    const char *new_aid  = NULL;
+    const char *new_atok = NULL;
+    int rc = -1;
 
     if (aid_path) {
         if (fread_agent_str(aid_path, &new_aid)) {
             print_err("failed to read agent-id from %s: %s", aid_path, strerror(errno));
-            return -1;
+            goto err_exit;
         } else if (validate_nonempty("agent-id", new_aid) || strlen(new_aid) > SIMET_AGENTID_MAX_LEN) {
-            return -1;
+            goto err_exit;
         }
     }
     if (atoken_path) {
         if (fread_agent_str(atoken_path, &new_atok)) {
             print_err("failed to read agent token from %s: %s", atoken_path, strerror(errno));
-            return -1;
+            goto err_exit;
         } else if (validate_nonempty("agent token", new_atok)) {
-            return -1;
+            goto err_exit;
         }
     }
 
+    rc = 0;
+
     /* We only change agent-id,token as a set */
-    if (agent_id != new_aid) {
+    if (new_aid) {
         free_const(agent_id);
         agent_id = new_aid;
+        new_aid = NULL;
     }
-    if (agent_token != new_atok) {
+    if (new_atok) {
         free_const(agent_token);
         agent_token = new_atok;
+        new_atok = NULL;
     }
 
-    if (agent_id)
+    if (agent_id) {
         print_msg(MSG_NORMAL, "agent-id: %s", agent_id);
+    }
 
-    return 0;
+err_exit:
+    free_const(new_aid);
+    free_const(new_atok);
+    return rc;
 }
 
 
