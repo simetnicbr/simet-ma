@@ -806,7 +806,7 @@ static void *twamp_callback_thread(void *p) {
     print_msg(MSG_NORMAL, "reflected packet receiving thread started");
 
     /* we wait for (number of packets * inter-packet interval) + last-packet reflector timeout */
-    int64_t tt_us = t_ctx->param.packets_count * t_ctx->param.packets_interval_us
+    int64_t tt_us = (int64_t)t_ctx->param.packets_count * t_ctx->param.packets_interval_us
                     + t_ctx->param.packets_timeout_us;
     /* clamp to 10 minutes */
     if (tt_us > 600000000)
