@@ -574,7 +574,7 @@ static int tcpc_process_request_answer(MeasureContext * const ctx, char *json)
 	    goto err_exit;
 	/* enforce at least 4 samples */
 	if ((unsigned long long)period_ms >= (unsigned long long)ctx->test_duration * 250U)
-	    period_ms = ctx->test_duration * 250U;
+	    period_ms = (int64_t)ctx->test_duration * 250;
 	if (period_ms > UINT_MAX)
 	    goto err_exit;
 	ctx->sample_period_ms = (unsigned int) period_ms;
