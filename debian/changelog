@@ -1,3 +1,11 @@
+simet-ma (0.18.14.6) unstable; urgency=medium
+
+  * inetup: fix memory leaks on config reload error paths
+  * inetup: avoid gratuitous disconnections on SIGHUP
+  * various: minor fixes
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Sat, 25 Jul 2026 16:07:53 -0300
+
 simet-ma (0.18.14.5) unstable; urgency=medium
 
   * simet-ma version 0.18.14.5
