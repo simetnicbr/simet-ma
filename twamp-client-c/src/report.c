@@ -447,7 +447,7 @@ int twamp_report_statistics(TWAMPReport *report, TWAMPParameters *param)
     print_msg(MSG_DEBUG, "stats: inspecting %u received packets (%u sent)", np, maxseq);
 
     /* pktstat_storage holds the statistics indexed by sender sequence number */
-    pktstat_storage = calloc(sizeof(struct twpktstat), maxseq);
+    pktstat_storage = calloc(maxseq, sizeof(struct twpktstat));
     if (!pktstat_storage)
         return ENOMEM;
 

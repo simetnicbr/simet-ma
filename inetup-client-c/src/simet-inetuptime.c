@@ -2090,12 +2090,13 @@ static struct simet_inetup_server_cluster * server_cluster_create(const char * c
  */
 
 /* returns 0 ok, (-1, errno set) on error. *p unchanged on error */
+/* WARNING: replaces *p without freeing the previous contents */
 static int fread_agent_str(const char *path, const char ** const p)
 {
     FILE *fp;
     struct stat st;
     int retry = 3;
-    char *b;
+    char *b = NULL;
     int n, e;
 
     assert(path && p);
@@ -2129,10 +2130,11 @@ static int fread_agent_str(const char *path, const char ** const p)
     if (n == 1 && e != ENOMEM) {
         *p = b;
         return 0;
-    } else {
-        errno = e;
-        return -1;
     }
+
+    free(b);
+    errno = e;
+    return -1;
 }
 
 static int validate_nonempty(const char * const vname, const char * const v)
@@ -2144,62 +2146,87 @@ static int validate_nonempty(const char * const vname, const char * const v)
     return 0;
 }
 
+/* returns -1 on error, 0 on change, 1 on no-error + no-change */
 static int load_agent_data(const char * const aid_path, const char * const atoken_path)
 {
-    const char *new_aid = agent_id;
-    const char *new_atok = agent_token;
+    const char *new_aid  = NULL;
+    const char *new_atok = NULL;
+    int rc = -1;
 
-    if (aid_path) {
-        if (fread_agent_str(aid_path, &new_aid)) {
-            print_err("failed to read agent-id from %s: %s", aid_path, strerror(errno));
-            return -1;
-        } else if (validate_nonempty("agent-id", new_aid) || strlen(new_aid) > SIMET_AGENTID_MAX_LEN) {
-            return -1;
-        }
+    if (validate_nonempty("agent-id file path", aid_path)
+            || validate_nonempty("agent token file path", atoken_path)) {
+        errno = EINVAL;
+        return -1;
     }
-    if (atoken_path) {
-        if (fread_agent_str(atoken_path, &new_atok)) {
-            print_err("failed to read agent token from %s: %s", atoken_path, strerror(errno));
-            return -1;
-        } else if (validate_nonempty("agent token", new_atok)) {
-            return -1;
-        }
+
+    if (fread_agent_str(aid_path, &new_aid)) {
+        print_err("failed to read agent-id from %s: %s", aid_path, strerror(errno));
+        goto err_out;
+    } else if (validate_nonempty("agent-id", new_aid) || strlen(new_aid) > SIMET_AGENTID_MAX_LEN) {
+        goto err_out;
     }
+
+    if (fread_agent_str(atoken_path, &new_atok)) {
+        print_err("failed to read agent token from %s: %s", atoken_path, strerror(errno));
+        goto err_out;
+    } else if (validate_nonempty("agent token", new_atok)) {
+        goto err_out;
+    }
+
+    rc = 1;
 
     /* We only change agent-id,token as a set */
-    if (agent_id != new_aid) {
+    if (xstrcmp(agent_id, new_aid)) {
         free_constchar(agent_id);
         agent_id = new_aid;
+        new_aid = NULL;
+        rc = 0;
     }
-    if (agent_token != new_atok) {
+    if (xstrcmp(agent_token, new_atok)) {
         free_constchar(agent_token);
         agent_token = new_atok;
+        new_atok = NULL;
+        rc = 0;
     }
 
-    if (agent_id)
+    if (agent_id && !rc) {
         print_msg(MSG_NORMAL, "agent-id: %s", agent_id);
+    }
 
-    return 0;
+err_out:
+    free_constchar(new_aid);
+    free_constchar(new_atok);
+    return rc;
 }
 
 static int load_netdev_file(const char * const netdev_name_path)
 {
-    const char * netdev_name = monitor_netdev;
+    const char * netdev_name = NULL;
+    int rc = -1;
 
-    if (netdev_name_path) {
-        if (fread_agent_str(netdev_name_path, &netdev_name)) {
-            print_err("failed to read network device name from %s: %s", netdev_name_path, strerror(errno));
-            return -1;
-        } else if (validate_nonempty("network device to monitor", netdev_name)) {
-            return -1;
-        }
+    if (!netdev_name_path || !netdev_name_path[0]) {
+        /* disabled... */
+        errno = ENXIO;
+        return -1;
     }
 
-    if (monitor_netdev != netdev_name) {
+    if (fread_agent_str(netdev_name_path, &netdev_name)) {
+        print_err("failed to read network device name from %s: %s", netdev_name_path, strerror(errno));
+        goto err_exit;
+    } else if (validate_nonempty("network device to monitor", netdev_name)) {
+        goto err_exit;
+    }
+
+    rc = 0;
+    if (netdev_name) {
         free_constchar(monitor_netdev);
         monitor_netdev = netdev_name;
+        netdev_name = NULL;
     }
-    return 0;
+
+err_exit:
+    free_constchar(netdev_name);
+    return rc;
 }
 
 /*
@@ -2544,7 +2571,7 @@ int main(int argc, char **argv) {
     if (load_agent_data(agent_id_file, agent_token_file)) {
         print_warn("failed to read measurement agent registration credentials");
     }
-    if (load_netdev_file(monitor_netdev_file)) {
+    if (monitor_netdev_file && load_netdev_file(monitor_netdev_file)) {
         print_err("failed to read network device name to monitor, disabling functionality");
     }
 
@@ -2781,29 +2808,39 @@ int main(int argc, char **argv) {
 
         if (got_reload_signal && !got_exit_signal) {
             const bool had_agentid = (agent_id != NULL);
+            bool config_changed = false;
+            int r;
+
             got_reload_signal = 0;
-            if (load_agent_data(agent_id_file, agent_token_file)) {
+            print_msg(MSG_DEBUG, "reloading configuration...");
+
+            if ((r = load_agent_data(agent_id_file, agent_token_file)) < 0) {
                 if (had_agentid) {
                     print_warn("agent registration credentials missing, disconnecting");
                 }
                 free_constchar(agent_id);    agent_id = NULL;
                 free_constchar(agent_token); agent_token = NULL;
             }
+            config_changed |= (r != 1);
+
             if (load_netdev_file(monitor_netdev_file)) {
                 simet_uptime2_measurements_disable_netdev();
             }
             simet_uptime2_measurements_reconfig();
-            if (agent_id) {
-                if (!had_agentid) {
-                    print_msg(MSG_ALWAYS, "agent registration credentials available, connecting...");
-                }
-                for (j = 0; j < servers_count; j++) {
-                    simet_uptime2_reconnect(servers[j]);
-                }
-                /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
-            } else {
-                for (j = 0; j < servers_count; j++) {
-                    simet_uptime2_disconnect(servers[j], false);
+
+            if (config_changed) {
+                if (agent_id) {
+                    if (!had_agentid) {
+                        print_msg(MSG_ALWAYS, "agent registration credentials available, connecting...");
+                    }
+                    for (j = 0; j < servers_count; j++) {
+                        simet_uptime2_reconnect(servers[j]);
+                    }
+                    /* FIXME: queue a "we forced a disconnect-reconnect event" event for next connection ? */
+                } else {
+                    for (j = 0; j < servers_count; j++) {
+                        simet_uptime2_disconnect(servers[j], false);
+                    }
                 }
             }
         }
