@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
     ctx.streamdata_file = streamdata_file;
     ctx.timeout_test = (timeout_test <= 0 || timeout_test > 40) ? 40 : (unsigned int) timeout_test;
     ctx.numstreams = (numstreams < 1 || numstreams > MAX_CONCURRENT_SESSIONS) ? MAX_CONCURRENT_SESSIONS : (unsigned int) numstreams;
-    ctx.test_duration = (test_lenght < 1 || test_lenght > 60) ? 60 : (unsigned int) test_lenght;
+    ctx.test_duration = (test_lenght < 1 || test_lenght > 300) ? 300 : (unsigned int) test_lenght;
     ctx.sessionid = NULL;
     ctx.sample_period_ms = (samplingperiod < 50 || samplingperiod > 1000) ? 500 : (unsigned int) samplingperiod;
     ctx.stats_oversampling = (statsoversampling < 0 || statsoversampling > 50 || (statsoversampling > 0 && samplingperiod / statsoversampling < 10)) ? 1 : (unsigned int)statsoversampling;
