@@ -70,14 +70,6 @@ discover_init() {
   # GLOBAL_STATE_PEER_IDXMAP should be either empty, or space-separated list of indexes
   # a negative value or invalid number must signal the end of the IDXMAP
   GLOBAL_STATE_PEER_IDXMAP=
-  if [ -n "$SIMET_SERVICELIST_OVERRIDE" ] ; then
-    cp "$SIMET_SERVICELIST_OVERRIDE" "$BASEDIR/services.json" || {
-      log_error "Failed when trying to override services.json from --services command line option"
-      exit 1
-    }
-    log_debug "Overriding services.json by command line request"
-    return
-  fi
 
   # Do we have the memory budget to run many twampc in parallel ?
   [ -z "$GLOBAL_SERIALIZE_SERVERSEL" ] && {
@@ -92,15 +84,25 @@ discover_init() {
   mkdir -p "$BASEDIR/serversel"
 
   local _curl1_pid
-  curl $CURL_APIBASE $CURL_APIOPT_FAST \
-    --request GET \
-    --user-agent "$SIMET_USERAGENT" \
-    --header "Authorization: Bearer $AGENT_TOKEN" \
-    --silent \
-    --fail \
-    --output "$BASEDIR/services.json" \
-    --url "$API_SERVICE_DISCOVERY" \
-  & _curl1_pid=$!
+  _curl1_pid=
+  if [ -z "$SIMET_SERVICELIST_OVERRIDE" ] ; then
+    curl $CURL_APIBASE $CURL_APIOPT_FAST \
+      --request GET \
+      --user-agent "$SIMET_USERAGENT" \
+      --header "Authorization: Bearer $AGENT_TOKEN" \
+      --silent \
+      --fail \
+      --output "$BASEDIR/services.json" \
+      --url "$API_SERVICE_DISCOVERY" \
+    & _curl1_pid=$!
+  else
+    cp "$SIMET_SERVICELIST_OVERRIDE" "$BASEDIR/services.json" || {
+      log_error "Failed when trying to override services.json from --services command line option"
+      exit 1
+    }
+    log_debug "Overriding services.json by command line request"
+    return
+  fi
 
   local _curl2_pid
   local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
@@ -127,10 +129,12 @@ discover_init() {
   & _curl3_pid=$!
 
   rc=0
-  wait $_curl1_pid || {
-    log_error "failed to retrieve list of measurement peers"
-    rc=1
-  }
+  if [ -n "$_curl1_pid" ] ; then
+    wait $_curl1_pid || {
+      log_error "failed to retrieve list of measurement peers"
+      rc=1
+    }
+  fi
   wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
   wait $_curl3_pid && log_debug "Measurement profiles received"
 
