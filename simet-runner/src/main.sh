@@ -55,6 +55,9 @@ main(){
   FORCE_PUBLICPEER=
   FORCE_PEER=
 
+  # JSON {"test_name":{"test_param1":123,...},...}
+  MSMT_PARAM_OVERRIDE_JSON=
+
   # refer to src/util.c::condwait()
   SERIALIZE_DISABLE=
   SERIALIZE_MEMLIMIT=5000
@@ -86,6 +89,13 @@ main(){
         ;;
       --msmt-context)
         MEASUREMENT_CONTEXT=$(printf "%s" "$2" | tr -dc 'a-zA-Z0-9!@#$%&*()_=+[]{};:/?,.<>-')
+        ;;
+      --msmt-parameters)
+        MSMT_PARAM_OVERRIDE_JSON="$2"
+        "$JSONFILTER" -s "$MSMT_PARAM_OVERRIDE_JSON" -t "@" >/dev/null 2>&1 || {
+          log_error "--msmt-parameters requires a JSON object with the measurement parameter data"
+          exit 1
+        }
         ;;
       --peer-reachability)
         ALLPEERS=1
