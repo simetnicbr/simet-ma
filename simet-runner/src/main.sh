@@ -76,10 +76,6 @@ main(){
         VERBOSE="true"
         ;;
       --test)
-        [ -n "$MEASUREMENT_CONTEXT" ] && {
-          log_error "--test cannot be used with specific measurement contexts"
-          exit 1
-        }
         if [ -n "$2" ] ; then
           RUN_ONLY_TASK="$2"
         else
@@ -87,6 +83,9 @@ main(){
           exit 1
         fi
         shift
+        ;;
+      --msmt-context)
+        MEASUREMENT_CONTEXT=$(printf "%s" "$2" | tr -dc 'a-zA-Z0-9!@#$%&*()_=+[]{};:/?,.<>-')
         ;;
       --peer-reachability)
         ALLPEERS=1
