@@ -105,16 +105,19 @@ discover_init() {
   fi
 
   local _curl2_pid
-  local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
-  curl $CURL_APIBASE $CURL_APIOPT_FAST \
-    --request GET \
-    --user-agent "$SIMET_USERAGENT" \
-    --header "Authorization: Bearer $AGENT_TOKEN" \
-    --silent \
-    --fail \
-    --output "$BASEDIR/serversel/twampquick_parameters.json" \
-    --url "$_curl2_endpoint/$AGENT_ID" \
-  & _curl2_pid=$!
+  _curl2_pid=
+  if [ -z "$FORCE_PUBLICPEER" ] ; then
+    local _curl2_endpoint="$API_SERVER_SELECTION/v1/request_quick"
+    curl $CURL_APIBASE $CURL_APIOPT_FAST \
+      --request GET \
+      --user-agent "$SIMET_USERAGENT" \
+      --header "Authorization: Bearer $AGENT_TOKEN" \
+      --silent \
+      --fail \
+      --output "$BASEDIR/serversel/twampquick_parameters.json" \
+      --url "$_curl2_endpoint/$AGENT_ID" \
+    & _curl2_pid=$!
+  fi
 
   local _curl3_pid
   local _curl3_endpoint="$API_MSMT_PROFILE"
@@ -135,7 +138,9 @@ discover_init() {
       rc=1
     }
   fi
-  wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
+  [ -n "$_curl2_pid" ] && {
+    wait $_curl2_pid && log_debug "Latency-based server selection parameters received"
+  }
   wait $_curl3_pid && log_debug "Measurement profiles received"
 
   return $rc
@@ -165,13 +170,16 @@ discover_next_peer() {
 discover_service() {
   local _service="undefined"
   local _element="undefined"
+  local _global
 
+  _global=
   case "$1" in
     AUTHORIZATION)
       _service="serverMonitor"
     ;;
     REPORT)
       _service="collector"
+      _global=1
     ;;
     TWAMP|TRACEROUTE)
       _service="twamp"
@@ -196,7 +204,11 @@ discover_service() {
     ;;
   esac
 
-  _discover_service $_service $_element
+  if [ -n "$_global" ] || [ -z "$FORCE_PEER" ] || [ "$2" != "HOST" ] ; then
+    _discover_service "$_service" "$_element"
+  else
+    printf "%s\n" "$FORCE_PEER"
+  fi
 }
 
 _discover_service(){

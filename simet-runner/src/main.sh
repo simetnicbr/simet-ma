@@ -52,6 +52,8 @@ main(){
   SETLOCK="true"
   ALLPEERS=0
   MEASUREMENT_CONTEXT=
+  FORCE_PUBLICPEER=
+  FORCE_PEER=
 
   # refer to src/util.c::condwait()
   SERIALIZE_DISABLE=
@@ -88,8 +90,21 @@ main(){
         ;;
       --peer-reachability)
         ALLPEERS=1
+        FORCE_PUBLICPEER=
+        FORCE_PEER=
         RUN_ONLY_TASK="TWAMPFAST"
         MEASUREMENT_CONTEXT="every-mp-from-servicelist"
+        ;;
+      --force-public-peer)
+        ALLPEERS=0
+        FORCE_PUBLICPEER=1
+        ;;
+      --force-peer)
+        ALLPEERS=0
+        FORCE_PUBLICPEER=1
+        FORCE_PEER="$2"
+        log_info "forcing peer to $2 on request"
+        shift
         ;;
       -v|--verbose)
         VERBOSE="true"
