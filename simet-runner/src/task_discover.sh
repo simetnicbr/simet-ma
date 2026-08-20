@@ -205,7 +205,7 @@ _discover_service(){
 
   _service="$1"
   _element="$2"
-  _extracted=$($JSONFILTER -i "$BASEDIR/services.json" -e "@[$GLOBAL_STATE_CURRENT_PEER].$_service[0].$_element")
+  _extracted=$($JSONFILTER -i "$BASEDIR/services.json" -e "@[$GLOBAL_STATE_CURRENT_PEER].${_service}[0].$_element")
   echo "$_extracted"
 }
 
