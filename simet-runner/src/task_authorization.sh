@@ -24,7 +24,7 @@ authorization() {
   if [ -n "$SIMET_SERVICELIST_OVERRIDE" ]; then
     log_debug "Disabling authorization token support."
     AUTHORIZATION_TOKEN=
-    return 0  
+    return 0
   fi
 
   local _endpoint="${1}measure-allowed"
@@ -43,7 +43,7 @@ authorization() {
     log_error "Authorization request failed at: $_endpoint"
     return 1
   }
- 
+
   local _allowed=$($JSONFILTER -i $BASEDIR/auth_response.json -e "@.measureAllowed")
   if [ $_allowed != "true" ]; then
     log_error "Authorization request denied at: $_endpoint"

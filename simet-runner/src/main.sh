@@ -109,8 +109,8 @@ main(){
         SETLOCK="true"
         ;;
       --no-parallel)
-	SERIALIZE_DISABLE=1
-	;;
+        SERIALIZE_DISABLE=1
+        ;;
       --limit-parallel-mem)
         if [ -n "$2" ] && [ "$2" -ge 0 ] 2>/dev/null; then
           SERIALIZE_MEMLIMIT="$2"
@@ -119,7 +119,7 @@ main(){
           exit 1
         fi
         shift
-	;;
+        ;;
     esac
     shift
   done
@@ -141,7 +141,7 @@ main(){
     flock -n -x 9 || {
       log_info "Waiting up to 15s to acquire the measurement lock..."
       flock_retry 15 -x 9 || {
-	log_error "Measurement lock is already taken, exiting..."
+        log_error "Measurement lock is already taken, exiting..."
         exit 1
       }
     }
@@ -203,7 +203,7 @@ _main_run(){
   fi
 }
 
-_main_orchestrate(){ 
+_main_orchestrate(){
   # 1. task authentication
   AGENT_ID="undefined"
   AGENT_TOKEN="undefined"
@@ -223,7 +223,7 @@ _main_orchestrate(){
   while [ $? -eq 0 ]; do
     local _auth_endpoint="https://$(discover_service AUTHORIZATION HOST):$(discover_service AUTHORIZATION PORT)/$(discover_service AUTHORIZATION PATH)"
     log_debug "authorization attempt at $_auth_endpoint"
-    # 3. task authorization: try at successive peers, until first success 
+    # 3. task authorization: try at successive peers, until first success
     AUTHORIZATION_TOKEN=
     authorization "$_auth_endpoint" "$AGENT_TOKEN"
     if [ $? -eq 0 ]; then
@@ -238,7 +238,7 @@ _main_orchestrate(){
       # this may end up running a measurement in background
       _main_run $_loopcounter && \
          [ -z "$_collector_endpoint" ] && \
-	   _collector_endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
+           _collector_endpoint="https://$(discover_service REPORT HOST):$(discover_service REPORT PORT)/$(discover_service REPORT PATH)"
       _loopcounter=$((_loopcounter + 1))
     fi
     discover_next_peer
@@ -409,7 +409,7 @@ _task_twamp(){
     if [ "$amedianrtt" -ge 0 ] 2>/dev/null ; then
       log_debug "TWAMP: median RTT $amedianrtt us"
       [ -z "$TWAMP_MEDIANRTT" ] || [ "$amedianrtt" -lt "$TWAMP_MEDIANRTT" ] && {
-	TWAMP_MEDIANRTT="$amedianrtt"
+        TWAMP_MEDIANRTT="$amedianrtt"
         log_debug "TWAMP: lowest RTT so far"
       }
     else
@@ -451,8 +451,8 @@ _task_tcpbw(){
   local _tcpbw_perstream=
   local _tcpbwv=
   if [[ "$DEBUG" = "true" ]] ; then
-	  _tcpbwv="-v -v"
-	  _tcpbw_perstream="-O \"${_task_dir}/perstream_data.json\""
+    _tcpbwv="-v -v"
+    _tcpbw_perstream="-O \"${_task_dir}/perstream_data.json\""
   fi
 
   TCPBW_MSMT_PARAMS=
@@ -514,7 +514,7 @@ _task_spoofer(){
 
   local _sspooferv=
   if [[ "$DEBUG" = "true" ]] ; then
-	  _spooferv="-v"
+    _spooferv="-v"
   fi
 
   if haspipefail && [ "$VERBOSE" = "true" ] ; then

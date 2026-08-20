@@ -82,8 +82,8 @@ _twquick() {
     j=$("$JSONFILTER" -i "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json" \
       -e "PKTSENT=@.results_summary.packets_sent" \
       -e "PKTRCVD=@.results_summary.packets_received_valid" ) && eval "$j" || {
-	log_debug "server selection: incorrect or missing data in results for peer #$tw_tag, $i"
-	rm -f "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json"
+        log_debug "server selection: incorrect or missing data in results for peer #$tw_tag, $i"
+        rm -f "$BASEDIR/serversel/twlight_result_${tw_tag}_$i.json"
       }
     # shellcheck disable=SC2015
     [ "$PKTSENT" -eq "$TWQUICK_PKTCOUNT" ] 2>/dev/null && [ "$PKTRCVD" -gt 0 ] 2>/dev/null || continue
@@ -206,29 +206,29 @@ subtask_serverselection() {
 
   while "$JSONFILTER" -i "$_services" -t "@[$SCNT]" >/dev/null 2>&1 ; do
     j=$("$JSONFILTER" -i "$_services" \
-	    -e "S_PUBPEER=@[$SCNT].isPublicPeer" \
-	    -e "S_LEVEL=@[$SCNT].localityListIndex" \
-	    -e "S_HOST=@[$SCNT].twamp[0].hostname" )\
+            -e "S_PUBPEER=@[$SCNT].isPublicPeer" \
+            -e "S_LEVEL=@[$SCNT].localityListIndex" \
+            -e "S_HOST=@[$SCNT].twamp[0].hostname" )\
       || j=
     [ -n "$j" ] && {
       eval "$j" || return
       if [ "$S_PUBPEER" -eq 0 ] && [ -n "$S_HOST" ] ; then
-	_twquick "$SCNT" "$S_HOST" 2>/dev/null & TWLPID=$!
-	PEERPIDLIST=$(append_list "$PEERPIDLIST" "$TWLPID")
-	PEERDATLIST=$(append_list "$PEERDATLIST" "$S_LEVEL")
-	PEERIDXLIST=$(append_list "$PEERIDXLIST" "$SCNT")
+        _twquick "$SCNT" "$S_HOST" 2>/dev/null & TWLPID=$!
+        PEERPIDLIST=$(append_list "$PEERPIDLIST" "$TWLPID")
+        PEERDATLIST=$(append_list "$PEERDATLIST" "$S_LEVEL")
+        PEERIDXLIST=$(append_list "$PEERIDXLIST" "$SCNT")
 
-	# sync wait on low-memory hosts
-	[ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && {
-	  # Updates RESIDX, RESRTT, PCNT
-	  _serversel_getresults "$PEERPIDLIST" "$PEERDATLIST" "$PEERIDXLIST"
-	  PEERPIDLIST=
-	  PEERIDXLIST=
-	  PEERDATLIST=
-	}
+        # sync wait on low-memory hosts
+        [ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && {
+          # Updates RESIDX, RESRTT, PCNT
+          _serversel_getresults "$PEERPIDLIST" "$PEERDATLIST" "$PEERIDXLIST"
+          PEERPIDLIST=
+          PEERIDXLIST=
+          PEERDATLIST=
+        }
       elif [ -n "$S_HOST" ] ;  then
-	log_verbose "server selection: peer #$SCNT: $S_HOST, global last-choice peer"
-	FBIDXLIST=$(append_list "$FBIDXLIST" "$SCNT")
+        log_verbose "server selection: peer #$SCNT: $S_HOST, global last-choice peer"
+        FBIDXLIST=$(append_list "$FBIDXLIST" "$SCNT")
       fi
     }
     SCNT=$(( SCNT + 1 ))
@@ -246,12 +246,12 @@ subtask_serverselection() {
   #log_debug "server selection: before sort: PCNT=$PCNT RESRTT='$RESRTT' RESIDX='$RESIDX' RESDAT='$RESDAT'"
   local i
   i=$(while [ "$PCNT" -gt 0 ] ; do
-	# busybox "small" sort (no -k, -t) workaround: zero-pad all fields before sort
-	printf "%020d:%020d:%010d\n" "${RESDAT%% *}" "${RESRTT%% *}" "${RESIDX%% *}"
-	RESRTT="${RESRTT#* }"
-	RESIDX="${RESIDX#* }"
-	RESDAT="${RESDAT#* }"
-	PCNT=$(( PCNT - 1 ))
+        # busybox "small" sort (no -k, -t) workaround: zero-pad all fields before sort
+        printf "%020d:%020d:%010d\n" "${RESDAT%% *}" "${RESRTT%% *}" "${RESIDX%% *}"
+        RESRTT="${RESRTT#* }"
+        RESIDX="${RESIDX#* }"
+        RESDAT="${RESDAT#* }"
+        PCNT=$(( PCNT - 1 ))
       done \
       | LC_ALL=C sort \
       | cut -d ':' -f 3 | tr -s '\n\r' ' ' \

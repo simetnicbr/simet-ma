@@ -13,13 +13,13 @@
 # Stateful iterator API
 #
 # Execution:
-# 
+#
 # discover_init
 # while [ $( discover_next_peer ) -eq 0 ]; do
 #   host=$( discover_service AUTHORIZATION HOST )
 #   port=$( discover_service AUTHORIZATION PORT )
 #   path=$( discover_service AUTHORIZATION PATH )
-#   
+#
 #   # try the target operation at successive peers, until first success
 #   result=$( target_operation host port path )
 #   if [ result -eq 0 ]; then
@@ -27,17 +27,17 @@
 #   fi
 # done
 #
-# function discover_init() 
+# function discover_init()
 #  - input var: SERVICE_DISCOVERY_ENDPOINT, AGENT_ID, AGENT_TOKEN
 #
 # function discover_next_peer()
 #  - out status 0, if next peer exists
 #  - out status 1, if next peer does NOT exist
 #
-# function discover_service() 
+# function discover_service()
 #  - in params: service element
 #  - out text: value
-#  - example: 
+#  - example:
 #     discover_service AUTHORIZATION HOST
 #     api.simet.nic.br
 #
@@ -76,7 +76,7 @@ discover_init() {
       exit 1
     }
     log_debug "Overriding services.json by command line request"
-    return    
+    return
   fi
 
   # Do we have the memory budget to run many twampc in parallel ?
@@ -198,7 +198,7 @@ discover_service() {
 _discover_service(){
   local _service="undefined"
   local _element="undefined"
-  
+
   _service="$1"
   _element="$2"
   _extracted=$($JSONFILTER -i "$BASEDIR/services.json" -e "@[$GLOBAL_STATE_CURRENT_PEER].$_service[0].$_element")
