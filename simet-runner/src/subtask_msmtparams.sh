@@ -20,6 +20,42 @@
 #
 ################################################################################
 
+subtask_msmtprofile_twamp() {
+  TWAMP_MSMT_PARAMS=
+  [ -s "$BASEDIR/msmt_profiles.json" ] && {
+    # NULL selector is the default entry, and we can't select by RTT for twamp
+    local mjson
+    mjson=$("$JSONFILTER" -i "$BASEDIR/msmt_profiles.json" -l1 -e "@.profile_twamp[!@.selector]") \
+      || mjson=
+  }
+  [ -n "$mjson" ] || mjson='{}'
+
+  log_debug "TWAMP: selected profile $(printf "%s" "$mjson" | tr -s ' \t\n\v\r' ' ')" || :
+
+  local mjson_override
+  mjson_override='{}'
+  [ -n "$MSMT_PARAM_OVERRIDE_JSON" ] && {
+    mjson_override="$("$JSONFILTER" -s "$MSMT_PARAM_OVERRIDE_JSON" -l1 -e "@.twamp" 2>/dev/null)" || mjson_override='{}'
+    log_debug "TWAMP: measurement parameter overrides $(printf "%s" "$mjson_override" | tr -s ' \t\n\v\r' ' ')" || :
+  }
+
+  local p
+  p=$("$JSONFILTER" -s "$mjson_override" -e "@.packet_count") \
+    || p=$("$JSONFILTER" -s "$mjson"     -e "@.packet_count") \
+    && TWAMP_MSMT_PARAMS=$(append_list "$TWAMP_MSMT_PARAMS" -c "$p")
+  p=$("$JSONFILTER" -s "$mjson_override" -e "@.payload_size_bytes") \
+    || p=$("$JSONFILTER" -s "$mjson"     -e "@.payload_size_bytes") \
+    && TWAMP_MSMT_PARAMS=$(append_list "$TWAMP_MSMT_PARAMS" -s "$p")
+  p=$("$JSONFILTER" -s "$mjson_override" -e "@.interpacket_delay_us") \
+    || p=$("$JSONFILTER" -s "$mjson"     -e "@.interpacket_delay_us") \
+    && TWAMP_MSMT_PARAMS=$(append_list "$TWAMP_MSMT_PARAMS" -i "$p")
+  p=$("$JSONFILTER" -s "$mjson_override" -e "@.last_packet_wait_us") \
+    || p=$("$JSONFILTER" -s "$mjson"     -e "@.last_packet_wait_us") \
+    && TWAMP_MSMT_PARAMS=$(append_list "$TWAMP_MSMT_PARAMS" -T "$p")
+
+  return 0
+}
+
 subtask_msmtprofile_tcpbw() {
   TCPBW_MSMT_PARAMS=
 

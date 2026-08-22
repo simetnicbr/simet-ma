@@ -194,9 +194,13 @@ _main_run(){
   ## if RUN_ONLY_TASK is set, we only run that one
   # 4. task twamp + traceroute
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
-    _task_twamp "4" "$_tstid_prefix"
+    TWAMP_MSMT_PARAMS=
+    subtask_msmtprofile_twamp || \
+      log_error "failed to parse TWAMP measurement parameters, using defaults"
+
+    _task_twamp "4" "$_tstid_prefix" $TWAMP_MSMT_PARAMS
     _task_traceroute "4" "$_tstid_prefix"
-    _task_twamp "6" "$_tstid_prefix"
+    _task_twamp "6" "$_tstid_prefix" $TWAMP_MSMT_PARAMS
     _task_traceroute "6" "$_tstid_prefix"
   elif [ "$RUN_ONLY_TASK" = "TWAMPFAST" ] ; then
     _task_twamp "4" "$_tstid_prefix" $TWAMPFAST_OPT
