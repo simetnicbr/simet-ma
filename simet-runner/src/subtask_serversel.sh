@@ -165,30 +165,35 @@ subtask_serverselection() {
   local _services="$BASEDIR/services.json"
 
   [ -s "$_services" ] || return
-  [ -s "$BASEDIR/serversel/twampquick_parameters.json" ] || return
-  [ -x "$TWAMPC" ] || return
 
-  local j
-  j=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
-    -e 'TWQUICK_PAYLOADSIZE=@.twamp_payload_size' \
-    -e 'TWQUICK_PKTCOUNT=@.twamp_packet_count' \
-    -e 'TWQUICK_PKTDELAY=@.twamp_packet_delay_us' \
-    -e 'TWQUICK_PKTTIMEOUT=@.twamp_packet_timeout_us' \
-    -e 'TWQUICK_REMOTEPORT=@.reflector_port' \
-    -e 'TWQUICK_KEY=@.auth_key_base64') || return
-  eval "$j" || return
-  TWQUICK_DROPLIMIT=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
-    -e '@.twamp_packet_drop_limit') || TWQUICK_DROPLIMIT=1
-  TWQUICK_PRECISION=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
-    -e '@.twamp_desired_precision_us') || TWQUICK_PRECISION=0
+  if [ -z "$FORCE_PUBLICPEER" ] ; then
+    [ -s "$BASEDIR/serversel/twampquick_parameters.json" ] || return
+    [ -x "$TWAMPC" ] || return
 
-  log_info "server selection: measuring network roundtrip time to the available servers..."
-  log_debug "server selection: latency-based: send and receive $TWQUICK_PKTCOUNT packets in $TWQUICK_PKTTIMEOUT microseconds"
-  [ "$TWQUICK_PRECISION" -gt 1 ] 2>/dev/null && \
-    log_verbose "server selection: RTT will be rounded to a precision of $TWQUICK_PRECISION microseconds"
+    local j
+    j=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
+      -e 'TWQUICK_PAYLOADSIZE=@.twamp_payload_size' \
+      -e 'TWQUICK_PKTCOUNT=@.twamp_packet_count' \
+      -e 'TWQUICK_PKTDELAY=@.twamp_packet_delay_us' \
+      -e 'TWQUICK_PKTTIMEOUT=@.twamp_packet_timeout_us' \
+      -e 'TWQUICK_REMOTEPORT=@.reflector_port' \
+      -e 'TWQUICK_KEY=@.auth_key_base64') || return
+    eval "$j" || return
+    TWQUICK_DROPLIMIT=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
+      -e '@.twamp_packet_drop_limit') || TWQUICK_DROPLIMIT=1
+    TWQUICK_PRECISION=$("$JSONFILTER" -i "$BASEDIR/serversel/twampquick_parameters.json" \
+      -e '@.twamp_desired_precision_us') || TWQUICK_PRECISION=0
 
-  [ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && \
-    log_info "server selection: limiting memory usage during selection, this will be slow!"
+    log_info "server selection: measuring network roundtrip time to the available servers..."
+    log_debug "server selection: latency-based: send and receive $TWQUICK_PKTCOUNT packets in $TWQUICK_PKTTIMEOUT microseconds"
+    [ "$TWQUICK_PRECISION" -gt 1 ] 2>/dev/null && \
+      log_verbose "server selection: RTT will be rounded to a precision of $TWQUICK_PRECISION microseconds"
+
+    [ "$GLOBAL_SERIALIZE_SERVERSEL" -eq 1 ] 2>/dev/null && \
+      log_info "server selection: limiting memory usage during selection, this will be slow!"
+  else
+    log_info "server selection: restricting to public peers by request"
+  fi
 
   local SCNT=0
   local S_PUBPEER
@@ -212,7 +217,7 @@ subtask_serverselection() {
       || j=
     [ -n "$j" ] && {
       eval "$j" || return
-      if [ "$S_PUBPEER" -eq 0 ] && [ -n "$S_HOST" ] ; then
+      if [ "$S_PUBPEER" -eq 0 ] && [ -n "$S_HOST" ] && [ -z "$FORCE_PUBLICPEER" ] ; then
         _twquick "$SCNT" "$S_HOST" 2>/dev/null & TWLPID=$!
         PEERPIDLIST=$(append_list "$PEERPIDLIST" "$TWLPID")
         PEERDATLIST=$(append_list "$PEERDATLIST" "$S_LEVEL")
@@ -226,7 +231,7 @@ subtask_serverselection() {
           PEERIDXLIST=
           PEERDATLIST=
         }
-      elif [ -n "$S_HOST" ] ;  then
+      elif [ "$S_PUBPEER" -ne 0 ] && [ -n "$S_HOST" ] ;  then
         log_verbose "server selection: peer #$SCNT: $S_HOST, global last-choice peer"
         FBIDXLIST=$(append_list "$FBIDXLIST" "$SCNT")
       fi
@@ -238,8 +243,10 @@ subtask_serverselection() {
   _serversel_getresults "$PEERPIDLIST" "$PEERDATLIST" "$PEERIDXLIST"
 
   [ -z "$RESIDX" ] || [ -z "$RESDAT" ] || [ -z "$RESRTT" ] || [ "$PCNT" -eq 0 ] && {
-    log_info "server selection: latency-based selection failed, using alternative selection method"
-    return
+    [ -z "$FORCE_PUBLICPEER" ] && {
+        log_info "server selection: latency-based selection failed, using alternative selection method"
+        return
+    }
   }
 
   # order by (service-list tier, rtt, service-list array index)

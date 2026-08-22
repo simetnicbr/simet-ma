@@ -52,6 +52,11 @@ main(){
   SETLOCK="true"
   ALLPEERS=0
   MEASUREMENT_CONTEXT=
+  FORCE_PUBLICPEER=
+  FORCE_PEER=
+
+  # JSON {"test_name":{"test_param1":123,...},...}
+  MSMT_PARAM_OVERRIDE_JSON=
 
   # refer to src/util.c::condwait()
   SERIALIZE_DISABLE=
@@ -74,10 +79,6 @@ main(){
         VERBOSE="true"
         ;;
       --test)
-        [ -n "$MEASUREMENT_CONTEXT" ] && {
-          log_error "--test cannot be used with specific measurement contexts"
-          exit 1
-        }
         if [ -n "$2" ] ; then
           RUN_ONLY_TASK="$2"
         else
@@ -86,10 +87,33 @@ main(){
         fi
         shift
         ;;
+      --msmt-context)
+        MEASUREMENT_CONTEXT=$(printf "%s" "$2" | tr -dc 'a-zA-Z0-9!@#$%&*()_=+[]{};:/?,.<>-')
+        ;;
+      --msmt-parameters)
+        MSMT_PARAM_OVERRIDE_JSON="$2"
+        "$JSONFILTER" -s "$MSMT_PARAM_OVERRIDE_JSON" -t "@" >/dev/null 2>&1 || {
+          log_error "--msmt-parameters requires a JSON object with the measurement parameter data"
+          exit 1
+        }
+        ;;
       --peer-reachability)
         ALLPEERS=1
+        FORCE_PUBLICPEER=
+        FORCE_PEER=
         RUN_ONLY_TASK="TWAMPFAST"
         MEASUREMENT_CONTEXT="every-mp-from-servicelist"
+        ;;
+      --force-public-peer)
+        ALLPEERS=0
+        FORCE_PUBLICPEER=1
+        ;;
+      --force-peer)
+        ALLPEERS=0
+        FORCE_PUBLICPEER=1
+        FORCE_PEER="$2"
+        log_info "forcing peer to $2 on request"
+        shift
         ;;
       -v|--verbose)
         VERBOSE="true"
@@ -170,9 +194,13 @@ _main_run(){
   ## if RUN_ONLY_TASK is set, we only run that one
   # 4. task twamp + traceroute
   if [ -z "$RUN_ONLY_TASK" ] || [ "$RUN_ONLY_TASK" = "TWAMP" ] ; then
-    _task_twamp "4" "$_tstid_prefix"
+    TWAMP_MSMT_PARAMS=
+    subtask_msmtprofile_twamp || \
+      log_error "failed to parse TWAMP measurement parameters, using defaults"
+
+    _task_twamp "4" "$_tstid_prefix" $TWAMP_MSMT_PARAMS
     _task_traceroute "4" "$_tstid_prefix"
-    _task_twamp "6" "$_tstid_prefix"
+    _task_twamp "6" "$_tstid_prefix" $TWAMP_MSMT_PARAMS
     _task_traceroute "6" "$_tstid_prefix"
   elif [ "$RUN_ONLY_TASK" = "TWAMPFAST" ] ; then
     _task_twamp "4" "$_tstid_prefix" $TWAMPFAST_OPT
