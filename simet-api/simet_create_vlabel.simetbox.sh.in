@@ -24,7 +24,7 @@ OLDLABEL=$(@BINDIR@/simet_read_vlabel.sh 2>/dev/null) && {
   }
 }
 
-umask 0022
+umask 0002
 
 set -e
 set -o pipefail

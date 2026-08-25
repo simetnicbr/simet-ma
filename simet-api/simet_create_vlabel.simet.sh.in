@@ -22,7 +22,7 @@ set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 
-umask 0022
+umask 0002
 
 OUTFILE=
 RC=1
