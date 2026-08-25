@@ -439,6 +439,13 @@ __simet_remove_identity() {
 	call write_agent_creds || rm -f "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE"
 	__invalidate_tokens
 	[ -d "$SIMET_RUNSTATE_DIR" ] && rm -f "$SIMET_RUNSTATE_DIR/vlabel-was-foreign"
+
+	# reset virtual label, required when de-cloning MAs due to misuse of
+	# image-based deployment with an already registered MA as the basis.
+	NEW_VLABEL=$(@BINDIR@/simet_create_vlabel.sh --reset) \
+		|| simet_log simet-ma daemon.error "failed to reset virtual label while removing registration information"
+	[ -n "$NEW_VLABEL" ] \
+		&& simet_log simet-ma daemon.info "virtual label reset to: $NEW_VLABEL"
 	:
 }
 # pairing not cleaned up here
