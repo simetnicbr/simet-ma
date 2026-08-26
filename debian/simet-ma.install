@@ -7,4 +7,5 @@ debian/networkd-dispatcher.routable/* /usr/lib/networkd-dispatcher/routable.d/
 debian/networkmanager-dispatcher/* /etc/NetworkManager/dispatcher.d/
 debian/dhclient-exit-hook/simet-ma /etc/dhcp/dhclient-exit-hooks.d/
 debian/dhcpcd-hook/* /lib/dhcpcd/dhcpcd-hooks/
+debian/etc.cloud.clean.d/* /etc/cloud/clean.d/
 opt/
