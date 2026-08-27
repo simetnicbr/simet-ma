@@ -1,3 +1,21 @@
+simet-ma (0.18.15) unstable; urgency=medium
+
+  * simet-ma version 0.18.15
+  * docs: explicitly document how to generate pristine images
+    Firmware, container and VM base images MUST NOT have been already
+    registered with the SIMET system, and MUST NOT have a machine-id
+    already set (machine-id must be unique to each container/vm/device)
+  * deb: add cleanup script for cloud-init
+    hint: NEVER use an already registered MA as the base image for VMs...
+  * deb: grant group-write permissions to AGENT_VLABEL_FILE
+  * simet-api: simet_create_vlabel.sh: create group-writable vlabel file
+  * simet-api: simet_create_vlabel.sh: add reset function
+  * simet-api: simet_register_ma.sh: reset vlabel when removing registration
+    This change allows for an attempt to mitigate the damage caused by undue
+    cloning of MA registration
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 27 Aug 2026 15:12:04 -0300
+
 simet-ma (0.18.14.7) unstable; urgency=medium
 
   * simet-ma version 0.18.14.7
