@@ -1,5 +1,5 @@
 /*
- * Base64 encoding/decoding (RFC4648)
+ * Base64 encoding/decoding (RFC4648) rev 2.2
  * Copyright (c) 2023,2024 NIC.br
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -206,13 +206,19 @@ static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len,
     const uint8_t * const src_end = src + src_len;
     char * const dst_end = dst + dst_len;
 
-    while (src <= src_end - 3 && dst <= dst_end - 4) {
+    while (src_len >= 3 && dst_len >= 4) {
         *dst++ = b64table[src[0] >> 2];
         *dst++ = b64table[((src[0] & 0x03) << 4) | (src[1] >> 4)];
         *dst++ = b64table[((src[1] & 0x0f) << 2) | (src[2] >> 6)];
         *dst++ = b64table[src[2] & 0x3f];
         src += 3;
+
+	src_len -= 3;
+	dst_len -= 4;
     }
+
+    /* note: we could use src_len/dst_len below as well / instead,
+     * but right now we don't, so we don't update them */
 
     if (src < src_end && dst < dst_end) {
         *dst++ = b64table[src[0] >> 2];
