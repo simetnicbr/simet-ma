@@ -1,5 +1,5 @@
 /*
- * Base64 encoding/decoding (RFC4648) rev 2.2
+ * Base64 encoding/decoding (RFC4648) rev 2.3
  * Copyright (c) 2023,2024 NIC.br
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -22,6 +22,8 @@
 #include <limits.h>
 
 #include <errno.h>
+
+#define  __nonstring __attribute__((__nonstring__))
 
 /* base64_decode - RFC 4648
  *
@@ -171,8 +173,8 @@ ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint
  *
  * Note: not C-strings, there's no NUL at the end!
  */
-static const char b64_table[64]     = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static const char b64safe_table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+static const char b64_table[64] __nonstring = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char b64safe_table[64] __nonstring = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /* base64_encode - RFC 4648
  *

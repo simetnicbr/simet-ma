@@ -1,5 +1,5 @@
 /*
- * Base64 encoding/decoding (RFC4648) rev 2.2
+ * Base64 encoding/decoding (RFC4648) rev 2.3
  * Copyright (c) 2023, 2024 NIC.br
  *
  * SPDX-License-Identifier: BSD-3-Clause
