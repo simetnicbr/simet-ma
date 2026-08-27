@@ -37,7 +37,6 @@
 #include <fcntl.h>
 
 #include "sha256.h"
-#include "crc16.h"
 #include "base64.h"
 
 const char *progname = PACKAGE_NAME;
