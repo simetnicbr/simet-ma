@@ -1,0 +1,55 @@
+Pristine VM / container / firmware images with SIMET-MA inside
+==============================================================
+
+A base/pristine image that contains simet-ma (and simet-lmapd) MUST NOT
+contain any MA registration information, if that image will be used to
+create several virtual machines, containers or devices.
+
+Note that cloning MA credentials (actually, running more than one MA with
+the same credentials) is a violation of the SIMET2 terms of service.  It
+is an unsupported situation that can cause measurement misattribution and
+SIMET-MA misbehavior.
+
+
+To ensure the image is "pristine" as far as SIMET-MA is concerned:
+
+1. Ensure there is no machine-id present on the image.
+
+   This is not a simet-ma or simet-lmapd restriction, it is actually a
+   general restriction.  No two running systems may have the same
+   machine-id at the same point in time, regadless of kind (so, it is
+   equally valid for baremetal, embedded, VMs and containers).
+
+   Note that the operating system will create (and persist) a new
+   machine-id when it first boots the image.
+
+2. Ensure the simet-ma and simet-lmapd services are NOT running.
+
+   Otherwise you might be unable to remove registration information,
+   or it might be recreated before the image contents are frozen,
+   thus invalidating steps 3 and 4 below.
+
+3. Remove any files whose name is prefixed by "agent-" under the
+   configuration directory of the measurement engine and also from its
+   "lmap" subdirectory.
+
+   rm -f /etc/simet/agent-* /opt/simet/etc/simet/agent-*
+   rm -f /etc/simet/lmap/agent-* /opt/etc/simet/lmap/agent-*
+
+   The above are the common default locations for the registration
+   information, please adjust to whatever paths you have used when
+   configuring simet-ma and simet-lmapd.
+
+4. Remove useless left-over cruft if simet-lmapd or simet-ma ever run:
+
+   rm -fr /var/spool/lmapd* /var/lib/lmapd*
+   rm -fr /var/run/simet* /var/lib/simet*
+   rm -fr /var/lock/simet*
+   find /opt/simet/var -type f -delete
+   find /opt/simet/run -type f -delete
+
+   The above are the common default locations for the lmapd queue and
+   report store, and for the runtime state for simet-lmapd and simet-ma.
+   Please adjust as needed if you changed those when compiling simet-ma
+   and simet-lmapd.
+

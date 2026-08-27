@@ -1,5 +1,5 @@
 /*
- * Base64 encoding/decoding (RFC4648)
+ * Base64 encoding/decoding (RFC4648) rev 2.3
  * Copyright (c) 2023,2024 NIC.br
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -22,6 +22,8 @@
 #include <limits.h>
 
 #include <errno.h>
+
+#define  __nonstring __attribute__((__nonstring__))
 
 /* base64_decode - RFC 4648
  *
@@ -171,8 +173,8 @@ ssize_t base64_decode(const char* const restrict src, const size_t src_len, uint
  *
  * Note: not C-strings, there's no NUL at the end!
  */
-static const char b64_table[64]     = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static const char b64safe_table[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+static const char b64_table[64] __nonstring = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char b64safe_table[64] __nonstring = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /* base64_encode - RFC 4648
  *
@@ -206,13 +208,19 @@ static ssize_t xx_b64encode(const uint8_t * restrict src, size_t src_len,
     const uint8_t * const src_end = src + src_len;
     char * const dst_end = dst + dst_len;
 
-    while (src <= src_end - 3 && dst <= dst_end - 4) {
+    while (src_len >= 3 && dst_len >= 4) {
         *dst++ = b64table[src[0] >> 2];
         *dst++ = b64table[((src[0] & 0x03) << 4) | (src[1] >> 4)];
         *dst++ = b64table[((src[1] & 0x0f) << 2) | (src[2] >> 6)];
         *dst++ = b64table[src[2] & 0x3f];
         src += 3;
+
+	src_len -= 3;
+	dst_len -= 4;
     }
+
+    /* note: we could use src_len/dst_len below as well / instead,
+     * but right now we don't, so we don't update them */
 
     if (src < src_end && dst < dst_end) {
         *dst++ = b64table[src[0] >> 2];

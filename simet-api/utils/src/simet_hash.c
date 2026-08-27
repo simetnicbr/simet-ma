@@ -37,7 +37,6 @@
 #include <fcntl.h>
 
 #include "sha256.h"
-#include "crc16.h"
 #include "base64.h"
 
 const char *progname = PACKAGE_NAME;
@@ -125,8 +124,8 @@ static int simet_do_hash_fd(int fd, const char * const fn)
 	    }
 	} while (res > 0 || (res == -1 && (errno == EINTR || errno == EAGAIN)));
 	if (res < 0) {
-        res = errno;
-        print_err("sha256: %s read failed: %s", fn, strerror(res));
+        const int e = errno;
+        print_err("sha256: %s read failed: %s", fn, strerror(e));
 	    return SEXIT_FAILURE;
 	} else if (size <= 0) {
         print_err("sha256: %s: no data to hash", fn);

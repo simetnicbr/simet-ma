@@ -1,0 +1,19 @@
+#!/bin/sh
+# Cleanup SIMET-MA registration and virtual labels
+#
+# SIMET-MA registration information MUST NEVER be present in a "golden"
+# base-image of a VM (or for that matter, factory-reset state of device
+# firmware).
+
+# Stop simet-ma and simet-lmapd just in case they're running
+systemctl stop simet-ma    || /etc/init.d/simet-ma    stop || :
+systemctl stop simet-lmapd || /etc/init.d/simet-lmapd stop || :
+
+# Remove all registration information.  Recreated by service init
+rm -f /opt/simet/etc/simet/agent-*
+rm -f /opt/simet/etc/simet/lmap/agent-*
+
+# Remove stale data that should not be present on a clean image
+rm -fr /var/spool/lmapd /var/run/lmapd
+rm -fr /var/run/simet /var/run/simet_public
+rm -fr /var/lib/simet

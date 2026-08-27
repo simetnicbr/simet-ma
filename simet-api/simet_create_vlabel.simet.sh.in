@@ -5,13 +5,21 @@
 ## If a virtual label is not present in the persistent storage, create one
 ## and return on stdout.
 ##
+## If --reset is the first parameter, regenerate the virtual label even if
+## it already exists.  This might change the virtual label.  Does not
+## re-enable disabled virtual labels.
+##
 ## Otherwise, return the existing virtual label on stdout.
 
 # If we already have it, or it is disabled, output it and exit ...
-# ... unless it needs to be switched to a new format.
+# ... unless it needs to be switched to a new format, or --reset is given
+
+RESET_VLABEL=0
+[ "$1" = "--reset" ] && RESET_VLABEL=1
+
 OLDLABEL=$(@BINDIR@/simet_read_vlabel.sh 2>/dev/null) && {
   [ -z "$OLDLABEL" ] && exit 0
-  [ "${OLDLABEL#NIC[0-9]*}" = "${OLDLABEL}" ] && {
+  [ $RESET_VLABEL -eq 0 ] && [ "${OLDLABEL#NIC[0-9]*}" = "${OLDLABEL}" ] && {
     printf "%s\n" "$OLDLABEL"
     exit 0
   }
@@ -22,7 +30,7 @@ set -o pipefail
 
 . @SIMETLIBDIR@/simet_lib.sh || exit 3
 
-umask 0022
+umask 0002
 
 OUTFILE=
 RC=1

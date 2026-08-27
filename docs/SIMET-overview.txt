@@ -115,6 +115,11 @@ enable the SIMET engine.  And an automated periodic firmware update
 process (or signal to the user that the SIMET engine is disabled due to
 outdated/expired firmware).
 
+The SIMET registration information (including but not limited to the
+SIMET agent-id, SIMET authorization tokens, and the SIMET virtual label)
+must not be tampered with and must only be used by a *single* instance
+of a SIMET measurement agent at any point in time.
+
 We reserve the right to change the terms of service applicable to
 SIMET2, and to discontinue the service at any time, *with* prior notice
 of at least 30 days on SIMET's main web page.

@@ -131,7 +131,7 @@ do_start_prepare() {
 		find "$SIMET_LOCK_DIR" -type f ! -perm 0660 -exec chmod 0660 '{}' +
 
 	# Registration information (heal permissions)
-	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE" ; do
+	for i in "$AGENT_ID_FILE" "$AGENT_TOKEN_FILE" "$LMAP_AGENT_FILE" "$AGENT_VLABEL_FILE" ; do
 		[ -n "$i" ] && {
 			find "$i" -maxdepth 0 -type f ! -perm -0660 -exec chmod ug+rw,o-w '{}' \; 2>/dev/null || true
 			d=$(dirname "$i") && [ -d "$d" ] && \
