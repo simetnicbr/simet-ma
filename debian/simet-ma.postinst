@@ -21,27 +21,6 @@ set -e
 # for details, see https://www.debian.org/doc/debian-policy/ or
 # the debian-policy package
 
-create_crond() {
-    RND1=$(awk 'BEGIN { srand(); print int(60*rand()) " " int(24*rand()) " * * * " }' )
-    RND2=$(awk 'BEGIN { srand(); print int(60*rand()) " 0-23/4 * * * " }')
-    cat <<- CRONDEOF
-	# SIMET Measurement Agent
-	# Any changes to this file might be lost on package update
-
-	MAILTO=""
-
-	# Renew SIMET device authorization tokens and agent-id
-	# Renova autorização e identificação da sonda SIMET
-	$RND1 nicbr-simet if [ -x /opt/simet/bin/simet_register_ma.sh ] ; then /opt/simet/bin/simet_register_ma.sh >/dev/null ; fi
-
-	# Geolocate if cache too old (and geolocation is enabled)
-	# Geolocaliza se o cache estiver velho (e geolocalização estiver habilitada)
-	$RND2 root if [ -x /opt/simet/bin/simet_geolocation.sh ] ; then /opt/simet/bin/simet_geolocation.sh >/dev/null 2>&1 || true ; fi
-
-	CRONDEOF
-    :
-}
-
 fix_traceroute() {
     # Unbreak traceroute, this violates Debian policy but...
     command -v setcap >/dev/null 2>&1 && {
@@ -124,19 +103,16 @@ case "$1" in
 			&& test -s "${AGENT_LOCK}" \
 			&& : > "${AGENT_LOCK}" \
 			|| true
-	} ) 2>/dev/null >/dev/null </dev/null || true
+	  }
+	  # Regenerate cron.d script, needs simet_lib_config loaded
+	  . /opt/simet/debian/simet_deb_lib.sh && simet_replace_crond_if_changed || true
+	) 2>/dev/null >/dev/null </dev/null || true
 
 	# Remove stale APIv1 registration data
 	rm -f /opt/simet/etc/simet/agent-id
 	rm -f /opt/simet/etc/simet/agent.jwt
 
-	#FIXME:
-	# replace the [ -e ] test below if changes the contents of the
-	# generated crontab are absolutely required.
-	#
-	#Changes that did not require it:
-	#  * simet-ma_periodic.sh removed from cron and package
-        [ -e /etc/cron.d/simet-ma ] || create_crond > /etc/cron.d/simet-ma
+	:
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
