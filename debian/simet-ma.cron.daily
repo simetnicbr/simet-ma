@@ -7,6 +7,13 @@
 
 # Refresh agent registry in case it has to change auth tokens
 test -f /opt/simet/bin/simet_register_ma.sh && {
+	# Reprogram cron.d schedule when stable seed changes, to break
+	# up group sync behavior caused by mass-deployment by VM cloning.
+	( . /opt/simet/lib/simet/simet_lib_config.sh \
+		&& . /opt/simet/debian/simet_deb_lib.sh \
+		&& simet_replace_crond_if_changed
+	) 2>/dev/null >/dev/null </dev/null || true
+
 	# Random sleep (limited to 300 seconds)
 	#
 	# This is required to break group sync behavior caused

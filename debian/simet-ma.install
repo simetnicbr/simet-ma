@@ -9,3 +9,4 @@ debian/dhclient-exit-hook/simet-ma /etc/dhcp/dhclient-exit-hooks.d/
 debian/dhcpcd-hook/* /lib/dhcpcd/dhcpcd-hooks/
 debian/etc.cloud.clean.d/* /etc/cloud/clean.d/
 opt/
+debian/simet_deb_lib.sh /opt/simet/debian/
