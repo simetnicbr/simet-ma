@@ -1,3 +1,10 @@
+simet-ma (0.18.15.1) unstable; urgency=medium
+
+  * simet-ma version 0.18.15.1
+  * deb: rework cron.d generation to break group sync when de-cloning MAs
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Tue, 08 Sep 2026 21:29:41 -0300
+
 simet-ma (0.18.15) unstable; urgency=medium
 
   * simet-ma version 0.18.15
