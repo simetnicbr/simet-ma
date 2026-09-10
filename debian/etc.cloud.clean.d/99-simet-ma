@@ -13,6 +13,9 @@ systemctl stop simet-lmapd || /etc/init.d/simet-lmapd stop || :
 rm -f /opt/simet/etc/simet/agent-*
 rm -f /opt/simet/etc/simet/lmap/agent-*
 
+# Remove cron.d schedule.  Recreated by cron.daily and postinst
+rm -f /etc/cron.d/simet-ma
+
 # Remove stale data that should not be present on a clean image
 rm -fr /var/spool/lmapd /var/run/lmapd
 rm -fr /var/run/simet /var/run/simet_public
