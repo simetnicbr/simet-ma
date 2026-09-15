@@ -4,25 +4,26 @@
 # Distributed under the GPLv3+ license with additional terms and permissions
 # Refer to the COPYING file on the program source for details
 
-simetma_interfaceup()
-(
-    # Note: runs in subshell
+# call simet-register-ma in background (-b), and also trigger an
+# initscript start if it is not already running (which might
+# serialize, so this has also to be done in background).
+simetma_interfaceup() {
+  test -x /opt/simet/bin/simet_register_ma.sh || return 0
 
-    test -x /opt/simet/bin/simet_register_ma.sh || return 0
-
-    start-stop-daemon -b -c nicbr-simet --start --name simet_reg_ma \
+  ( #subshell in background
+    start-stop-daemon -c nicbr-simet --start --name simet_reg_ma \
 	    --startas /opt/simet/bin/simet_register_ma.sh \
-	    -- --boot >/dev/null </dev/null 2>&1 || :
-
-    invoke-rc.d simet-ma start >/dev/null 2>&1 || :
-)
+	    -- --boot || :
+    exec invoke-rc.d simet-ma start >/dev/null </dev/null 2>&1
+  ) </dev/null >/dev/null 2>&1 &
+}
 
 case "$reason" in
     BOUND|RENEW|REBIND|REBOOT)
         simetma_interfaceup || :
         ;;
     EXPIRE|FAIL|RELEASE|STOP)
-	:
+        :
         ;;
 esac
 

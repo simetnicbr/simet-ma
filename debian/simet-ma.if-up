@@ -12,11 +12,11 @@ export LC_ALL=C
 
 test -x /opt/simet/bin/simet_register_ma.sh || exit 0
 
-(
-	sleep 10
-	start-stop-daemon -b -c nicbr-simet --start --name simet_reg_ma \
-		--startas /opt/simet/bin/simet_register_ma.sh \
-		-- --boot || :
-	invoke-rc.d simet-ma start || :
+( #subshell in background
+  sleep 10
+  start-stop-daemon -c nicbr-simet --start --name simet_reg_ma \
+	  --startas /opt/simet/bin/simet_register_ma.sh \
+	  -- --boot || :
+  exec invoke-rc.d simet-ma start
 ) </dev/null >/dev/null 2>&1 &
 :
