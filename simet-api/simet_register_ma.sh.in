@@ -83,12 +83,14 @@ CURLOPT="$CURL_APIOPT"
 CURLOPT_XTRA="--max-filesize 4000"
 
 SIMETMA_24HMODE=
+SIMETMA_LOCKWAIT=30
 case "$1" in
 	--boot)
 		shift
 		CURLOPT="$CURL_APIOPT_FAST"
 		SIMETMA_RECONFIG=
 		SIMETMA_24HMODE=1
+		SIMETMA_LOCKWAIT=5
 	;;
 	--daily)
 		shift
@@ -860,16 +862,18 @@ flock -n -x 7 || {
 [ -r "$AGENT_LOCK" ] || touch "$AGENT_LOCK" || abend "cannot create $AGENT_LOCK"
 exec 8<"$AGENT_LOCK"
 flock -n -s 8 || {
-	simet_log simet-ma daemon.info "waiting up to 30s for the currently running measurement to complete..."
-	flock_retry 30 -s 8 || simet_log simet-ma daemon.info "measurement still running, continuing anyway..."
+	simet_log simet-ma daemon.info "waiting up to ${SIMETMA_LOCKWAIT:-30}s for the currently running measurement to complete..."
+	flock_retry "${SIMETMA_LOCKWAIT:-30}" -s 8 \
+		|| simet_log simet-ma daemon.info "measurement still running, continuing anyway..."
 }
 
 # Acquire the agent token lock
 [ -r "$AGENT_TOKEN_LOCK" ] || touch "$AGENT_TOKEN_LOCK" || abend "cannot create $AGENT_TOKEN_LOCK"
 exec 9<"$AGENT_TOKEN_LOCK"
 flock -n -x 9 || {
-	simet_log simet-ma daemon.info "waiting up to 30s to acquire the agent registration lock"
-	flock_retry 30 -x 9 || abend "failed to acquire the agent registration lock, giving up"
+	simet_log simet-ma daemon.info "waiting up to ${SIMETMA_LOCKWAIT:-30}s to acquire the agent registration lock"
+	flock_retry "${SIMETMA_LOCKWAIT:-30}" -x 9 \
+		|| abend "failed to acquire the agent registration lock, giving up"
 }
 
 # shield the FDs using a subprocess where they're closed
