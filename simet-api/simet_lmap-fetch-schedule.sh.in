@@ -547,8 +547,8 @@ getschedule() {
 [ -r "$SIMETMA_LMAPSCHED_LOCK" ] || touch "$SIMETMA_LMAPSCHED_LOCK" || abend "cannot create $SIMETMA_LMAPSCHED_LOCK"
 exec 8<"$SIMETMA_LMAPSCHED_LOCK"
 flock -n -x 8 || {
-       printf "%s: already running\n" "$0" >&2
-       clean_exit
+        printf "%s: already running\n" "$0" >&2
+        exit 0
 }
 
 # Acquire the agent token lock
