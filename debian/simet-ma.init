@@ -158,9 +158,9 @@ do_start_prepare() {
 		log_action_end_msg "$RC" "unavailable"
 	fi
 
-	log_action_msg "Attempting SIMET-MA registration with the SIMET backend"
+	log_action_msg "Attempting SIMET-MA registration with the SIMET backend (in background)"
 	# --name doesn't matter, as long as it doesn't match, and not too long
-	start-stop-daemon -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
+	start-stop-daemon -b -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
 	:
 }
 
@@ -193,10 +193,6 @@ do_start_cmd_override() {
 	    $START_ARGS \
 	    --startas $DAEMON --name "${COMMAND_NAME}" --test > /dev/null \
 	  || return 1
-
-	# fail early the most common reasons for inetup to refuse to start
-	[ ! -s "$AGENT_ID_FILE" ] || [ ! -s "$AGENT_TOKEN_FILE" ] \
-	  && return 2
 
 	start-stop-daemon --start --quiet --pidfile "${PIDFILE}" \
 	    $START_ARGS \
