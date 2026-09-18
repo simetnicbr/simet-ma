@@ -10,9 +10,10 @@ test -x /opt/simet/bin/simet_register_ma.sh || exit 0
 
 [ "$2" = "connectivity-change" ] && [ "$CONNECTIVITY_STATE" = "FULL" ] || exit 0
 
-start-stop-daemon -b -c nicbr-simet --start --name simet_reg_ma \
+( #subshell in background
+  start-stop-daemon -c nicbr-simet --start --name simet_reg_ma \
 	--startas /opt/simet/bin/simet_register_ma.sh \
-	-- --boot >/dev/null </dev/null 2>&1 || :
-
-invoke-rc.d simet-ma start >/dev/null 2>&1 || :
+	-- --boot || :
+  exec invoke-rc.d simet-ma start
+) </dev/null >/dev/null 2>&1 &
 :

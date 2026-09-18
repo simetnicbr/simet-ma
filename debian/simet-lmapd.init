@@ -127,14 +127,11 @@ do_start_prepare() {
 		x_force_group_files    "$(lmapd_get_queuedir "$i")" || exit 2
 	done
 
-	start-stop-daemon -c "$SUSER" --start --name simet_reg_ma --startas /opt/simet/bin/simet_register_ma.sh -- --boot || true
-	[ -r "$LMAP_AGENT_FILE" ] || {
-		log_warning_msg "LMAP agent-id is not configured yet"
-		exit 0
-	}
-
-	# contact controller at daemon start/boot, or try to generate a local schedule.
-	start-stop-daemon -c "$SUSER" --start --name simetgetsched --startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot || true
+	# contact controller at daemon start/boot, or try to generate a local schedule
+	# (run in background)
+	start-stop-daemon -b -c "$SUSER" --start --name simetgetsched \
+		--startas /opt/simet/bin/simet_lmap-fetch-schedule.sh -- --boot \
+		|| true
 
 	# try to geolocate (as root)
 	/opt/simet/bin/simet_geolocation.sh >/dev/null 2>&1 &

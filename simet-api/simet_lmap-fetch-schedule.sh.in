@@ -96,6 +96,7 @@ HASHSUM=$(command -v sha256sum) || HASHSUM=$(command -v md5sum) \
 APILV=1
 [ -z "$LMAP_EXTRA_INSTANCES" ] || APILV=2
 
+LMAP_LOCKWAIT=30
 LMAP_REQUEST_INSTANCES=
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -103,6 +104,7 @@ while [ $# -gt 0 ]; do
 		shift
 		CURLOPT="$CURL_APIOPT_FAST"
 		LMAP_RECONFIG=
+		LMAP_LOCKWAIT=5
 		;;
 	-l1)
 		# will be removed in the future
@@ -545,16 +547,16 @@ getschedule() {
 [ -r "$SIMETMA_LMAPSCHED_LOCK" ] || touch "$SIMETMA_LMAPSCHED_LOCK" || abend "cannot create $SIMETMA_LMAPSCHED_LOCK"
 exec 8<"$SIMETMA_LMAPSCHED_LOCK"
 flock -n -x 8 || {
-       printf "%s: already running\n" "$0" >&2
-       clean_exit
+        printf "%s: already running\n" "$0" >&2
+        exit 0
 }
 
 # Acquire the agent token lock
 [ -r "$AGENT_TOKEN_LOCK" ] || touch "$AGENT_TOKEN_LOCK" || abend "cannot create $AGENT_TOKEN_LOCK"
 exec 9<"$AGENT_TOKEN_LOCK"
 flock -n -x 9 || {
-	simet_log simet-ma daemon.info "waiting up to 30s to acquire the agent registration lock"
-	flock_retry 30 -x 9 || abend "failed to acquire the agent registration lock, giving up"
+	simet_log simet-ma daemon.info "waiting up to ${LMAP_LOCKWAIT:-30}s to acquire the agent registration lock"
+	flock_retry "${LMAP_LOCKWAIT:-30}" -x 9 || abend "failed to acquire the agent registration lock, giving up"
 }
 
 # shield the FDs using a subprocess where they're closed
