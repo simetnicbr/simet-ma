@@ -1,3 +1,16 @@
+simet-ma (0.18.15.2) unstable; urgency=medium
+
+  * simet-ma version 0.18.15.2
+  * simet-api: shorten maximum wait for locks in boot mode
+  * simet-api: fix simet*_lmap-fetch-schedule self-locking
+  * deb: decouple network hooks from initscript start
+  * deb: simet-ma.init: register MA in background
+  * deb: simet-lmapd.init: background potentially slow paths
+  * deb: wipe cron.d schedule on cloud-init clean
+  * lmap: improve emergency schedule
+
+ -- NIC.br SIMET Team <medicoes@simet.nic.br>  Thu, 17 Sep 2026 22:09:10 -0300
+
 simet-ma (0.18.15.1) unstable; urgency=medium
 
   * simet-ma version 0.18.15.1
