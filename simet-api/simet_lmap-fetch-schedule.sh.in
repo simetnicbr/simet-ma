@@ -103,7 +103,6 @@ while [ $# -gt 0 ]; do
 	--boot)
 		shift
 		CURLOPT="$CURL_APIOPT_FAST"
-		LMAP_RECONFIG=
 		LMAP_LOCKWAIT=5
 		;;
 	-l1)
